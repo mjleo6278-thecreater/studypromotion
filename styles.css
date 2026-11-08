@@ -505,3 +505,10 @@ body.board-mode main { margin: 0; width: 100%; }
 :root[data-theme="dark"] .pt-piece.queen { fill: #ffcc4d; }
 .pawn-track { height: 18px; }
 .pt-piece { width: 15px; height: 15px; }
+
+/* 구글 계정 연동 */
+.gsync { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 14px 0; }
+.gsync-title { display: flex; align-items: center; gap: 8px; font-size: 15px; margin: 0 0 4px; }
+.gsync .btn-row { margin-top: 8px; }
+#ask-msg { white-space: pre-line; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }

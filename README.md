@@ -60,3 +60,15 @@ icons/                앱 아이콘
 tools/build.js        배포 파일 만들기
 tests/                단위 테스트, 브라우저 테스트
 ```
+
+## 구글 계정 연동 켜기
+
+설정 화면의 **구글 계정 연동**은 공부 기록을 내 구글 드라이브의 `studypromotion-data.json` 파일 하나에 저장하고, 다른 기기에서 불러옵니다. 권한은 `drive.file`이라 이 앱이 만든 파일 말고는 드라이브의 다른 파일을 볼 수 없습니다.
+
+켜려면 구글 OAuth 클라이언트 ID가 필요합니다 (공개돼도 되는 값입니다).
+
+1. https://console.cloud.google.com 에서 새 프로젝트를 만듭니다.
+2. API 및 서비스 → 라이브러리 → **Google Drive API** 사용.
+3. Google 인증 플랫폼(OAuth 동의 화면) → 앱 이름·이메일 입력, 대상은 **외부**. 대상 → 테스트 사용자에 쓸 구글 계정을 추가합니다.
+4. 클라이언트 → 클라이언트 만들기 → **웹 애플리케이션**, 승인된 JavaScript 원본에 `https://mjleo6278-thecreater.github.io` 추가.
+5. 만들어진 클라이언트 ID를 `js/gsync.js` 맨 위 `CLIENT_ID`에 넣고 main에 올리면 자동 배포됩니다.
