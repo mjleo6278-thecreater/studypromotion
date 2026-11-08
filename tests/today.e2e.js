@@ -68,8 +68,34 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   await page.tap('#h-next [data-next-focus]');
   assert(await page.isVisible('#view-timer'), '▶ 누르면 타이머로');
   let tm = await timer();
+  let st0 = null;
   const korean = (await state()).subjects.find((s) => s.name === '국어');
   assert(tm.label === '국어 · 고전시가' && tm.subjectId === korean.id && tm.mode === 'focus', '공부할 범위와 과목이 타이머에 들어감');
+
+  // 집중 중에 같은 범위 ▶는 그냥 이어서, 다른 범위로 바꾸면 그때까지 한 시간을 기록할지 물어봄
+  await page.tap('#timer-start');
+  await page.evaluate(() => { const t = window.__studypromotion.timer; t.endAt -= 3 * 60 * 1000; }); // 3분 지난 것으로
+  await page.goto(base + '#home');
+  const sBefore = (await state()).sessions.length;
+  await page.tap('#h-next [data-next-focus]');
+  tm = await timer();
+  assert(await page.isVisible('#view-timer') && !(await page.isVisible('#ask')) && tm.running && tm.label === '국어 · 고전시가', '같은 범위 ▶는 묻지 않고 이어서');
+  await page.tap('#timer-topic-clear'); // 범위 없이 집중하던 중
+  await page.goto(base + '#home');
+  await page.tap('#h-next [data-next-focus]');
+  assert(await page.isVisible('#ask') && (await page.textContent('#ask-msg')).includes('3분'), '집중 중에 다른 범위로 바꾸면 3분을 기록할지 물어봄');
+  await page.tap('#ask-cancel');
+  tm = await timer();
+  assert(await page.isVisible('#view-timer') && tm.running && tm.label === null && (await state()).sessions.length === sBefore, '그대로 두면 타이머 계속');
+  await page.goto(base + '#home');
+  await page.tap('#h-next [data-next-focus]');
+  await page.tap('#ask-ok');
+  st0 = await state();
+  const switched = st0.sessions[st0.sessions.length - 1];
+  assert(st0.sessions.length === sBefore + 1 && switched.minutes === 3 && !switched.label, '기록하고 바꾸기: 앞의 3분은 앞의 범위로 기록');
+  tm = await timer();
+  assert(!tm.running && tm.remaining === tm.total && tm.label === '국어 · 고전시가', '새 범위로 처음부터');
+  await page.evaluate((id) => App.store.update((s) => { s.sessions = s.sessions.filter((x) => x.id !== id); }), switched.id); // 아래 합계 계산에 안 섞이게
 
   // 3) 타이머: 앱을 닫았다 열어도 이어 감
   await page.tap('#timer-start');

@@ -1341,8 +1341,18 @@
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* 무시 */ }
 
   // 화이트보드 항목에서 바로 타이머 시작
-  function focusOn(opts) {
-    if (timer.running) pauseTimer();
+  // 집중 중에 다른 범위로 바꾸면, 그때까지 한 시간은 버리지 않고 기록할지 물어본다
+  async function focusOn(opts) {
+    if (timer.mode === 'focus' && timer.label === (opts.label || null) && timer.topicId === (opts.topicId || null) && (timer.running || timer.remaining < timer.total)) return go('timer'); // 같은 범위면 이어서
+    const left = timer.running ? Math.max(0, Math.ceil((timer.endAt - now()) / 1000)) : timer.remaining;
+    const doneMin = timer.mode === 'focus' ? Math.floor((timer.total - left) / 60) : 0;
+    if (doneMin >= 1) {
+      const ok = await ask(`지금 집중 중인 ${Stats.formatMinutes(doneMin)}을 기록하고\n'${opts.label || '새 범위'}'(으)로 새로 시작할까요?`, { ok: '기록하고 바꾸기', cancel: '그대로 두기' });
+      if (!ok) return go('timer');
+      if (timer.running) pauseTimer();
+      recordFocus(doneMin, now());
+      toast(`${Stats.formatMinutes(doneMin)} 기록했어요`);
+    } else if (timer.running) pauseTimer();
     timer.label = opts.label || null;
     timer.topicId = opts.topicId || null;
     const subj = opts.subjectName ? store.get().subjects.find((s) => s.name === opts.subjectName) : null;
