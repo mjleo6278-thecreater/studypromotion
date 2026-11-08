@@ -678,3 +678,10 @@ a, .btn.link, .tab.active, .badge { color: var(--accent-text); }
 .time-input { display: flex; align-items: center; gap: 6px; }
 .time-input input { width: 72px; }
 #time-form input[type=range] { width: 100%; accent-color: var(--accent); }
+
+/* 계정 */
+.google-btn { display: inline-flex; align-items: center; gap: 8px; justify-content: center; width: 100%; font-weight: 600; }
+.acc-or { text-align: center; margin: 12px 0 8px; }
+.acc-form { display: grid; gap: 8px; }
+.acc-form .btn-row { margin-top: 4px; }
+#acc-in .btn-row { justify-content: flex-start; }
