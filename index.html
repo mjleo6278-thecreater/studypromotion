@@ -15,6 +15,7 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="fonts/pretendard/pretendard.css">
   <link rel="stylesheet" href="styles.css">
+  <script>try{var d=document.documentElement,t=localStorage.getItem('studypromotion.theme'),a=localStorage.getItem('studypromotion.accent');if(t==='light'||t==='dark')d.setAttribute('data-theme',t);if(a==='pink')d.setAttribute('data-accent',a)}catch(e){}</script>
 </head>
 <body>
   <svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
@@ -28,7 +29,7 @@
     <symbol id="i-stats" viewBox="0 0 24 24"><rect x="4.4" y="12.4" width="3.8" height="7.6" rx="1.2"/><rect x="10.1" y="4.2" width="3.8" height="15.8" rx="1.2"/><rect x="15.8" y="8.6" width="3.8" height="11.4" rx="1.2"/></symbol>
   </svg>
   <header class="topbar">
-    <div class="brand"><img class="brand-mark" src="icons/favicon-64.png" alt="" width="28" height="28">스터디 프로모션</div>
+    <a class="brand" href="#home" data-view="home" title="홈으로" aria-label="스터디 프로모션, 홈으로 가기"><img class="brand-mark" src="icons/favicon-64.png" alt="" width="28" height="28">스터디 프로모션</a>
     <button class="btn install-btn" id="install-btn" hidden>앱 설치</button>
     <div class="top-actions">
       <button class="top-icon" id="theme-btn" type="button" title="화면 밝기: 자동" aria-label="화면 밝기 바꾸기"></button>
@@ -369,6 +370,13 @@
 
       <div class="panel">
         <div class="panel-head"><h2>설정</h2></div>
+        <div class="accent-field">
+          <span class="accent-label">테마 색</span>
+          <div class="accent-picks" id="accent-picks" role="radiogroup" aria-label="테마 색">
+            <button class="accent-pick active" type="button" role="radio" aria-checked="true" data-accent-pick="teal"><i style="background:#04becd"></i>청록</button>
+            <button class="accent-pick" type="button" role="radio" aria-checked="false" data-accent-pick="pink"><i style="background:#ff3d8b"></i>핑크</button>
+          </div>
+        </div>
         <form class="settings" id="settings-form">
           <label class="field">하루 목표(분)<input type="number" id="set-goal" min="10" step="10" inputmode="numeric"></label>
           <label class="field">집중 시간(분)<input type="number" id="set-focus" min="1" max="120" inputmode="numeric"></label>
@@ -397,6 +405,11 @@
           <label class="btn">백업 가져오기<input type="file" id="import-file" accept="application/json,.json" hidden></label>
           <button class="btn danger" id="reset-btn">모든 데이터 초기화</button>
         </div>
+        <details class="autobk" id="autobk">
+          <summary>자동 백업 <span class="muted small" id="autobk-count"></span></summary>
+          <p class="muted small">앱이 업데이트될 때, 기록을 통째로 바꾸기 전(백업 불러오기·계정 기록 받기·초기화), 그리고 하루에 한 번 이 기기에 기록 사본을 남겨요. 기록이 이상하면 여기서 골라 되돌리세요.</p>
+          <ul class="autobk-list" id="autobk-list"></ul>
+        </details>
       </div>
 
       <a class="panel about-link" href="#about" data-go="about"><span><b>앱 소개 · 사용설명서</b><span class="muted small">이름에 담긴 뜻, 만든 사람, 잘 쓰는 법</span></span><span aria-hidden="true">›</span></a>
@@ -502,14 +515,23 @@
         </ol>
       </div>
 
-      <div class="panel egg">
+      <div class="panel egg" id="egg">
         <h2>이스터에그 <span aria-hidden="true">🥚</span></h2>
-        <p class="muted">이 앱 어딘가에 작은 비밀을 숨겨 둘 예정이에요. 다음 업데이트를 기다려 주세요.</p>
+        <p class="muted">이 앱에 피드백을 보내 준 적이 있다면, 여기에 이름을 넣어 보세요.</p>
+        <form class="egg-form" id="egg-form" autocomplete="off">
+          <input type="text" id="egg-input" placeholder="비밀 단어" maxlength="20" aria-label="비밀 단어" enterkeyhint="go" spellcheck="false">
+          <button class="btn primary" type="submit">열기</button>
+        </form>
+        <div class="egg-out" id="egg-out" aria-live="polite" hidden></div>
       </div>
 
       <div class="panel">
         <h2>업데이트 소식</h2>
         <ul class="news" id="about-news">
+          <li><b>기록 지키기</b>: 앱이 업데이트될 때, 기록을 통째로 바꾸기 전, 그리고 하루에 한 번 기록을 자동 백업해요. 계정·설정 › 백업 › 자동 백업에서 골라 되돌릴 수 있고, 저장에 실패하면 바로 알려 줘요</li>
+          <li><b>핑크 테마</b>: 계정·설정에서 테마 색을 청록과 핑크 중에 고를 수 있어요</li>
+          <li><b>홈으로 바로</b>: 왼쪽 위 ‘스터디 프로모션’을 누르면 어디서든 홈으로 돌아와요</li>
+          <li><b>이스터에그</b>: 이 화면 어딘가에 비밀 입력칸이 생겼어요</li>
           <li><b>공부 인증 이미지</b>: 그날 공부 시간·과목·시간표를 스토리 크기 그림으로 만들어 공유해요 (목표를 달성하면 알림에서 바로)</li>
           <li><b>공부 달력·시간표</b>: 날마다 공부한 만큼 칠해지고, 날짜를 누르면 그날 과목별 시간과 10분 칸 시간표가 나와요</li>
           <li><b>오늘 할 범위</b>: 홈에서 가까운 시험의 오늘 할 내용을 과목을 번갈아 골라 줘요</li>
@@ -664,6 +686,8 @@
   <script src="js/scope.js"></script>
   <script src="js/share.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/backup.js"></script>
+  <script src="js/egg.js"></script>
   <script src="js/board.js"></script>
   <script src="js/lock.js"></script>
   <script src="js/cloud.js"></script>

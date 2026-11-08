@@ -1,6 +1,7 @@
 /* 데이터 저장소: localStorage에 하나의 JSON으로 저장 */
 (function (root) {
   const KEY = 'studypromotion.v1';
+  const BROKEN_KEY = 'studypromotion.v1.broken'; // 읽지 못한 기록 원본 (지우지 않고 보관)
   const LEGACY_KEYS = ['studygambit.v1', 'studymate.v1']; // 이름을 바꾸기 전 저장 위치 (자동으로 옮겨 옴)
   const VERSION = 2;
   const UNDO_LIMIT = 60;
@@ -32,10 +33,12 @@
   }
 
   // 가져온 데이터나 오래된 데이터를 현재 형식에 맞춘다
+  // 이 버전이 모르는 항목(새 버전에서 생긴 기록)도 지우지 않고 그대로 둔다.
+  // 그래야 옛 버전 화면(다른 탭·다른 기기·업데이트 전 앱)이 저장해도 새 기록이 사라지지 않는다.
   function normalize(data) {
     const base = defaults();
-    if (!data || typeof data !== 'object') return base;
-    const out = {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return base;
+    const out = Object.assign({}, data, {
       version: VERSION,
       subjects: Array.isArray(data.subjects) ? data.subjects : base.subjects,
       tasks: Array.isArray(data.tasks) ? data.tasks : [],
@@ -48,33 +51,56 @@
       strokes: Array.isArray(data.strokes) ? data.strokes : [],
       boardView: data.boardView && typeof data.boardView === 'object' ? data.boardView : {},
       activeExamId: data.activeExamId || null,
-      settings: Object.assign({}, base.settings, data.settings || {}),
-    };
+      settings: Object.assign({}, base.settings, data.settings && typeof data.settings === 'object' ? data.settings : {}),
+    });
     return out;
   }
 
   function createStore(storage) {
     let state;
     const listeners = [];
+    const replaceHooks = []; // 기록을 통째로 바꾸기 직전에 지금 기록을 넘겨받는다 (자동 백업)
+    const errorHooks = []; // 저장에 실패하면 알림
+    let loadIssue = null; // 저장된 기록을 읽지 못했을 때 { raw, at }
 
     function load() {
+      let raw = null;
       try {
-        let raw = storage && storage.getItem(KEY);
+        raw = storage && storage.getItem(KEY);
         if (!raw && storage) for (const k of LEGACY_KEYS) { raw = storage.getItem(k); if (raw) break; }
+      } catch (e) { raw = null; }
+      try {
         state = raw ? normalize(JSON.parse(raw)) : defaults();
       } catch (e) {
+        // 깨진 기록을 빈 기록으로 덮어쓰기 전에 원본을 따로 남겨 둔다
+        loadIssue = { raw, at: Date.now() };
+        try { if (storage && !storage.getItem(BROKEN_KEY)) storage.setItem(BROKEN_KEY, raw); } catch (err) { /* 공간 부족: 자동 백업이 대신 보관 */ }
         state = defaults();
       }
       return state;
     }
 
-    function save() {
+    function write() {
+      if (!storage) return true;
       try {
-        storage && storage.setItem(KEY, JSON.stringify(state));
+        storage.setItem(KEY, JSON.stringify(state));
+        return true;
       } catch (e) {
-        /* 저장 불가(사생활 보호 모드 등) — 메모리에서는 계속 동작 */
+        // 저장 공간 부족 등 — 메모리에서는 계속 동작하고, 화면에 알린다
+        errorHooks.forEach((fn) => { try { fn(e); } catch (err) { /* 무시 */ } });
+        return false;
       }
+    }
+
+    function save() {
+      write();
       listeners.forEach((fn) => fn(state));
+    }
+
+    function beforeReplace(reason) {
+      if (!replaceHooks.length) return;
+      const snap = JSON.stringify(state);
+      replaceHooks.forEach((fn) => { try { fn(snap, reason); } catch (e) { /* 백업 실패해도 계속 */ } });
     }
 
     // opts.undoable: 되돌리기 기록을 남긴다 / opts.silent: 화면 갱신 알림 없이 저장만
@@ -90,9 +116,8 @@
         if (undoStack.length > UNDO_LIMIT) undoStack.shift();
       }
       fn(state);
-      if (opts.silent) {
-        try { storage && storage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 무시 */ }
-      } else save();
+      if (opts.silent) write();
+      else save();
     }
 
     function undo() {
@@ -108,17 +133,22 @@
       return JSON.stringify(state, null, 2);
     }
 
-    function importJSON(text) {
+    // reason: 자동 백업에 남길 까닭 ('import' 백업 파일, 'cloud' 계정 기록, 'restore' 자동 백업에서 되돌리기)
+    function importJSON(text, reason) {
       const parsed = JSON.parse(text);
       if (!parsed || typeof parsed !== 'object' || !('tasks' in parsed || 'cards' in parsed)) {
         throw new Error('스터디 프로모션 백업 파일이 아닙니다.');
       }
+      beforeReplace(reason || 'import');
       state = normalize(parsed);
+      undoStack.length = 0;
       save();
     }
 
     function reset() {
+      beforeReplace('reset');
       state = defaults();
+      undoStack.length = 0;
       save();
     }
 
@@ -147,6 +177,9 @@
       undo,
       canUndo: () => undoStack.length > 0,
       subscribe: (fn) => listeners.push(fn),
+      onBeforeReplace: (fn) => replaceHooks.push(fn),
+      onSaveError: (fn) => errorHooks.push(fn),
+      loadIssue: () => loadIssue,
       adopt,
       exportJSON,
       importJSON,
@@ -154,7 +187,7 @@
     };
   }
 
-  const api = { createStore, uid, normalize, defaults, KEY };
+  const api = { createStore, uid, normalize, defaults, KEY, BROKEN_KEY };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.StoreLib = api;
 })(typeof window !== 'undefined' ? window : globalThis);

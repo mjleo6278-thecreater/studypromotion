@@ -99,7 +99,18 @@
    *  d: { title, date, total, goal, exam: {name, dday}|null, subjects: [{name, color, minutes}],
    *       timeline: Stats.dayTimeline 결과, colorOf(subjectId), range: '9:00 ~ 17:03', track: {square, promoted} }
    */
+  // 지금 고른 테마 색(청록/핑크)을 그림에도 쓴다
+  function themeAccent() {
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      if (/^#[0-9a-f]{6}$/i.test(v)) return v;
+    } catch (e) { /* 무시 */ }
+    return '#04becd';
+  }
+  const withAlpha = (hex, a) => `rgba(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)}, ${a})`;
+
   async function render(d) {
+    C.accent = themeAccent();
     const canvas = document.createElement('canvas');
     canvas.width = W; canvas.height = H;
     const ctx = canvas.getContext('2d');
@@ -229,7 +240,7 @@
     for (let i = 0; i < 8; i++) {
       ctx.fillStyle = i % 2 ? '#1c1c1c' : '#262626';
       ctx.fillRect(tx + i * sq, ty, sq, sq);
-      if (i < tr.square || tr.promoted) { ctx.fillStyle = 'rgba(4, 190, 205, .28)'; ctx.fillRect(tx + i * sq, ty, sq, sq); }
+      if (i < tr.square || tr.promoted) { ctx.fillStyle = withAlpha(C.accent, .28); ctx.fillRect(tx + i * sq, ty, sq, sq); }
     }
     piece(ctx, tr.promoted ? 'queen' : 'pawn', tx + tr.square * sq + 8, ty + 8, sq - 16, tr.promoted ? C.accent : '#ffffff');
     text(ctx, '한 칸씩 전진해서, 시험 날엔 퀸으로.', W / 2, H - 76, 32, 500, C.faint, 'center');

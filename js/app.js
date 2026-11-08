@@ -85,7 +85,7 @@
 
   document.addEventListener('click', (e) => {
     const tab = e.target.closest('[data-view]');
-    if (tab) return go(tab.dataset.view);
+    if (tab) { if (tab.tagName === 'A') e.preventDefault(); return go(tab.dataset.view); }
     const link = e.target.closest('[data-go]');
     if (link) { e.preventDefault(); go(link.dataset.go); }
   });
@@ -1247,7 +1247,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.5';
+  const APP_VERSION = '2.6';
   const APP_DATE = '2026년 11월 9일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
@@ -1482,7 +1482,31 @@
     toast('화면 밝기: ' + THEME_LABEL[theme]);
   });
 
-  window.App = { store, focusOn, pawnTrack, $, $$, esc, toast, ask, uid, go, now, render, get view() { return currentView; } };
+  /* ---------- 테마 색 (청록 / 핑크) ---------- */
+  const ACCENTS = { teal: '청록', pink: '핑크' };
+  let accent = 'teal';
+  try { accent = localStorage.getItem('studypromotion.accent') || 'teal'; } catch (e) { /* 무시 */ }
+  if (!ACCENTS[accent]) accent = 'teal';
+  function applyAccent(a) {
+    if (a === 'teal') document.documentElement.removeAttribute('data-accent');
+    else document.documentElement.setAttribute('data-accent', a);
+    $$('[data-accent-pick]').forEach((b) => {
+      const on = b.dataset.accentPick === a;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', String(on));
+    });
+  }
+  applyAccent(accent);
+  $('#accent-picks').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-accent-pick]');
+    if (!b || b.dataset.accentPick === accent) return;
+    accent = b.dataset.accentPick;
+    try { localStorage.setItem('studypromotion.accent', accent); } catch (err) { /* 무시 */ }
+    applyAccent(accent);
+    toast('테마 색: ' + ACCENTS[accent]);
+  });
+
+  window.App = { store, focusOn, pawnTrack, $, $$, esc, toast, ask, uid, go, now, render, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   go(location.hash.slice(1) || 'home');

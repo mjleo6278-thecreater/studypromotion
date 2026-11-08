@@ -159,7 +159,7 @@
 
   function applyRemote(d) {
     applyingRemote = true;
-    try { store.importJSON(d.data); } finally { applyingRemote = false; }
+    try { store.importJSON(d.data, 'cloud'); } finally { applyingRemote = false; }
     meta.remoteAt = d.updatedAt;
     meta.dirty = false;
     meta.syncedAt = Date.now();
@@ -191,6 +191,8 @@
         const when = new Date(remote.updatedAt).toLocaleString('ko-KR');
         const useRemote = await ask(`이 계정에 저장된 기록이 있어요 (${when}).\n계정의 기록을 이 기기로 불러올까요?\n\n취소를 누르면 이 기기의 기록을 계정에 올려요.`);
         action = useRemote ? 'download' : 'upload';
+        // 계정에 있던 기록을 이 기기 기록으로 덮기 전에 이 기기에 사본을 남긴다
+        if (!useRemote && App.backup && remote.data) await App.backup.add(remote.data, 'cloud-remote');
       }
       if (action === 'download') { applyRemote(remote); toast('계정의 기록을 불러왔어요'); }
       else if (action === 'upload') { await upload(); if (interactive) toast('계정에 저장했어요'); }
