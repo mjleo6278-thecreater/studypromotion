@@ -537,3 +537,13 @@ body.board-mode main { margin: 0; width: 100%; }
 .lock-screen.shake .lock-time { animation: lockshake .4s; }
 @keyframes lockshake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
 #ask, #toast { z-index: 1100; }
+
+/* 월 목표 */
+.month-goal { margin: 4px 0 16px; }
+.mg-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 14px; }
+.mg-head .btn.link { margin: 0; }
+.mg-track { height: 12px; background: var(--line); border-radius: 999px; overflow: hidden; margin: 6px 0; }
+.mg-fill { height: 100%; background: var(--accent); border-radius: 999px; transition: width .4s; }
+.mg-fill.behind { background: #e0a030; }
+.mg-form { display: flex; gap: 8px; align-items: flex-end; margin-top: 8px; flex-wrap: wrap; }
+.mg-form .field { flex: 1; min-width: 120px; }

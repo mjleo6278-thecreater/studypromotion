@@ -35,6 +35,10 @@ const server = http.createServer((req, res) => {
   assert(await page.textContent('#month-total') === '1시간 30분', '이번 달 합계');
   assert(/지난달.*1시간 · ▲ 30분/.test(await page.textContent('#month-compare')), '지난달 비교');
   assert(await page.locator('#month-chart .wc-col').count() === 6, '6개월 막대');
+  await page.click('#mg-edit'); await page.fill('#mg-input', '30'); await page.click('#mg-form button[type=submit]');
+  assert(/5% 달성/.test(await page.textContent('#mg-text')) && /30시간/.test(await page.textContent('#mg-label')), '월 목표 설정과 진행률');
+  await page.reload();
+  assert(/5% 달성/.test(await page.textContent('#mg-text')), '월 목표 저장 유지');
 
   // 잠금 시작
   await page.goto(base + '#timer');

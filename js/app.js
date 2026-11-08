@@ -590,7 +590,18 @@
     $('#month-compare').textContent = prev.minutes || cur.minutes
       ? `지난달(${prev.month}월) ${Stats.formatMinutes(prev.minutes)} · ${diff >= 0 ? '▲ ' : '▼ '}${Stats.formatMinutes(Math.abs(diff))}`
       : '';
-    const mMax = Math.max(60, ...months.map((m) => m.minutes));
+    const goalMin = st.settings.monthlyGoalMin || 0;
+    const g = Stats.monthGoal(goalMin, cur.minutes, now());
+    $('#mg-label').textContent = goalMin ? `${cur.month}월 목표 ${Stats.formatMinutes(goalMin)}` : '이번 달 목표';
+    $('#mg-edit').textContent = goalMin ? '목표 바꾸기' : '목표 설정';
+    $('.mg-track').hidden = !g;
+    $('#mg-fill').style.width = g ? g.pct + '%' : '0';
+    $('#mg-fill').classList.toggle('behind', !!g && !g.onTrack && !g.done);
+    $('#mg-text').textContent = !g ? '한 달 동안 공부할 목표 시간을 정해 보세요.'
+      : g.done ? `🎉 목표 달성! (${g.pct}%)`
+      : `${g.pct}% 달성 · 남은 ${Stats.formatMinutes(g.remaining)} · 남은 ${g.daysLeft}일 동안 하루 ${Stats.formatMinutes(g.perDay)}씩` +
+        (g.onTrack ? ' · 계획보다 앞서 있어요' : ` · 계획보다 ${Stats.formatMinutes(-g.paceMin)} 뒤처졌어요`);
+    const mMax = Math.max(60, goalMin, ...months.map((m) => m.minutes));
     $('#month-chart').innerHTML = months.map((m, i) => `<div class="wc-col${i === 5 ? ' today' : ''}">
       <div class="wc-val">${m.minutes ? (m.minutes < 60 ? m.minutes + '분' : (Math.round(m.minutes / 6) / 10) + '시간') : ''}</div>
       <div class="wc-bar${m.minutes ? '' : ' zero'}" style="height:${Math.round((m.minutes / mMax) * 100)}px" title="${m.key} ${Stats.formatMinutes(m.minutes)}"></div>
@@ -621,6 +632,24 @@
       $('#set-break').value = set.breakMin;
     }
   }
+
+  $('#mg-edit').addEventListener('click', () => {
+    const f = $('#mg-form');
+    f.hidden = !f.hidden;
+    const cur = store.get().settings.monthlyGoalMin || 0;
+    $('#mg-input').value = cur ? Math.round(cur / 60) : '';
+    if (!f.hidden) $('#mg-input').focus();
+  });
+  $('#mg-cancel').addEventListener('click', () => { $('#mg-form').hidden = true; });
+  $('#mg-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    let h = parseInt($('#mg-input').value, 10);
+    h = isNaN(h) ? 0 : Math.min(744, Math.max(0, h));
+    store.update((st) => { st.settings.monthlyGoalMin = h * 60; });
+    $('#mg-form').hidden = true;
+    renderStats();
+    toast(h ? `월 목표를 ${h}시간으로 정했어요` : '월 목표를 지웠어요');
+  });
 
   $('#settings-form').addEventListener('submit', (e) => {
     e.preventDefault();

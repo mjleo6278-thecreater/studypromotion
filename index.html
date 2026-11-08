@@ -244,6 +244,16 @@
         <div class="month-hero">
           <div><div class="month-total" id="month-total">0분</div><div class="muted small" id="month-sub"></div></div>
         </div>
+        <div class="month-goal" id="month-goal">
+          <div class="mg-head"><span id="mg-label">이번 달 목표</span><button class="btn link" id="mg-edit" type="button">목표 설정</button></div>
+          <div class="mg-track"><div class="mg-fill" id="mg-fill"></div></div>
+          <div class="muted small" id="mg-text"></div>
+          <form class="mg-form" id="mg-form" hidden>
+            <label class="field">월 목표(시간)<input type="number" id="mg-input" min="0" max="744" step="1" inputmode="numeric"></label>
+            <button class="btn primary" type="submit">저장</button>
+            <button class="btn" type="button" id="mg-cancel">취소</button>
+          </form>
+        </div>
         <div class="month-chart" id="month-chart"></div>
       </div>
       <div class="panel">

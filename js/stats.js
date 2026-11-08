@@ -96,7 +96,26 @@
     return out;
   }
 
-  const api = { monthKey, lastNMonths, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes };
+  // 월 목표 진행: goalMin 목표(분), minutes 이번 달 공부(분), now 기준 남은 날(오늘 포함)로 하루 필요량 계산
+  function monthGoal(goalMin, minutes, now) {
+    if (!goalMin) return null;
+    const d = new Date(now);
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    const daysLeft = lastDay - d.getDate() + 1;
+    const remaining = Math.max(0, goalMin - minutes);
+    const expected = goalMin * (d.getDate() / lastDay); // 오늘까지 이 정도는 했어야 계획대로
+    return {
+      pct: Math.min(100, Math.round((minutes / goalMin) * 100)),
+      remaining,
+      daysLeft,
+      perDay: remaining ? Math.ceil(remaining / daysLeft) : 0,
+      onTrack: minutes >= expected,
+      paceMin: Math.round(minutes - expected),
+      done: minutes >= goalMin,
+    };
+  }
+
+  const api = { monthGoal, monthKey, lastNMonths, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);

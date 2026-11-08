@@ -149,3 +149,17 @@ test('최근 몇 달 공부 시간 합계와 공부한 날 수', () => {
   const jan = Stats.lastNMonths([], new Date(2027, 0, 3).getTime(), 3);
   assert.deepStrictEqual(jan.map((x) => x.key), ['2026-11', '2026-12', '2027-01']);
 });
+
+test('월 목표 진행률과 하루 필요량', () => {
+  const now = new Date(2026, 10, 11, 12).getTime(); // 11월 11일 (30일 중), 남은 날 20일
+  assert.strictEqual(Stats.monthGoal(0, 100, now), null);
+  const g = Stats.monthGoal(60 * 60, 15 * 60, now); // 목표 60시간, 15시간 함
+  assert.strictEqual(g.pct, 25);
+  assert.strictEqual(g.remaining, 45 * 60);
+  assert.strictEqual(g.daysLeft, 20);
+  assert.strictEqual(g.perDay, 135);
+  assert.strictEqual(g.onTrack, false); // 11/30 지점이면 22시간은 했어야 함
+  const done = Stats.monthGoal(600, 700, now);
+  assert.strictEqual(done.done, true);
+  assert.strictEqual(done.pct, 100);
+});

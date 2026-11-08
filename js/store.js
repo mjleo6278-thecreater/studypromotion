@@ -27,7 +27,7 @@
       strokes: [], // 화이트보드 펜 자국 { id, examId, d, color, width }
       boardView: {}, // examId → { x, y, z }
       activeExamId: null,
-      settings: { dailyGoalMin: 120, focusMin: 25, breakMin: 5 },
+      settings: { dailyGoalMin: 120, focusMin: 25, breakMin: 5, monthlyGoalMin: 0 },
     };
   }
 
