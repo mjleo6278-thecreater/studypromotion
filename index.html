@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>스터디 프로모션</title>
+  <meta name="description" content="시험 범위 화이트보드, 학습 계획, 집중 타이머, 플래시카드 복습, 공부 통계를 한 곳에서.">
+  <meta name="theme-color" content="#20346e">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="스터디 프로모션">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/favicon-64.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><img class="brand-mark" src="icons/favicon-64.png" alt="" width="28" height="28">스터디 프로모션</div>
+    <button class="btn install-btn" id="install-btn" hidden>앱 설치</button>
+    <button class="theme-btn" id="theme-btn" title="화면 밝기: 자동" aria-label="화면 밝기 바꾸기">◐</button>
+    <nav class="tabs" role="tablist">
+      <button class="tab" data-view="home" role="tab"><span class="ico">⌂</span><span>홈</span></button>
+      <button class="tab" data-view="board" role="tab"><span class="ico">▦</span><span>범위</span></button>
+      <button class="tab" data-view="plan" role="tab"><span class="ico">☑</span><span>계획</span></button>
+      <button class="tab" data-view="timer" role="tab"><span class="ico">◷</span><span>타이머</span></button>
+      <button class="tab" data-view="review" role="tab"><span class="ico">❐</span><span>복습</span></button>
+      <button class="tab" data-view="stats" role="tab"><span class="ico">▥</span><span>통계</span></button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- 홈 -->
+    <section id="view-home" class="view">
+      <h1 id="home-greeting">오늘도 한 걸음</h1>
+      <p class="tagline muted">한 칸씩 전진해서, 시험 날엔 퀸으로.</p>
+      <div class="cards4">
+        <div class="stat"><div class="stat-label">오늘 공부</div><div class="stat-value" id="h-today">0분</div>
+          <div class="bar"><div class="bar-fill" id="h-goalbar"></div></div><div class="stat-sub" id="h-goal"></div></div>
+        <div class="stat"><div class="stat-label">남은 할 일</div><div class="stat-value" id="h-tasks">0</div><div class="stat-sub" id="h-tasks-sub"></div></div>
+        <div class="stat"><div class="stat-label">복습 대기 카드</div><div class="stat-value" id="h-due">0</div><div class="stat-sub"><a href="#review" data-go="review">복습하러 가기</a></div></div>
+        <div class="stat"><div class="stat-label">연속 학습일</div><div class="stat-value" id="h-streak">0일</div><div class="stat-sub">하루에 조금이라도</div></div>
+      </div>
+      <div class="panel" id="h-exams-panel">
+        <div class="panel-head"><h2>시험 준비</h2><a href="#board" data-go="board">범위 화이트보드 열기</a></div>
+        <div id="h-exams"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>오늘 할 일</h2><a href="#plan" data-go="plan">전체 보기</a></div>
+        <ul class="task-list" id="h-tasklist"></ul>
+      </div>
+    </section>
+
+    <!-- 시험 범위 화이트보드 -->
+    <section id="view-board" class="view">
+      <div class="board-bar" id="board-bar">
+        <div class="bb-group">
+          <select id="bb-exam" aria-label="시험 선택"></select>
+          <button class="bb-btn" id="bb-exam-edit" title="시험 이름·날짜 바꾸기" aria-label="시험 편집">✎</button>
+          <span class="bb-dday" id="bb-dday"></span>
+          <span class="bb-pace" id="bb-pace"></span>
+          <div class="pawn-track" id="bb-track" title="전체 진행률: 폰이 끝 칸에 닿으면 퀸으로 승급"></div>
+          <span class="bb-pct" id="bb-pct"></span>
+        </div>
+        <div class="bb-group">
+          <button class="bb-btn text" id="bb-paste" title="범위 목록을 붙여넣어 한 번에 추가">범위 붙여넣기</button>
+          <button class="bb-btn text" id="bb-add-card" title="과목·범주 카드 추가">＋ 카드</button>
+          <button class="bb-btn text" id="bb-add-note" title="메모 붙이기">＋ 메모</button>
+          <form class="bb-search" id="bb-search" role="search">
+            <input id="bb-search-input" type="search" placeholder="범위 검색" aria-label="범위에서 항목 찾기" autocomplete="off">
+            <span class="bb-search-count muted" id="bb-search-count"></span>
+          </form>
+        </div>
+        <div class="bb-group" role="group" aria-label="도구">
+          <button class="bb-btn tool active" data-tool="select" title="선택·이동 (V)" aria-label="선택">✋</button>
+          <button class="bb-btn tool" data-tool="pen" title="펜 (P) — 체크 표시·밑줄" aria-label="펜">✎</button>
+          <button class="bb-btn tool" data-tool="marker" title="형광펜 (H)" aria-label="형광펜">▍</button>
+          <button class="bb-btn tool" data-tool="eraser" title="지우개 (E)" aria-label="지우개">⌫</button>
+          <span class="bb-colors" id="bb-colors"></span>
+        </div>
+        <div class="bb-group">
+          <button class="bb-btn" id="bb-zoom-out" title="축소" aria-label="축소">−</button>
+          <button class="bb-btn text" id="bb-zoom-label" title="100%로">100%</button>
+          <button class="bb-btn" id="bb-zoom-in" title="확대" aria-label="확대">＋</button>
+          <button class="bb-btn text" id="bb-fit" title="전체 범위가 한눈에 보이게">한눈에 보기</button>
+          <button class="bb-btn text" id="bb-arrange" title="카드 자동 정렬">정렬</button>
+          <button class="bb-btn" id="bb-undo" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
+          <button class="bb-btn" id="bb-more" title="더 보기" aria-label="더 보기">⋯</button>
+        </div>
+      </div>
+      <div class="board-viewport" id="board-viewport" tabindex="0" aria-label="시험 범위 화이트보드">
+        <div class="board-world" id="board-world">
+          <svg class="board-ink" id="board-ink" width="12000" height="8000"></svg>
+          <div class="board-cards" id="board-cards"></div>
+        </div>
+        <div class="board-empty" id="board-empty" hidden>
+          <div class="panel">
+            <h2>시험 범위 화이트보드</h2>
+            <p class="muted">시험 범위를 과목, 단원, 세부 항목으로 나눠 넓은 보드에 펼쳐 놓고, 끝낸 곳을 하나씩 체크하세요.</p>
+            <form class="form-grid exam-form" id="exam-form">
+              <input id="ex-name" placeholder="시험 이름 예: 2학기 기말고사" required maxlength="40">
+              <input id="ex-date" type="date" aria-label="시험 날짜">
+              <button class="btn primary" type="submit">시험 만들기</button>
+            </form>
+            <button class="btn link" id="exam-sample">예시 범위로 둘러보기</button>
+          </div>
+        </div>
+        <div class="board-legend" id="board-legend"></div>
+      </div>
+    </section>
+
+    <!-- 계획 -->
+    <section id="view-plan" class="view">
+      <h1>학습 계획</h1>
+      <form class="panel form-grid" id="task-form">
+        <input id="t-title" placeholder="무엇을 공부할까요? 예: 수학 문제집 3단원" required maxlength="120">
+        <select id="t-subject" aria-label="과목"></select>
+        <input id="t-due" type="date" aria-label="마감일">
+        <input id="t-est" type="number" min="5" step="5" placeholder="예상(분)" aria-label="예상 시간(분)">
+        <button class="btn primary" type="submit">추가</button>
+      </form>
+      <div class="filters" id="task-filters">
+        <button class="chip active" data-filter="open">남은 일</button>
+        <button class="chip" data-filter="today">오늘까지</button>
+        <button class="chip" data-filter="done">완료</button>
+        <button class="chip" data-filter="all">전체</button>
+      </div>
+      <ul class="task-list panel" id="tasklist"></ul>
+
+      <div class="panel">
+        <div class="panel-head"><h2>과목</h2></div>
+        <div class="subjects" id="subject-list"></div>
+        <form class="inline-form" id="subject-form">
+          <input id="s-name" placeholder="새 과목 이름" required maxlength="20">
+          <input id="s-color" type="color" value="#8a6fd1" aria-label="과목 색">
+          <button class="btn" type="submit">과목 추가</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- 타이머 -->
+    <section id="view-timer" class="view">
+      <h1>집중 타이머</h1>
+      <div class="panel timer-panel">
+        <div class="mode-switch">
+          <button class="chip" data-mode="focus">집중</button>
+          <button class="chip" data-mode="break">휴식</button>
+        </div>
+        <div class="ring-wrap">
+          <svg viewBox="0 0 200 200" class="ring">
+            <circle cx="100" cy="100" r="88" class="ring-bg"/>
+            <circle cx="100" cy="100" r="88" class="ring-fg" id="ring-fg"/>
+          </svg>
+          <div class="ring-text"><div id="timer-time">25:00</div><div id="timer-mode" class="muted">집중</div></div>
+        </div>
+        <div class="timer-topic" id="timer-topic" hidden><span id="timer-topic-text"></span><button class="icon-btn" id="timer-topic-clear" aria-label="공부 항목 지우기">✕</button></div>
+        <label class="field">과목
+          <select id="timer-subject"></select>
+        </label>
+        <div class="btn-row">
+          <button class="btn primary big" id="timer-start">시작</button>
+          <button class="btn" id="timer-reset">초기화</button>
+          <button class="btn" id="timer-skip">건너뛰기</button>
+        </div>
+        <p class="muted" id="timer-today"></p>
+      </div>
+    </section>
+
+    <!-- 복습 -->
+    <section id="view-review" class="view">
+      <h1>플래시카드 복습</h1>
+      <div id="deck-home">
+        <div class="panel">
+          <div class="panel-head"><h2>덱</h2></div>
+          <ul class="deck-list" id="deck-list"></ul>
+          <form class="inline-form" id="deck-form">
+            <input id="d-name" placeholder="새 덱 이름 예: 영단어 Day 1" required maxlength="40">
+            <button class="btn" type="submit">덱 만들기</button>
+          </form>
+        </div>
+      </div>
+
+      <div id="deck-detail" hidden>
+        <button class="btn link" id="deck-back">← 덱 목록</button>
+        <div class="panel">
+          <div class="panel-head"><h2 id="deck-title"></h2>
+            <div><button class="btn primary" id="deck-study">복습 시작</button> <button class="btn danger" id="deck-delete">덱 삭제</button></div></div>
+          <p class="muted" id="deck-summary"></p>
+          <form class="form-grid two" id="card-form">
+            <input id="c-front" placeholder="앞면 (질문)" required>
+            <input id="c-back" placeholder="뒷면 (정답)" required>
+            <button class="btn" type="submit">카드 추가</button>
+          </form>
+          <details class="bulk">
+            <summary>여러 장 한 번에 추가</summary>
+            <p class="muted">한 줄에 한 장씩, 앞면과 뒷면을 탭 또는 " - " 로 구분하세요. 예: apple - 사과</p>
+            <textarea id="bulk-text" rows="5"></textarea>
+            <button class="btn" id="bulk-add">일괄 추가</button>
+          </details>
+          <ul class="card-list" id="card-list"></ul>
+        </div>
+      </div>
+
+      <div id="study" hidden>
+        <button class="btn link" id="study-back">← 그만하기</button>
+        <div class="study-meta muted" id="study-meta"></div>
+        <div class="flash" id="flash" tabindex="0">
+          <div class="flash-front" id="flash-front"></div>
+          <div class="flash-back" id="flash-back" hidden></div>
+          <div class="flash-hint muted" id="flash-hint">클릭하거나 스페이스를 눌러 정답 보기</div>
+        </div>
+        <div class="grades" id="grades" hidden>
+          <button class="btn grade again" data-grade="again">다시<small></small></button>
+          <button class="btn grade hard" data-grade="hard">어려움<small></small></button>
+          <button class="btn grade good" data-grade="good">보통<small></small></button>
+          <button class="btn grade easy" data-grade="easy">쉬움<small></small></button>
+        </div>
+        <div class="panel done-panel" id="study-done" hidden>
+          <h2>오늘 복습 끝!</h2>
+          <p class="muted" id="study-done-text"></p>
+          <button class="btn primary" id="study-finish">덱으로 돌아가기</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 통계 -->
+    <section id="view-stats" class="view">
+      <h1>통계</h1>
+      <div class="panel">
+        <div class="panel-head"><h2>최근 7일 공부 시간</h2><span class="muted" id="week-total"></span></div>
+        <div class="week-chart" id="week-chart"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>과목별 누적 시간</h2></div>
+        <div id="subject-bars"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>최근 집중 기록</h2></div>
+        <ul class="simple-list" id="session-list"></ul>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>설정</h2></div>
+        <form class="settings" id="settings-form">
+          <label class="field">하루 목표(분)<input type="number" id="set-goal" min="10" step="10"></label>
+          <label class="field">집중 시간(분)<input type="number" id="set-focus" min="1" max="120"></label>
+          <label class="field">휴식 시간(분)<input type="number" id="set-break" min="1" max="60"></label>
+          <button class="btn" type="submit">저장</button>
+        </form>
+        <p class="muted small install-help" id="install-help">
+          휴대폰·PC에 앱처럼 설치하면 인터넷 없이도 열립니다.
+          안드로이드·PC 크롬/엣지: 주소창의 설치 아이콘 또는 위의 <b>앱 설치</b> 버튼.
+          아이폰·아이패드: Safari에서 공유 버튼 → <b>홈 화면에 추가</b>.
+          데이터는 이 기기 브라우저에 저장되니 가끔 <b>백업 내보내기</b>를 해 두세요.
+        </p>
+        <div class="btn-row">
+          <button class="btn" id="export-btn">백업 내보내기</button>
+          <label class="btn">백업 가져오기<input type="file" id="import-file" accept="application/json,.json" hidden></label>
+          <button class="btn danger" id="reset-btn">모든 데이터 초기화</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 화이트보드: 범위 붙여넣기 -->
+  <div class="ask-backdrop" id="paste-dlg" hidden>
+    <div class="ask-box wide" role="dialog" aria-modal="true" aria-labelledby="paste-title">
+      <h2 id="paste-title">범위 붙여넣기</h2>
+      <p class="muted small">한 줄에 한 항목. 들여쓰기(스페이스·탭)나 <code># 과목</code>, <code>- 단원</code> 으로 단계를 나누면 맨 위 단계가 카드 하나가 됩니다. <code>[x]</code> 로 시작하면 이미 끝낸 항목으로 들어가요.</p>
+      <textarea id="paste-text" rows="12" spellcheck="false" placeholder="# 수학&#10;- 1단원 다항식&#10;  - 다항식의 연산&#10;  - 나머지 정리&#10;- 2단원 방정식&#10;# 영어&#10;- 본문 1~3과"></textarea>
+      <div class="paste-foot">
+        <span class="muted small" id="paste-count"></span>
+        <div class="ask-actions">
+          <button class="btn link" id="paste-sample" type="button">예시 넣기</button>
+          <button class="btn" id="paste-cancel" type="button">취소</button>
+          <button class="btn primary" id="paste-ok" type="button">보드에 추가</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 화이트보드: 시험 편집 -->
+  <div class="ask-backdrop" id="exam-dlg" hidden>
+    <form class="ask-box" id="exam-edit-form" role="dialog" aria-modal="true" aria-labelledby="exam-dlg-title">
+      <h2 id="exam-dlg-title">시험</h2>
+      <label class="field">시험 이름<input id="ee-name" required maxlength="40"></label>
+      <label class="field">시험 날짜<input id="ee-date" type="date"></label>
+      <div class="ask-actions spread">
+        <button class="btn danger" id="ee-delete" type="button">시험 삭제</button>
+        <span><button class="btn" id="ee-cancel" type="button">취소</button> <button class="btn primary" type="submit">저장</button></span>
+      </div>
+    </form>
+  </div>
+
+  <!-- 화이트보드: 항목 메뉴 -->
+  <div class="pop-menu" id="pop-menu" hidden role="menu"></div>
+
+  <div class="ask-backdrop" id="ask" hidden>
+    <div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-msg">
+      <p id="ask-msg"></p>
+      <div class="ask-actions"><button class="btn" id="ask-cancel">취소</button><button class="btn primary" id="ask-ok">확인</button></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="js/srs.js"></script>
+  <script src="js/stats.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/scope.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/board.js"></script>
+</body>
+</html>
