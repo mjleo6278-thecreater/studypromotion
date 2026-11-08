@@ -152,12 +152,12 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   await page.goto(base + '#stats');
   const count = (await state()).sessions.length;
   await page.tap('#session-list [data-del-session]');
-  assert(await page.isVisible('#ask'), '지우기 전에 확인');
-  await page.tap('#ask-cancel');
-  assert((await state()).sessions.length === count, '취소하면 그대로');
+  assert((await state()).sessions.length === count - 1, '✕ 누르면 기록 삭제');
+  assert(await page.isVisible('#toast .toast-act'), '알림에 되돌리기 버튼');
+  await page.tap('#toast .toast-act');
+  assert((await state()).sessions.length === count, '되돌리기로 기록 복구');
   await page.tap('#session-list [data-del-session]');
-  await page.tap('#ask-ok');
-  assert((await state()).sessions.length === count - 1, '확인하면 기록 삭제');
+  assert((await state()).sessions.length === count - 1, '다시 지우기');
 
   // 6) 되돌리기는 범위만: 그사이 쌓인 공부 기록은 지우지 않음
   await page.goto(base + '#home');

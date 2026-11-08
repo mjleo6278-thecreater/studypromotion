@@ -61,6 +61,34 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   await page.tap('[data-card="c2"] [data-card-cancel]');
   assert(!(await page.isVisible('.card-edit')), '취소');
 
+  // 카드 삭제는 알림에서 되돌리기
+  await page.tap('[data-card="c2"] .card-del');
+  assert(!(await state()).cards.some((c) => c.id === 'c2'), '카드 삭제');
+  await page.tap('#toast .toast-act');
+  const order = (await state()).cards.map((c) => c.id).join(',');
+  assert(order === 'c1,c2', '되돌리기로 같은 자리에 복구 (' + order + ')');
+
+  // 할 일 삭제도 되돌리기
+  await page.evaluate(() => App.store.update((s) => s.tasks.push({ id: 'tk', title: '수학 익힘책', done: false, createdAt: Date.now() })));
+  await page.goto(base + '#plan');
+  await page.tap('#tasklist [data-id="tk"] .task-del');
+  assert(!(await state()).tasks.some((x) => x.id === 'tk'), '할 일 삭제');
+  await page.tap('#toast .toast-act');
+  assert((await state()).tasks.some((x) => x.id === 'tk'), '할 일 되돌리기');
+  // 할 일 고치기: 이름·과목·마감일·예상 시간
+  await page.tap('#tasklist [data-id="tk"] .task-edit-btn');
+  assert(await page.isVisible('#tasklist .task-edit'), '할 일 ✎ 누르면 고치기');
+  await page.fill('#tasklist .task-edit [name="title"]', '수학 익힘책 40~45쪽');
+  await page.selectOption('#tasklist .task-edit [name="subject"]', { label: '수학' });
+  await page.fill('#tasklist .task-edit [name="due"]', '2030-01-05');
+  await page.fill('#tasklist .task-edit [name="est"]', '45');
+  await page.tap('#tasklist .task-edit button[type="submit"]');
+  const tk = (await state()).tasks.find((x) => x.id === 'tk');
+  assert(tk.title === '수학 익힘책 40~45쪽' && tk.due === '2030-01-05' && tk.estimateMin === 45 && tk.subjectId === (await state()).subjects.find((x) => x.name === '수학').id, '할 일 내용이 바뀜');
+  assert(!(await page.isVisible('#tasklist .task-edit')), '저장하면 닫힘');
+  // 알림이 사라진 뒤에는 그 자리를 눌러도 아무 일 없음 (보이지 않는 버튼이 막지 않게)
+  assert(await page.evaluate(() => getComputedStyle(document.querySelector('#toast')).pointerEvents === 'none'), '닫힌 알림은 터치를 막지 않음');
+
   // 2) 타이머: 시작 전 집중·휴식 시간 빠른 선택
   await page.goto(base + '#timer');
   assert(await page.isVisible('#len-chips [data-len="50"]'), '집중 시간 고르기 (25·50·90분)');

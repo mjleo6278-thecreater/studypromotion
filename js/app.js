@@ -15,12 +15,23 @@
   const now = () => Date.now();
   const todayKey = () => Stats.dayKey(now());
 
-  function toast(msg) {
+  // opts.action / opts.onAction: 알림 옆에 '되돌리기' 같은 버튼 (5초 동안)
+  function toast(msg, opts) {
     const t = $('#toast');
     t.textContent = msg;
+    const act = !!(opts && opts.action && opts.onAction);
+    if (act) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'toast-act';
+      b.textContent = opts.action;
+      b.addEventListener('click', () => { clearTimeout(toast._t); t.classList.remove('show'); opts.onAction(); });
+      t.appendChild(b);
+    }
+    t.classList.toggle('has-act', act);
     t.classList.add('show');
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+    toast._t = setTimeout(() => t.classList.remove('show'), act ? 5000 : 2200);
   }
 
   function subjectById(id) {
@@ -87,7 +98,19 @@
     return `<span>D-${diff} (${esc(due.slice(5).replace('-', '/'))})</span>`;
   }
 
+  let editingTaskId = null;
+  let taskDraft = null; // 고치는 중 다시 그려질 때 입력값 유지
   function taskItem(t) {
+    if (t.id === editingTaskId) {
+      const d = taskDraft || { title: t.title, subjectId: t.subjectId || '', due: t.due || '', est: t.estimateMin || '' };
+      return `<li class="task editing" data-id="${esc(t.id)}"><form class="task-edit" data-task-edit="${esc(t.id)}">
+        <input name="title" value="${esc(d.title)}" required maxlength="120" aria-label="할 일" autocomplete="off">
+        <select name="subject" aria-label="과목">${subjectOptions(d.subjectId, true)}</select>
+        <input name="due" type="date" value="${esc(d.due)}" aria-label="마감일">
+        <input name="est" type="number" min="5" step="5" value="${esc(d.est)}" placeholder="예상(분)" aria-label="예상 시간(분)">
+        <span class="card-edit-actions"><button class="btn sm" type="button" data-task-cancel>취소</button><button class="btn primary sm" type="submit">저장</button></span>
+      </form></li>`;
+    }
     const s = subjectById(t.subjectId);
     return `<li class="task${t.done ? ' done' : ''}" data-id="${esc(t.id)}">
       <input type="checkbox" class="task-check" ${t.done ? 'checked' : ''} aria-label="완료">
@@ -99,6 +122,7 @@
           ${t.done ? '' : dueLabel(t.due)}
         </div>
       </div>
+      <button class="icon-btn task-edit-btn" aria-label="고치기" title="고치기">✎</button>
       <button class="icon-btn task-del" aria-label="삭제" title="삭제">✕</button>
     </li>`;
   }
@@ -124,13 +148,27 @@
   }
 
   function renderTaskList(el, list, emptyText) {
+    const form = el.querySelector('.task-edit');
+    const focus = form && document.activeElement && form.contains(document.activeElement) ? document.activeElement.name : null;
+    if (form && form.dataset.taskEdit === editingTaskId) taskDraft = { title: form.title.value, subjectId: form.subject.value, due: form.due.value, est: form.est.value };
+    if (editingTaskId && !store.get().tasks.some((t) => t.id === editingTaskId)) { editingTaskId = null; taskDraft = null; }
     el.innerHTML = list.length ? list.map(taskItem).join('') : `<li class="empty">${emptyText}</li>`;
+    if (focus) { const f = el.querySelector(`.task-edit [name="${focus}"]`); if (f) f.focus(); }
   }
 
   function onTaskListClick(e) {
     const li = e.target.closest('.task');
     if (!li) return;
     const id = li.dataset.id;
+    if (e.target.closest('.task-edit-btn')) {
+      editingTaskId = id;
+      taskDraft = null;
+      render();
+      const input = e.currentTarget.querySelector('.task-edit [name="title"]');
+      if (input) { input.focus(); input.select(); }
+      return;
+    }
+    if (e.target.closest('[data-task-cancel]')) { editingTaskId = null; taskDraft = null; render(); return; }
     if (e.target.classList.contains('task-check')) {
       store.update((st) => {
         const t = st.tasks.find((x) => x.id === id);
@@ -138,11 +176,36 @@
       });
       if (e.target.checked) toast('잘했어요! 할 일 하나 완료');
     } else if (e.target.classList.contains('task-del')) {
+      const list = store.get().tasks;
+      const i = list.findIndex((x) => x.id === id);
+      if (i < 0) return;
+      const removed = list[i];
       store.update((st) => { st.tasks = st.tasks.filter((x) => x.id !== id); });
+      toast(`'${removed.title}' 지웠어요`, { action: '되돌리기', onAction: () => store.update((st) => { if (!st.tasks.some((x) => x.id === id)) st.tasks.splice(Math.min(i, st.tasks.length), 0, removed); }) });
     }
   }
   $('#tasklist').addEventListener('click', onTaskListClick);
   $('#h-tasklist').addEventListener('click', onTaskListClick);
+  function onTaskEditSubmit(e) {
+    const f = e.target.closest('.task-edit');
+    if (!f) return;
+    e.preventDefault();
+    const title = f.title.value.trim();
+    if (!title) return toast('할 일을 적어 주세요');
+    const id = f.dataset.taskEdit;
+    const est = parseInt(f.est.value, 10);
+    editingTaskId = null;
+    taskDraft = null;
+    store.update((st) => {
+      const t = st.tasks.find((x) => x.id === id);
+      if (t) { t.title = title; t.subjectId = f.subject.value || null; t.due = f.due.value || null; t.estimateMin = est > 0 ? est : null; }
+    });
+    toast('할 일을 고쳤어요');
+  }
+  function onTaskEditKey(e) {
+    if (e.key === 'Escape' && e.target.closest('.task-edit')) { editingTaskId = null; taskDraft = null; render(); }
+  }
+  ['#tasklist', '#h-tasklist'].forEach((sel) => { $(sel).addEventListener('submit', onTaskEditSubmit); $(sel).addEventListener('keydown', onTaskEditKey); });
 
   $('#task-form').addEventListener('submit', (e) => {
     e.preventDefault();
@@ -362,10 +425,12 @@
       const id = chk.dataset.nextCheck;
       const n = store.get().topics.find((x) => x.id === id);
       if (!n) return;
+      const prev = { done: n.done, pct: n.pct, doneAt: n.doneAt };
       store.update((s) => { Scope.setDone(s.topics, id, true); }, { undoable: true });
       const ep = Scope.examProgress(store.get().topics, n.examId);
       const ex = store.get().exams.find((x) => x.id === n.examId);
-      toast(ep.total && ep.done === ep.total ? `체크메이트! ${ex ? ex.name + ' ' : ''}범위를 모두 끝냈어요 ♛` : `'${n.title}' 끝! 폰이 한 칸 전진 ♟`);
+      toast(ep.total && ep.done === ep.total ? `체크메이트! ${ex ? ex.name + ' ' : ''}범위를 모두 끝냈어요 ♛` : `'${n.title}' 끝! 폰이 한 칸 전진 ♟`,
+        { action: '되돌리기', onAction: () => store.update((s) => { const x = s.topics.find((t) => t.id === id); if (x) Object.assign(x, prev); }) });
       return;
     }
     const play = e.target.closest('[data-next-focus]');
@@ -769,7 +834,12 @@
     const id = row.dataset.card;
     if (e.target.closest('.card-del')) {
       if (editingCardId === id) editingCardId = null;
+      const list = store.get().cards;
+      const i = list.findIndex((c) => c.id === id);
+      if (i < 0) return;
+      const removed = list[i];
       store.update((st) => { st.cards = st.cards.filter((c) => c.id !== id); });
+      toast(`카드 '${removed.front}' 지웠어요`, { action: '되돌리기', onAction: () => store.update((st) => { if (!st.cards.some((c) => c.id === id)) st.cards.splice(Math.min(i, st.cards.length), 0, removed); }) });
     } else if (e.target.closest('.card-edit-btn')) {
       editingCardId = id;
       renderDeckDetail();
@@ -1006,9 +1076,8 @@
     const s = store.get().sessions.find((x) => x.id === id);
     if (!s) return;
     const d = new Date(s.endedAt);
-    if (!(await ask(`${d.getMonth() + 1}/${d.getDate()} ${Stats.formatMinutes(s.minutes)} 기록을 지울까요?\n통계와 목표에서도 빠져요.`, { ok: '지우기' }))) return;
     store.update((st) => { st.sessions = st.sessions.filter((x) => x.id !== id); });
-    toast('기록을 지웠어요');
+    toast(`${d.getMonth() + 1}/${d.getDate()} ${Stats.formatMinutes(s.minutes)} 기록을 지웠어요`, { action: '되돌리기', onAction: () => store.update((st) => { if (!st.sessions.some((x) => x.id === id)) st.sessions.push(s); }) });
   });
 
   /* ---------- 공부 시간 직접 기록 (학원·독서실·인강 등) ---------- */
@@ -1073,7 +1142,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.3';
+  const APP_VERSION = '2.4';
   const APP_DATE = '2026년 11월 9일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
@@ -1197,7 +1266,7 @@
     installEvent = null;
     $('#install-btn').hidden = true;
   });
-  window.addEventListener('appinstalled', () => { $('#install-btn').hidden = true; toast('스터디 프로모션를 설치했어요'); });
+  window.addEventListener('appinstalled', () => { $('#install-btn').hidden = true; toast('스터디 프로모션을 설치했어요'); });
   if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
     // 새 버전이 배포되면: 쓰는 중이 아니면 바로 새로고침, 쓰는 중이면 안내 띠
     let swReg = null;
