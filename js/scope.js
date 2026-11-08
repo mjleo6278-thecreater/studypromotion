@@ -46,23 +46,43 @@
       .filter((n) => n && n.kind !== 'note' && kids(index, n.id).length === 0);
   }
 
-  /** {done, total, pct, state: 'none'|'some'|'all'} */
-  function progress(nodes, id, index) {
-    const leaves = leavesUnder(nodes, id, index);
+  // 잎 항목의 진행률(0~100). 체크했으면 100, 아니면 부분 진행(pct)
+  function leafPct(n) {
+    if (n.done) return 100;
+    const v = +n.pct || 0;
+    return Math.max(0, Math.min(99, Math.round(v)));
+  }
+
+  // 잎 목록으로 진행 요약 (소요시간 est: 분)
+  function summarize(leaves) {
     const total = leaves.length;
-    const done = leaves.filter((n) => n.done).length;
+    const done = leaves.filter((n) => leafPct(n) >= 100).length;
+    let timeTotal = 0, timeDone = 0, withEst = 0, pctSum = 0;
+    for (const n of leaves) {
+      const p = leafPct(n);
+      pctSum += p;
+      const est = +n.est || 0;
+      if (est > 0) { withEst++; timeTotal += est; timeDone += (est * p) / 100; }
+    }
+    timeDone = Math.round(timeDone);
+    const byTime = withEst > 0 && withEst === total;
+    const pct = !total ? 0 : byTime ? Math.round((timeDone / timeTotal) * 100) : Math.round(pctSum / total);
+    const any = leaves.some((n) => leafPct(n) > 0);
     return {
-      done,
-      total,
-      pct: total ? Math.round((done / total) * 100) : 0,
-      state: done === 0 ? 'none' : done === total ? 'all' : 'some',
+      done, total, pct: pct >= 100 && done < total ? 99 : pct,
+      state: !any ? 'none' : done === total ? 'all' : 'some',
+      timeTotal, timeDone, timeLeft: Math.max(0, timeTotal - timeDone), withEst, noEst: total - withEst,
     };
   }
 
+  /** {done, total, pct, state: 'none'|'some'|'all', timeTotal, timeDone, timeLeft, noEst} */
+  function progress(nodes, id, index) {
+    return summarize(leavesUnder(nodes, id, index));
+  }
+
   function examProgress(nodes, examId) {
-    const leaves = nodes.filter((n) => n.examId === examId && n.kind !== 'note' && !nodes.some((c) => c.parentId === n.id));
-    const done = leaves.filter((n) => n.done).length;
-    return { done, total: leaves.length, pct: leaves.length ? Math.round((done / leaves.length) * 100) : 0 };
+    const parents = new Set(nodes.map((n) => n.parentId).filter(Boolean));
+    return summarize(nodes.filter((n) => n.examId === examId && n.kind !== 'note' && !parents.has(n.id)));
   }
 
   // 항목(또는 상위 항목 아래 전체)의 체크 상태를 바꾼다. nodes를 직접 수정.
@@ -70,9 +90,67 @@
     const leaves = leavesUnder(nodes, id);
     for (const n of leaves) {
       n.done = !!done;
+      n.pct = done ? 100 : 0;
       n.doneAt = done ? now || Date.now() : null;
     }
     return leaves.length;
+  }
+
+  // 잎 항목 하나의 부분 진행률을 정한다 (100이면 체크)
+  function setLeafProgress(n, pct, now) {
+    pct = Math.max(0, Math.min(100, Math.round(+pct || 0)));
+    n.pct = pct;
+    n.done = pct >= 100;
+    n.doneAt = n.done ? now || Date.now() : null;
+  }
+
+  /**
+   * 시험 시간 페이스 (순수 함수)
+   *  prog: examProgress 결과, exam: { date, planStart, paceSnap: {day, left} }
+   *  반환: 총·한·남은 시간, 하루 기본 페이스, 지금 필요한 페이스, 오늘 할 양, 밀린 양
+   */
+  function timePlan(prog, exam, now) {
+    if (!exam || !prog.timeTotal) return null;
+    const days = daysUntil(exam.date, now);
+    if (days === null || isNaN(days)) return null;
+    const total = prog.timeTotal, left = prog.timeLeft;
+    const today = dayKeyOf(now);
+    const start = exam.planStart || today;
+    const planDays = Math.max(1, daysUntil(exam.date, new Date(start + 'T12:00').getTime()) || 1);
+    const studyDays = Math.max(1, days);
+    const leftAtStart = exam.paceSnap && exam.paceSnap.day === today ? Math.max(left, exam.paceSnap.left) : left;
+    const elapsed = Math.max(0, Math.min(planDays, planDays - days));
+    const expectedAtStart = (total * elapsed) / planDays;
+    const doneAtStart = total - leftAtStart;
+    const todayQuota = days <= 0 ? left : Math.ceil(leftAtStart / studyDays);
+    const todayDone = Math.max(0, leftAtStart - left);
+    const basePerDay = Math.ceil(total / planDays);
+    return {
+      days, total, done: prog.timeDone, left, pct: Math.min(left > 0 ? 99 : 100, Math.round((prog.timeDone / total) * 100)),
+      basePerDay,
+      perDay: days <= 0 ? left : Math.ceil(left / studyDays),
+      todayQuota, todayDone,
+      todayLeft: Math.max(0, todayQuota - todayDone),
+      behind: Math.max(0, Math.round(expectedAtStart - doneAtStart)),
+      extraPerDay: Math.max(0, todayQuota - basePerDay),
+      noEst: prog.noEst,
+      finished: left <= 0,
+    };
+  }
+
+  // 계획 시작일과 오늘 아침 남은 양을 기록한다 (exam을 직접 수정, 바뀌었으면 true)
+  function touchPlan(exam, prog, now) {
+    if (!exam || !prog.timeTotal) return false;
+    const today = dayKeyOf(now);
+    let changed = false;
+    if (!exam.planStart) { exam.planStart = today; changed = true; }
+    if (!exam.paceSnap || exam.paceSnap.day !== today) { exam.paceSnap = { day: today, left: prog.timeLeft }; changed = true; }
+    return changed;
+  }
+
+  function dayKeyOf(ts) {
+    const d = new Date(ts);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
   function toggle(nodes, id, now) {
@@ -322,7 +400,7 @@
   const api = {
     CARD_W, GAP, COLORS, SAMPLE,
     childrenOf, indexByParent, subtreeIds, leavesUnder, progress, examProgress,
-    setDone, toggle, removeSubtree, depthOf, nextOrder,
+    setDone, setLeafProgress, leafPct, summarize, timePlan, touchPlan, toggle, removeSubtree, depthOf, nextOrder,
     parseOutline, countOutline, addOutline, autoLayout, estimateHeight, bounds,
     daysUntil, ddayLabel, toOutline, pace, pawnRank,
   };

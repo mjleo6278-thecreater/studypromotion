@@ -7,6 +7,8 @@
   const A = window.App;
   if (!A) return;
   const { store, $, $$, esc, toast, ask, uid } = A;
+  const fm = (m) => Stats.formatMinutes(m);
+  let paceOpen = false;
 
   const WORLD_W = 12000;
   const WORLD_H = 8000;
@@ -162,11 +164,23 @@
         ${checkBtn(n.id, p.state, n.title)}
         <span class="btitle" data-rename="${esc(n.id)}">${esc(n.title)}</span>
         ${flagsHtml(n)}
-        ${hasKids ? `<span class="bcount">${p.done}/${p.total}</span>` : ''}
+        ${hasKids ? `<span class="bcount">${p.timeTotal ? `남은 ${fm(p.timeLeft)}` : `${p.done}/${p.total}`}</span>` : timeChip(n)}
         <button class="bmenu" data-menu="${esc(n.id)}" aria-label="${esc(n.title)} 메뉴">⋯</button>
       </div>
       ${childHtml || adding ? `<ul>${childHtml}${adding ? addRow(n.id) : ''}</ul>` : ''}
     </li>`;
+  }
+
+  // 잎 항목 옆 소요시간·진행률 칩 (누르면 입력 창)
+  function timeChip(n) {
+    const pct = Scope.leafPct(n);
+    const est = +n.est || 0;
+    let label;
+    if (!est && !pct) label = '⏱';
+    else if (pct >= 100) label = est ? fm(est) : '100%';
+    else if (pct > 0) label = est ? `${pct}% · 남은 ${fm(Math.round(est * (100 - pct) / 100))}` : `${pct}%`;
+    else label = fm(est);
+    return `<button class="btime${pct > 0 && pct < 100 ? ' partial' : ''}${!est ? ' empty' : ''}" data-time="${esc(n.id)}" style="--p:${pct}%" aria-label="${esc(n.title)} 소요시간·진행률">${label}</button>`;
   }
 
   function cardHtml(c, index) {
@@ -189,7 +203,7 @@
         ${flagsHtml(c)}
         <button class="bmenu" data-menu="${esc(c.id)}" aria-label="${esc(c.title)} 메뉴">⋯</button>
       </div>
-      <div class="bcard-prog"><div class="bbar"><div style="width:${p.pct}%"></div></div><span>${p.done}/${p.total} · ${p.pct}%</span></div>
+      <div class="bcard-prog"><div class="bbar"><div style="width:${p.pct}%"></div></div><span>${p.timeTotal ? `${p.pct}% · 남은 ${fm(p.timeLeft)}` : `${p.done}/${p.total} · ${p.pct}%`}</span></div>
       ${list || adding ? `<ul class="btree">${list}${adding ? addRow(c.id) : ''}</ul>` : ''}
       ${onlyLeft && kids.length && !list && !adding ? '<p class="bcard-done muted">이 카드는 다 끝냈어요</p>' : ''}
       <button class="badd" data-add="${esc(c.id)}">＋ 항목 추가</button>
@@ -228,13 +242,15 @@
     $('#bb-dday').textContent = dd;
     $('#bb-dday').hidden = !dd;
     $('#bb-dday').classList.toggle('soon', !!ex && Scope.daysUntil(ex.date, Date.now()) !== null && Scope.daysUntil(ex.date, Date.now()) <= 7 && Scope.daysUntil(ex.date, Date.now()) >= 0);
-    const pc = ex ? Scope.pace(p.total - p.done, ex.date, Date.now()) : null;
-    $('#bb-pace').textContent = pc ? (pc.days > 0 ? `하루 ${pc.perDay}개씩` : `남은 ${pc.perDay}개`) : '';
+    const plan = ex ? Scope.timePlan(p, ex, Date.now()) : null;
+    const pc = ex && !plan ? Scope.pace(p.total - p.done, ex.date, Date.now()) : null;
+    $('#bb-pace').textContent = plan ? (plan.finished ? '다 끝냈어요' : plan.days > 0 ? `하루 ${fm(plan.perDay)}씩` : `남은 ${fm(plan.left)}`) : pc ? (pc.days > 0 ? `하루 ${pc.perDay}개씩` : `남은 ${pc.perDay}개`) : '';
     $('#bb-pace').title = pc && pc.days > 0 ? `시험까지 ${pc.days}일, 남은 항목 ${p.total - p.done}개` : '';
-    $('#bb-pace').hidden = !pc;
+    $('#bb-pace').hidden = !plan && !pc;
+    renderPace(plan, p);
     $('#bb-track').innerHTML = A.pawnTrack(p.pct);
     $('#bb-track').setAttribute('aria-label', `전체 진행률 ${p.pct}%`);
-    $('#bb-pct').textContent = `${p.done}/${p.total} · ${p.pct}%`;
+    $('#bb-pct').textContent = p.timeTotal ? `${p.pct}%` : `${p.done}/${p.total} · ${p.pct}%`;
     $('#bb-undo').disabled = !store.canUndo();
     $('#bb-colors').innerHTML = INK_COLORS.map((c) => `<button class="bb-color${c === inkColor ? ' active' : ''}" data-color="${c}" style="--ink:${c}" aria-label="색 ${c}"></button>`).join('');
 
@@ -249,6 +265,36 @@
       <span class="f-review">↻ 다시 보기 ${count('review')}</span>
       <label class="bl-toggle"><input type="checkbox" id="bl-only-left"${onlyLeft ? ' checked' : ''}> 남은 것만</label>` : '';
   }
+
+  // 시험 시간 페이스 띠
+  function renderPace(plan, p) {
+    const el = $('#board-pace');
+    if (!plan) {
+      el.hidden = !(p.total && !p.timeTotal);
+      el.innerHTML = el.hidden ? '' : '<div class="bp-row"><span>⏱ 항목 옆 <b>⏱</b>을 눌러 걸리는 시간을 적으면, 시험까지 하루에 몇 시간씩 해야 하는지 계산해 드려요.</span></div>';
+      return;
+    }
+    el.hidden = false;
+    const dday = plan.days > 0 ? `시험까지 ${plan.days}일` : plan.days === 0 ? '오늘 시험' : '시험 끝';
+    const today = plan.finished ? '모든 범위를 끝냈어요 ♛'
+      : plan.todayLeft ? `오늘 할 양 <b>${fm(plan.todayLeft)}</b> 남음` : '오늘 할 양 <b>완료 ✓</b>';
+    const behind = !plan.finished && plan.behind > 0 ? `<span class="bp-behind">밀린 양 ${fm(plan.behind)}</span>` : '';
+    el.innerHTML = `<button class="bp-row" id="bp-toggle" aria-expanded="${paceOpen}">
+        <span>⏱ ${today}</span>${behind}<span class="muted">${dday}</span><span class="bp-more">${paceOpen ? '접기 ▴' : '자세히 ▾'}</span>
+      </button>
+      ${paceOpen ? `<div class="bp-grid">
+        <div><small>전체 소요시간</small><b>${fm(plan.total)}</b><small>${p.noEst ? `시간 안 적은 항목 ${p.noEst}개` : '모든 항목 기준'}</small></div>
+        <div><small>한 만큼</small><b>${plan.pct}%</b><small>${fm(plan.done)} 함</small></div>
+        <div><small>남은 시간</small><b>${fm(plan.left)}</b><small>${100 - plan.pct}% 남음</small></div>
+        <div><small>오늘 할 양</small><b>${fm(plan.todayQuota)}</b><small>${fm(plan.todayDone)} 함 · ${fm(plan.todayLeft)} 남음</small></div>
+        <div><small>하루 기본 페이스</small><b>${fm(plan.basePerDay)}</b><small>처음 계획대로라면</small></div>
+        <div class="${plan.behind ? 'warn' : ''}"><small>${plan.behind ? '밀려서 필요한 페이스' : '지금 필요한 페이스'}</small><b>${fm(plan.perDay)}</b><small>${plan.extraPerDay ? `하루 ${fm(plan.extraPerDay)} 더` : '계획대로 가고 있어요'}</small></div>
+      </div>` : ''}`;
+  }
+
+  $('#board-pace').addEventListener('click', (e) => {
+    if (e.target.closest('#bp-toggle')) { paceOpen = !paceOpen; renderBar(); }
+  });
 
   function render() {
     if (renderingNow) return;
@@ -276,6 +322,14 @@
         addTarget = null;
       }
       setToolClass();
+      const ex0 = exam();
+      if (ex0) {
+        const pp = Scope.examProgress(st().topics, examId);
+        const copy = Object.assign({}, ex0);
+        if (Scope.touchPlan(copy, pp, Date.now())) {
+          store.update((s) => { const e = s.exams.find((x) => x.id === examId); e.planStart = copy.planStart; e.paceSnap = copy.paceSnap; }, { silent: true });
+        }
+      }
       renderBar();
       const index = Scope.indexByParent(st().topics);
       const cards = index.get('root:' + examId) || [];
@@ -301,6 +355,8 @@
       celebrate(id, nowDone);
       return;
     }
+    const tm = e.target.closest('[data-time]');
+    if (tm) { openTime(tm.dataset.time); return; }
     const col = e.target.closest('[data-collapse]');
     if (col) {
       mutate((s) => { const n = s.topics.find((x) => x.id === col.dataset.collapse); if (n) n.collapsed = !n.collapsed; }, false);
@@ -310,6 +366,71 @@
     if (add) { openAdd(add.dataset.add); return; }
     const m = e.target.closest('[data-menu]');
     if (m) { openMenu(m.dataset.menu, m); return; }
+  });
+
+  /* ---------- 소요시간·진행률 입력 ---------- */
+  let timeId = null;
+  function timeVals() {
+    const h = parseInt($('#time-h').value, 10) || 0;
+    const m = parseInt($('#time-m').value, 10) || 0;
+    return { est: Math.max(0, Math.min(5999, h * 60 + m)), pct: +$('#time-pct').value || 0 };
+  }
+  function timePreview() {
+    const { est, pct } = timeVals();
+    $('#time-pct-label').textContent = pct + '%';
+    $$('#time-pct-quick [data-pct]').forEach((b) => b.classList.toggle('active', +b.dataset.pct === pct));
+    $$('#time-quick [data-min]').forEach((b) => b.classList.toggle('active', +b.dataset.min === est));
+    $('#time-preview').textContent = est
+      ? `${fm(est)} 중 ${fm(Math.round(est * pct / 100))} 한 셈이에요 · 남은 ${fm(Math.round(est * (100 - pct) / 100))}`
+      : '걸리는 시간을 적으면 시험 페이스 계산에 들어가요.';
+  }
+  function openTime(id) {
+    const n = byId(id);
+    if (!n) return;
+    timeId = id;
+    let card = n;
+    while (card.parentId) card = byId(card.parentId);
+    $('#time-item').textContent = card.id === n.id ? n.title : `${card.title} · ${n.title}`;
+    const est = +n.est || 0;
+    $('#time-h').value = est ? Math.floor(est / 60) : '';
+    $('#time-m').value = est ? est % 60 : '';
+    $('#time-pct').value = Scope.leafPct(n);
+    timePreview();
+    $('#time-dlg').hidden = false;
+    $('#time-h').focus();
+  }
+  function closeTime() { $('#time-dlg').hidden = true; timeId = null; }
+  ['input', 'change'].forEach((ev) => $('#time-form').addEventListener(ev, timePreview));
+  $('#time-quick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-min]'); if (!b) return;
+    const v = +b.dataset.min; $('#time-h').value = Math.floor(v / 60) || ''; $('#time-m').value = v % 60 || (Math.floor(v / 60) ? 0 : ''); timePreview();
+  });
+  $('#time-pct-quick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pct]'); if (!b) return;
+    $('#time-pct').value = b.dataset.pct; timePreview();
+  });
+  $('#time-cancel').addEventListener('click', closeTime);
+  $('#time-dlg').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTime(); });
+  $('#time-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const id = timeId;
+    const { est, pct } = timeVals();
+    closeTime();
+    let nowDone = false;
+    mutate((s) => {
+      const n = s.topics.find((t) => t.id === id);
+      if (!n) return;
+      const ex = s.exams.find((x) => x.id === n.examId);
+      const before = Scope.examProgress(s.topics, n.examId).timeLeft;
+      n.est = est || null;
+      const afterEst = Scope.examProgress(s.topics, n.examId).timeLeft;
+      // 시간을 새로 적거나 고친 건 공부한 게 아니니 오늘 아침 기준도 같이 옮긴다
+      if (ex && ex.paceSnap && ex.paceSnap.day === Stats.dayKey(Date.now())) ex.paceSnap.left = Math.max(0, ex.paceSnap.left + (afterEst - before));
+      const was = Scope.leafPct(n);
+      Scope.setLeafProgress(n, pct);
+      nowDone = was < 100 && pct >= 100;
+    });
+    celebrate(id, nowDone);
   });
 
   function celebrate(id, nowDone) {
@@ -431,6 +552,7 @@
       items.push(['add', isCard ? '항목 추가' : '하위 항목 추가']);
       items.push(['rename', '이름 바꾸기']);
       for (const k of Object.keys(FLAG_INFO)) items.push(['flag:' + k, `${FLAG_INFO[k].icon} ${FLAG_INFO[k].label} ${n.flags && n.flags[k] ? '표시 빼기' : '표시'}`]);
+      if (!(Scope.indexByParent(st().topics).get(id) || []).length) items.push(['time', '⏱ 소요시간·진행률']);
       items.push(['check-all', '모두 체크']);
       items.push(['uncheck-all', '모두 체크 해제']);
       items.push(['focus', '◷ 이 범위로 타이머 시작']);
@@ -472,6 +594,7 @@
     const n = byId(id);
     if (!n) return;
     if (act === 'add') openAdd(id);
+    else if (act === 'time') openTime(id);
     else if (act === 'rename') {
       const el = cardsEl.querySelector(`[data-rename="${CSS.escape(id)}"]`);
       if (el) startRename(id, el);

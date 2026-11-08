@@ -230,7 +230,12 @@
       return `<a class="exam-row" href="#board" data-open-exam="${esc(ex.id)}">
         <span class="exam-name">${esc(ex.name)}</span>${dd ? `<span class="badge">${dd}</span>` : ''}
         <span class="pawn-track" aria-label="진행률 ${p.pct}%">${pawnTrack(p.pct)}</span>
-        <span class="exam-pct">${p.done}/${p.total} · ${p.pct}%${(() => { const pc = Scope.pace(p.total - p.done, ex.date, t); return pc && pc.days > 0 ? ` · 하루 ${pc.perDay}개` : ''; })()}</span></a>`;
+        <span class="exam-pct">${(() => {
+          const plan = Scope.timePlan(p, ex, t);
+          if (plan) return `${p.pct}% · 남은 ${Stats.formatMinutes(plan.left)}` + (plan.finished ? '' : plan.days > 0 ? ` · 오늘 ${plan.todayLeft ? Stats.formatMinutes(plan.todayLeft) + ' 더' : '몫 완료 ✓'}` : '') + (plan.behind && !plan.finished ? ` · <span class="overdue">밀림 ${Stats.formatMinutes(plan.behind)}</span>` : '');
+          const pc = Scope.pace(p.total - p.done, ex.date, t);
+          return `${p.done}/${p.total} · ${p.pct}%` + (pc && pc.days > 0 ? ` · 하루 ${pc.perDay}개` : '');
+        })()}</span></a>`;
     }).join('') : '<p class="muted" style="margin:0">시험 범위를 화이트보드에 펼쳐 놓고 하나씩 체크해 보세요. <a href="#board" data-go="board">시험 만들기</a></p>';
   }
 

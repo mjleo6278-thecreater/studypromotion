@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "test": "node --test tests/logic.test.js tests/scope.test.js tests/gsync.test.js tests/lock.test.js",
-    "test:e2e": "node tests/e2e.js && node tests/board.e2e.js && node tests/pwa.e2e.js && node tests/gsync.e2e.js && node tests/lock.e2e.js",
+    "test:e2e": "node tests/e2e.js && node tests/board.e2e.js && node tests/pwa.e2e.js && node tests/gsync.e2e.js && node tests/lock.e2e.js && node tests/pace.e2e.js",
     "build": "node tools/build.js",
     "start": "python3 -m http.server 8080"
   }

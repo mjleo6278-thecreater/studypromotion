@@ -89,6 +89,7 @@
           <button class="bb-btn" id="bb-more" title="더 보기" aria-label="더 보기">⋯</button>
         </div>
       </div>
+      <div class="board-pace" id="board-pace" hidden></div>
       <div class="board-viewport" id="board-viewport" tabindex="0" aria-label="시험 범위 화이트보드">
         <div class="board-world" id="board-world">
           <svg class="board-ink" id="board-ink" width="12000" height="8000"></svg>
@@ -313,6 +314,31 @@
     <div class="lock-msg" id="lock-msg">지금은 공부 시간이에요.</div>
     <div class="lock-leaves" id="lock-leaves"></div>
     <button class="lock-quit" id="lock-quit" type="button"><i class="fill"></i><span>3초 길게 눌러 포기하기</span></button>
+  </div>
+
+  <!-- 화이트보드: 소요시간·진행률 -->
+  <div class="ask-backdrop" id="time-dlg" hidden>
+    <form class="ask-box" id="time-form" role="dialog" aria-modal="true" aria-labelledby="time-title">
+      <h2 id="time-title">소요시간·진행률</h2>
+      <p class="muted small" id="time-item"></p>
+      <label class="field">이 항목에 걸리는 시간
+        <span class="time-input"><input type="number" id="time-h" min="0" max="99" inputmode="numeric" aria-label="시간"> 시간 <input type="number" id="time-m" min="0" max="59" step="5" inputmode="numeric" aria-label="분"> 분</span>
+      </label>
+      <div class="lock-chips" id="time-quick">
+        <button class="chip" type="button" data-min="15">15분</button><button class="chip" type="button" data-min="30">30분</button><button class="chip" type="button" data-min="60">1시간</button><button class="chip" type="button" data-min="90">1시간 30분</button><button class="chip" type="button" data-min="120">2시간</button><button class="chip" type="button" data-min="180">3시간</button>
+      </div>
+      <label class="field">얼마나 했나요? <b id="time-pct-label">0%</b>
+        <input type="range" id="time-pct" min="0" max="100" step="5">
+      </label>
+      <div class="lock-chips" id="time-pct-quick">
+        <button class="chip" type="button" data-pct="0">0%</button><button class="chip" type="button" data-pct="25">25%</button><button class="chip" type="button" data-pct="50">50%</button><button class="chip" type="button" data-pct="75">75%</button><button class="chip" type="button" data-pct="100">다 했어요</button>
+      </div>
+      <p class="muted small" id="time-preview"></p>
+      <div class="ask-actions">
+        <button class="btn" type="button" id="time-cancel">취소</button>
+        <button class="btn primary" type="submit">저장</button>
+      </div>
+    </form>
   </div>
 
   <!-- 화이트보드: 범위 붙여넣기 -->
