@@ -769,3 +769,68 @@ a, .btn.link, .tab.active, .badge { color: var(--accent-text); }
   #view-board.list-mode .board-bar { gap: 8px; }
   .list-mode .board-cards { padding: 10px 10px 32px; gap: 10px; }
 }
+
+/* ================================================================
+   상단 아이콘 (화면 밝기 · 앱 소개 · 계정)
+   ================================================================ */
+.top-actions { order: 4; display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.install-btn:not([hidden]) + .top-actions { margin-left: 6px; }
+.top-icon { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; border: 0; border-radius: 10px; background: none; color: var(--muted); cursor: pointer; padding: 0; }
+.top-icon:hover { background: var(--bg); color: var(--text); }
+.top-icon.active { color: var(--accent-text); }
+.top-icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.top-icon svg .fill { fill: currentColor; stroke: none; }
+.acc-btn.on::after { content: ''; position: absolute; right: 6px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface); }
+
+/* 계정·설정 */
+.acc-hero { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.acc-avatar { flex: none; width: 52px; height: 52px; border-radius: 50%; background: var(--bg); border: 1px solid var(--line); color: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; }
+.acc-avatar svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+.acc-avatar.on { background: var(--ink); color: var(--ink-text); border-color: var(--ink); }
+.acc-who { min-width: 0; }
+.acc-who h2 { font-size: 17px; overflow-wrap: anywhere; }
+.acc-who p { margin: 2px 0 0; overflow-wrap: anywhere; }
+.acc-perks { list-style: none; margin: 0 0 14px; padding: 12px 14px; border-radius: 10px; background: var(--bg); display: grid; gap: 6px; font-size: 14px; }
+.acc-perks li::before { content: '✓'; color: var(--accent-text); font-weight: 800; margin-right: 8px; }
+.acc-note { margin: 12px 0 0; text-align: center; }
+.btn-row.left { justify-content: flex-start; }
+.installed-note { display: none; margin: 0; }
+@media (display-mode: standalone) { .installed-note { display: block; } }
+.stats-foot { text-align: center; margin: 4px 0 0; }
+.about-link { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text); }
+.about-link > span:first-child { display: flex; flex-direction: column; gap: 2px; }
+.about-link > span:last-child { font-size: 24px; color: var(--muted); }
+.about-link:hover { border-color: var(--text); }
+
+/* 앱 소개 */
+.about-hero { text-align: center; padding: 18px 8px 22px; }
+.about-icon { width: 84px; height: 84px; display: block; margin: 0 auto 14px; border-radius: 22px; box-shadow: 0 0 0 1px var(--line); }
+.about-hero h1 { font-size: 26px; margin: 0 0 4px; }
+.about-motto { margin: 0 0 16px; font-size: 16px; color: var(--accent-text); font-weight: 700; }
+.about-track { width: 224px; height: 28px; margin: 0 auto 14px; display: grid; }
+.about-track .pt-piece { width: 22px; height: 22px; }
+.maker { color: var(--text); }
+.about-story p { line-height: 1.8; margin: 10px 0; word-break: keep-all; }
+.about-story blockquote { margin: 16px 0 4px; padding: 12px 16px; border-left: 4px solid var(--accent); background: var(--bg); border-radius: 0 10px 10px 0; font-weight: 700; font-size: 16px; }
+.panel h2 + p { margin-top: 8px; }
+.maker-line { font-size: 18px; margin: 10px 0 6px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.maker-line .muted { font-size: 13px; }
+.manual details { border-top: 1px solid var(--line); padding: 2px 0; }
+.manual details:first-of-type { border-top: 0; }
+.manual summary { cursor: pointer; padding: 12px 2px; font-weight: 700; list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.manual summary::-webkit-details-marker { display: none; }
+.manual summary::after { content: '+'; font-size: 18px; color: var(--muted); font-weight: 400; }
+.manual details[open] summary::after { content: '−'; }
+.manual details > *:not(summary) { margin: 0 2px 12px; font-size: 14px; line-height: 1.7; word-break: keep-all; }
+.manual ol, .manual ul { padding-left: 20px; }
+.manual li { margin: 4px 0; }
+.routine { margin: 10px 0 0; padding-left: 20px; line-height: 1.7; word-break: keep-all; font-size: 14px; }
+.routine li { margin: 6px 0; }
+.egg { border-style: dashed; }
+.egg p { margin: 8px 0 0; }
+.news { margin: 10px 0 0; padding-left: 18px; line-height: 1.7; font-size: 14px; word-break: keep-all; }
+.news li { margin: 4px 0; }
+.about-foot { text-align: center; margin: 8px 0 0; }
+.home-about { text-align: center; margin: 4px 0 0; font-size: 13px; }
+.home-about a { color: var(--muted); }
+.home-about a:hover { color: var(--accent-text); }

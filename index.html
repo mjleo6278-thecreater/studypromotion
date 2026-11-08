@@ -20,7 +20,11 @@
   <header class="topbar">
     <div class="brand"><img class="brand-mark" src="icons/favicon-64.png" alt="" width="28" height="28">스터디 프로모션</div>
     <button class="btn install-btn" id="install-btn" hidden>앱 설치</button>
-    <button class="theme-btn" id="theme-btn" title="화면 밝기: 자동" aria-label="화면 밝기 바꾸기">◐</button>
+    <div class="top-actions">
+      <button class="top-icon" id="theme-btn" type="button" title="화면 밝기: 자동" aria-label="화면 밝기 바꾸기"></button>
+      <button class="top-icon" id="about-btn" type="button" data-view="about" title="앱 소개·사용설명서" aria-label="앱 소개와 사용설명서"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.6"/><path d="M12 10.8v6"/><circle class="fill" cx="12" cy="7.6" r="1.25"/></svg></button>
+      <button class="top-icon acc-btn" id="account-btn" type="button" data-view="account" title="계정·설정" aria-label="계정과 설정"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20c1.1-3.9 4-6 7.4-6s6.3 2.1 7.4 6"/></svg></button>
+    </div>
     <nav class="tabs" role="tablist">
       <button class="tab" data-view="home" role="tab"><span class="ico">⌂</span><span>홈</span></button>
       <button class="tab" data-view="board" role="tab"><span class="ico">▦</span><span>범위</span></button>
@@ -51,6 +55,7 @@
         <div class="panel-head"><h2>오늘 할 일</h2><a href="#plan" data-go="plan">전체 보기</a></div>
         <ul class="task-list" id="h-tasklist"></ul>
       </div>
+      <p class="home-about"><a href="#about" data-go="about">♟ 스터디 프로모션 이야기 · 사용설명서</a></p>
     </section>
 
     <!-- 시험 범위 화이트보드 -->
@@ -285,49 +290,187 @@
         <div class="panel-head"><h2>최근 집중 기록</h2></div>
         <ul class="simple-list" id="session-list"></ul>
       </div>
+      <p class="muted small stats-foot">하루 목표와 집중·휴식 시간은 <a href="#account" data-go="account">계정·설정</a>에서 바꿀 수 있어요.</p>
+    </section>
+
+    <!-- 계정·설정 -->
+    <section id="view-account" class="view">
+      <h1>계정·설정</h1>
+      <div class="panel acc-panel" id="acc-panel">
+        <div class="acc-hero">
+          <div class="acc-avatar" id="acc-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20c1.1-3.9 4-6 7.4-6s6.3 2.1 7.4 6"/></svg></div>
+          <div class="acc-who"><h2 id="acc-title">로그인하지 않았어요</h2><p class="muted small" id="acc-status"></p></div>
+        </div>
+        <div id="acc-out">
+          <ul class="acc-perks">
+            <li>폰과 PC에서 같은 기록을 이어서 써요</li>
+            <li>폰을 바꾸거나 앱을 지워도 기록이 남아요</li>
+            <li>기록이 바뀌면 알아서 계정에 저장돼요</li>
+          </ul>
+          <button class="btn google-btn" id="acc-google" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.3-4.8 3.3-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 0 1 0-4.2V7.1H2.1a11 11 0 0 0 0 9.8l3.7-2.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1l3.7 2.8C6.7 7.3 9.1 5.4 12 5.4z"/></svg>구글 계정으로 로그인</button>
+          <div class="acc-or muted small">또는 이메일로</div>
+          <form class="acc-form" id="acc-form" autocomplete="on">
+            <input type="email" id="acc-email" placeholder="이메일" autocomplete="username" required>
+            <input type="password" id="acc-pass" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" minlength="6" required>
+            <div class="btn-row">
+              <button class="btn primary" type="submit" data-mode="login">로그인</button>
+              <button class="btn" type="submit" data-mode="signup">새 계정 만들기</button>
+              <button class="btn link" type="button" id="acc-reset">비밀번호를 잊었어요</button>
+            </div>
+          </form>
+          <p class="muted small acc-note">계정이 없어도 모든 기능을 쓸 수 있어요. 이때 기록은 이 기기에만 저장돼요.</p>
+        </div>
+        <div id="acc-in" hidden>
+          <div class="btn-row">
+            <button class="btn" id="acc-sync" type="button">지금 동기화</button>
+            <button class="btn link" id="acc-logout" type="button">로그아웃</button>
+          </div>
+        </div>
+      </div>
+
       <div class="panel">
         <div class="panel-head"><h2>설정</h2></div>
         <form class="settings" id="settings-form">
-          <label class="field">하루 목표(분)<input type="number" id="set-goal" min="10" step="10"></label>
-          <label class="field">집중 시간(분)<input type="number" id="set-focus" min="1" max="120"></label>
-          <label class="field">휴식 시간(분)<input type="number" id="set-break" min="1" max="60"></label>
+          <label class="field">하루 목표(분)<input type="number" id="set-goal" min="10" step="10" inputmode="numeric"></label>
+          <label class="field">집중 시간(분)<input type="number" id="set-focus" min="1" max="120" inputmode="numeric"></label>
+          <label class="field">휴식 시간(분)<input type="number" id="set-break" min="1" max="60" inputmode="numeric"></label>
           <button class="btn" type="submit">저장</button>
         </form>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>앱으로 설치</h2></div>
         <p class="muted small install-help" id="install-help">
-          휴대폰·PC에 앱처럼 설치하면 인터넷 없이도 열립니다.
-          안드로이드·PC 크롬/엣지: 주소창의 설치 아이콘 또는 위의 <b>앱 설치</b> 버튼.
+          휴대폰·PC에 앱처럼 설치하면 홈 화면 아이콘으로 바로 열리고, 인터넷이 없어도 쓸 수 있어요.<br>
+          안드로이드(삼성 인터넷·크롬): 메뉴 ⋮ → <b>홈 화면에 추가</b> 또는 <b>앱 설치</b>.<br>
+          PC 크롬·엣지: 주소창 오른쪽의 설치 아이콘 또는 위의 <b>앱 설치</b> 버튼.<br>
           아이폰·아이패드: Safari에서 공유 버튼 → <b>홈 화면에 추가</b>.
-          데이터는 이 기기 브라우저에 저장되니 가끔 <b>백업 내보내기</b>를 해 두세요.
         </p>
-        <div class="gsync" id="account">
-          <h3 class="gsync-title">계정 · 기기 간 동기화</h3>
-          <p class="muted small" id="acc-status"></p>
-          <div id="acc-out">
-            <button class="btn google-btn" id="acc-google" type="button"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#4285F4" d="M22.6 12.2c0-.8-.1-1.5-.2-2.2H12v4.2h5.9a5 5 0 0 1-2.2 3.3v2.7h3.6c2.1-1.9 3.3-4.8 3.3-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.6-2.8c-1 .7-2.2 1.1-3.7 1.1-2.9 0-5.3-1.9-6.2-4.5H2.1v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.8 14.1a6.6 6.6 0 0 1 0-4.2V7.1H2.1a11 11 0 0 0 0 9.8l3.7-2.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1l3.7 2.8C6.7 7.3 9.1 5.4 12 5.4z"/></svg>구글 계정으로 로그인</button>
-            <div class="acc-or muted small">또는 이메일로</div>
-            <form class="acc-form" id="acc-form" autocomplete="on">
-              <input type="email" id="acc-email" placeholder="이메일" autocomplete="username" required>
-              <input type="password" id="acc-pass" placeholder="비밀번호 (6자 이상)" autocomplete="current-password" minlength="6" required>
-              <div class="btn-row">
-                <button class="btn primary" type="submit" data-mode="login">로그인</button>
-                <button class="btn" type="submit" data-mode="signup">새 계정 만들기</button>
-                <button class="btn link" type="button" id="acc-reset">비밀번호를 잊었어요</button>
-              </div>
-            </form>
-          </div>
-          <div id="acc-in" hidden>
-            <div class="btn-row">
-              <button class="btn" id="acc-sync" type="button">지금 동기화</button>
-              <button class="btn link" id="acc-logout" type="button">로그아웃</button>
-            </div>
-          </div>
-        </div>
-        <div class="btn-row">
+        <p class="muted small installed-note">지금 앱으로 설치해서 쓰고 있어요 ✓</p>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>백업</h2></div>
+        <p class="muted small">기록 전체를 파일로 내려받거나 불러와요. 로그인하지 않았다면 가끔 백업해 두세요.</p>
+        <div class="btn-row left">
           <button class="btn" id="export-btn">백업 내보내기</button>
           <label class="btn">백업 가져오기<input type="file" id="import-file" accept="application/json,.json" hidden></label>
           <button class="btn danger" id="reset-btn">모든 데이터 초기화</button>
         </div>
       </div>
+
+      <a class="panel about-link" href="#about" data-go="about"><span><b>앱 소개 · 사용설명서</b><span class="muted small">이름에 담긴 뜻, 만든 사람, 잘 쓰는 법</span></span><span aria-hidden="true">›</span></a>
+    </section>
+
+    <!-- 앱 소개 -->
+    <section id="view-about" class="view">
+      <div class="about-hero">
+        <svg class="about-icon" viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="22" fill="#0a0a0a"/><path d="M50 80 C40 74 28 73 18 75 L18 47 C28 45 40 46 50 52 C60 46 72 45 82 47 L82 75 C72 73 60 74 50 80 Z" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/><path d="M50 52 L50 80" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M31 40 L28 20 L40 29 L50 15 L60 29 L72 20 L69 40 Z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+        <h1>스터디 프로모션</h1>
+        <p class="about-motto">한 칸씩 전진해서, 시험 날엔 퀸으로.</p>
+        <div class="pawn-track about-track" id="about-track" aria-hidden="true"></div>
+        <p class="muted small">만든 사람 <b class="maker">남민재</b> · <span id="app-version"></span></p>
+      </div>
+
+      <div class="panel about-story">
+        <h2>이름에 담긴 뜻</h2>
+        <p>체스판 위에서 가장 작은 말은 <b>폰(Pawn)</b>입니다. 한 번에 단 한 칸, 그것도 앞으로만 걸을 수 있습니다. 뒤로 물러설 수도, 옆으로 비켜 갈 수도 없기에 폰은 늘 가장 약한 말로 여겨지지요.</p>
+        <p>그러나 체스에는 오직 폰에게만 허락된 규칙이 하나 있습니다. 쉬지 않고 걸어 상대 진영의 마지막 줄에 닿는 순간, 폰은 체스판에서 가장 강한 말인 <b>퀸(Queen)</b>으로 다시 태어납니다. 이것을 <b>프로모션(Promotion)</b>, 곧 ‘승급’이라고 부릅니다.</p>
+        <p>공부도 이와 같습니다. 오늘 외운 단어 하나, 오늘 푼 문제 한 장은 작아 보여도, 한 칸씩 쌓인 걸음은 결코 사라지지 않습니다. 매일 한 칸씩 묵묵히 나아간 학생은 시험 당일, 더 이상 폰이 아닌 퀸이 되어 시험장에 들어섭니다.</p>
+        <p><b>스터디 프로모션</b>은 그 한 칸 한 칸을 함께 세어 주는 앱입니다. 범위를 하나 끝낼 때마다 폰이 한 칸 전진하고, 모든 범위를 마치는 날 당신의 폰은 퀸으로 승급합니다.</p>
+        <blockquote>한 칸씩 전진해서, 시험 날엔 퀸으로.</blockquote>
+      </div>
+
+      <div class="panel">
+        <h2>만든 사람</h2>
+        <p class="maker-line"><b>남민재</b> <span class="muted">기획 · 디자인 · 제작</span></p>
+        <p class="muted small">체스의 ‘프로모션’에서 이름을 따, 시험을 준비하는 모든 학생이 하루 한 칸씩 나아가도록 응원하는 마음으로 만들었어요.</p>
+      </div>
+
+      <div class="panel manual">
+        <h2>사용설명서</h2>
+        <p class="muted small">처음이라면 ‘처음 시작하기’부터 읽어 보세요. 제목을 누르면 펼쳐져요.</p>
+        <details open>
+          <summary>처음 시작하기 (3분이면 충분해요)</summary>
+          <ol>
+            <li><a href="#board" data-go="board">범위</a> 탭에서 시험 이름과 날짜를 적고, 시험 보는 과목을 고르세요.</li>
+            <li>과목마다 <b>공부할 내용 추가</b> 칸에 시험 범위를 하나씩 적어요. 예: ‘1단원 다항식’, ‘본문 1~3과’.</li>
+            <li>항목 옆 <b>⏱</b>을 눌러 걸리는 시간을 적으면, 시험까지 하루에 얼마나 해야 하는지 계산해 줘요.</li>
+            <li>공부할 땐 <a href="#timer" data-go="timer">타이머</a>나 폰 잠금 모드를 켜고, 끝낸 범위는 체크하세요. 체크할 때마다 폰이 한 칸씩 전진해요.</li>
+          </ol>
+        </details>
+        <details>
+          <summary>⌂ 홈</summary>
+          <p>오늘 공부한 시간과 하루 목표, 남은 할 일, 오늘 복습할 카드, 연속 학습일을 한눈에 보여 줘요. <b>시험 준비</b>에는 시험마다 D-day, 진행률(폰이 걷는 체스 칸), 남은 시간과 오늘 더 해야 할 양이 나와요.</p>
+        </details>
+        <details>
+          <summary>▦ 범위 — 목록과 보드</summary>
+          <ul>
+            <li><b>목록 보기</b>: 과목 아래에 공부할 내용이 차례로 놓여요. 휴대폰에서 쓰기 편해요.</li>
+            <li><b>보드 보기</b>: 넓은 화이트보드에 과목 카드를 펼쳐 두고, 끌어서 옮기거나 펜·형광펜으로 표시할 수 있어요. 두 손가락으로 확대·이동해요.</li>
+            <li><b>체크</b>: 끝낸 항목을 체크해요. 단원을 체크하면 안에 든 항목이 모두 체크돼요. 과목을 다 끝내면 ‘♛ 승급’ 도장이 찍혀요.</li>
+            <li><b>⋯ 메뉴</b>: 하위 항목 추가(단원 → 세부 내용), 이름 바꾸기, ★ 중요·! 어려움·↻ 다시 보기 표시, 순서 바꾸기, 이 범위로 타이머 시작, 오늘 할 일로 보내기, 삭제.</li>
+            <li><b>⏱ 소요시간·진행률</b>: 걸리는 시간과 얼마나 했는지(%)를 적어요. 반쯤 했다면 50%로 두면 돼요.</li>
+            <li><b>페이스 띠</b>: 오늘 할 양, 밀린 양, 지금 필요한 하루 페이스를 알려 줘요. ‘자세히’를 누르면 전체 소요시간과 한 만큼이 나와요.</li>
+            <li><b>목록 붙여넣기</b>: 이미 정리해 둔 범위가 있으면 한 번에 붙여넣을 수 있어요. ‘# 과목’, ‘- 단원’, 들여쓰기로 단계를 나눠요.</li>
+            <li>실수로 지웠다면 <b>↶ 되돌리기</b>로 되살릴 수 있어요.</li>
+          </ul>
+        </details>
+        <details>
+          <summary>☑ 계획</summary>
+          <p>할 일을 적고 과목, 마감일, 예상 시간을 정해요. 끝내면 체크하고, ‘오늘까지’를 누르면 오늘 할 일만 모아 봐요. 과목 목록도 여기서 관리해요.</p>
+        </details>
+        <details>
+          <summary>◷ 타이머와 폰 잠금 모드</summary>
+          <ul>
+            <li>집중(기본 25분)과 휴식(기본 5분)을 번갈아 해요. 시간이 끝나면 소리와 알림으로 알려 주고, 집중한 시간은 과목별로 기록돼요.</li>
+            <li>범위의 ⋯ 메뉴에서 <b>이 범위로 타이머 시작</b>을 누르면 무엇을 공부했는지도 함께 남아요.</li>
+            <li><b>폰 잠금 모드</b>: 정한 시간 동안 잠금 화면만 보여요. 다른 앱으로 나간 시간은 공부 시간에서 빠지고, 그만두려면 3초 동안 길게 눌러야 해요.</li>
+          </ul>
+        </details>
+        <details>
+          <summary>❐ 복습 (플래시카드)</summary>
+          <p>덱을 만들고 앞면(질문)과 뒷면(정답)을 적어요. 복습할 때 ‘다시·어려움·보통·쉬움’으로 답하면, 잊어버릴 때쯤 다시 보여 주는 <b>간격 반복</b>으로 오래 기억하게 도와줘요. ‘apple - 사과’처럼 여러 장을 한 번에 넣을 수도 있어요.</p>
+        </details>
+        <details>
+          <summary>▥ 통계와 월 목표</summary>
+          <p>이번 달 공부 시간과 지난달 비교, 최근 6개월과 7일 그래프, 과목별 누적 시간, 최근 기록을 보여 줘요. <b>월 목표</b>를 정하면 달마다 다른 날 수에 맞춰 하루 기본 페이스와 오늘 남은 양을 계산해 줘요.</p>
+        </details>
+        <details>
+          <summary>계정·동기화와 백업</summary>
+          <p>오른쪽 위 사람 아이콘을 눌러 구글 계정이나 이메일로 로그인하면, 폰과 PC에서 같은 기록을 자동으로 이어서 써요. 로그인하지 않으면 기록은 이 기기에만 저장되니, 가끔 <b>백업 내보내기</b>로 파일을 받아 두세요.</p>
+        </details>
+        <details>
+          <summary>앱으로 설치하기</summary>
+          <p>안드로이드(삼성 인터넷·크롬)는 메뉴 ⋮ → <b>홈 화면에 추가</b>(또는 앱 설치), 아이폰은 Safari 공유 버튼 → <b>홈 화면에 추가</b>, PC는 주소창 오른쪽 설치 아이콘을 눌러요. 새 버전이 나오면 앱을 열 때 알아서 바뀌어요.</p>
+        </details>
+      </div>
+
+      <div class="panel">
+        <h2>잘 쓰는 법</h2>
+        <ol class="routine">
+          <li><b>시험 3~4주 전</b> 과목별 범위를 모두 적고, 항목마다 걸리는 시간을 적어 두세요.</li>
+          <li><b>매일 아침</b> 홈에서 ‘오늘 할 양’을 확인해요. 밀렸다면 페이스 띠가 하루에 얼마나 더 해야 하는지 알려 줘요.</li>
+          <li><b>공부할 때</b> 타이머나 폰 잠금 모드를 켜서 딴짓을 막아요.</li>
+          <li><b>끝낸 범위는 바로 체크</b>하세요. 폰이 퀸에 가까워지는 걸 보는 게 생각보다 큰 힘이 돼요.</li>
+          <li><b>외울 것</b>(단어·개념·공식)은 플래시카드로 만들고, ‘복습 대기 카드’를 매일 0으로 만들어요.</li>
+          <li><b>주말</b>에는 통계로 한 주를 돌아보고, 다음 주 목표를 조정해요.</li>
+        </ol>
+      </div>
+
+      <div class="panel egg">
+        <h2>이스터에그 <span aria-hidden="true">🥚</span></h2>
+        <p class="muted">이 앱 어딘가에 작은 비밀을 숨겨 둘 예정이에요. 다음 업데이트를 기다려 주세요.</p>
+      </div>
+
+      <div class="panel">
+        <h2>업데이트 소식</h2>
+        <ul class="news" id="about-news">
+          <li><b>범위를 쉽게</b>: 시험을 만들 때 과목을 고르고, 과목마다 공부할 내용을 하나씩 적는 목록 보기</li>
+          <li><b>계정·설정</b>을 따로 모으고, 앱 소개와 사용설명서를 새로 만들었어요</li>
+        </ul>
+      </div>
+      <p class="muted small about-foot">© 2026 남민재 · 스터디 프로모션</p>
     </section>
   </main>
 

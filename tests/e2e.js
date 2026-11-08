@@ -35,7 +35,8 @@ const shotDir = process.argv[2];
   assert((await page.textContent('#h-tasks')) === '1', '완료 체크 후 1');
 
   // 타이머: 1분 집중 설정 후 시간 경과 시뮬레이션
-  await page.click('[data-view=stats]');
+  await page.click('#account-btn');
+  assert(await page.isVisible('#view-account') && await page.isVisible('#acc-google'), '계정·설정 화면 (오른쪽 위 아이콘)');
   await page.fill('#set-focus', '1');
   await page.click('#settings-form button[type=submit]');
   await page.click('[data-view=timer]');
@@ -89,6 +90,12 @@ const shotDir = process.argv[2];
   await page.fill('#t-title', '<img src=x onerror="window.__x=1">');
   await page.click('#task-form button[type=submit]');
   assert(!(await page.evaluate(() => window.__x)), 'HTML 이스케이프');
+
+  // 앱 소개
+  await page.click('#about-btn');
+  const about = await page.textContent('#view-about');
+  assert(about.includes('남민재') && about.includes('프로모션') && about.includes('사용설명서') && about.includes('이스터에그'), '앱 소개: 제작자·이름의 뜻·사용설명서·이스터에그 자리');
+  await page.click('[data-view=home]');
 
   // 모바일
   await page.setViewportSize({ width: 375, height: 760 });

@@ -48,16 +48,18 @@
   }
 
   /* ---------- 라우팅 ---------- */
-  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats'];
+  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'account', 'about'];
   let currentView = 'home';
 
   function go(view) {
     if (!VIEWS.includes(view)) view = 'home';
+    const prev = currentView;
     currentView = view;
     $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
-    $$('.tab').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
+    $$('.tab, .top-icon[data-view]').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
     document.body.classList.toggle('board-mode', view === 'board');
     if (location.hash !== '#' + view) history.replaceState(null, '', '#' + view);
+    if (prev === 'about' && view !== 'about') stopAboutTrack();
     render();
     window.scrollTo(0, 0);
   }
@@ -643,13 +645,37 @@
       return `<li><span>${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.label ? ` <span class="muted">· ${esc(s.label)}</span>` : ''}</span>
         <span class="muted">${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${Stats.formatMinutes(s.minutes)}</span></li>`;
     }).join('') : '<li class="empty">아직 기록이 없어요.</li>';
+  }
 
-    const set = st.settings;
+  /* ---------- 계정·설정 ---------- */
+  function renderAccount() {
+    const set = store.get().settings;
     if (document.activeElement.closest('#settings-form') == null) {
       $('#set-goal').value = set.dailyGoalMin;
       $('#set-focus').value = set.focusMin;
       $('#set-break').value = set.breakMin;
     }
+  }
+
+  /* ---------- 앱 소개 ---------- */
+  const APP_VERSION = '2.1';
+  const APP_DATE = '2026년 11월 9일';
+  let aboutTimer = null;
+  function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
+  function renderAbout() {
+    $('#app-version').textContent = `버전 ${APP_VERSION} · ${APP_DATE}`;
+    if (aboutTimer) return;
+    // 폰이 한 칸씩 전진해 끝 칸에서 퀸으로 승급하는 모습을 되풀이
+    let step = 0;
+    const draw = () => { $('#about-track').innerHTML = pawnTrack(step >= 7 ? 100 : Math.ceil((step / 7) * 100)); };
+    draw();
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { step = 7; draw(); return; }
+    aboutTimer = setInterval(() => {
+      if (document.hidden) return;
+      step = step >= 10 ? 0 : step + 1; // 7 = 퀸, 8~10 잠시 머묾
+      draw();
+    }, 650);
   }
 
   $('#mg-edit').addEventListener('click', () => {
@@ -680,7 +706,7 @@
     });
     if (!timer.running) setMode(timer.mode);
     $('#set-goal').blur();
-    renderStats();
+    renderAccount();
     toast('설정을 저장했어요');
   });
 
@@ -725,6 +751,8 @@
       if (!$('#deck-detail').hidden) renderDeckDetail();
       else if ($('#study').hidden) renderDecks();
     } else if (currentView === 'stats') renderStats();
+    else if (currentView === 'account') renderAccount();
+    else if (currentView === 'about') renderAbout();
     else if (currentView === 'board' && window.Board) window.Board.render();
   }
 
@@ -809,11 +837,18 @@
   /* ---------- 화면 밝기(자동/밝게/어둡게) ---------- */
   const THEMES = ['auto', 'light', 'dark'];
   const THEME_LABEL = { auto: '자동', light: '밝게', dark: '어둡게' };
+  // 글꼴마다 모양이 다른 기호 대신 직접 그린 아이콘
+  const THEME_ICON = {
+    auto: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.2"/><path class="fill" d="M12 3.8a8.2 8.2 0 0 1 0 16.4z"/></svg>',
+    light: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M2.6 12h2.2M19.2 12h2.2M5.4 5.4l1.6 1.6M17 17l1.6 1.6M5.4 18.6 7 17M17 7l1.6-1.6"/></svg>',
+    dark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.6 14.6A8 8 0 1 1 9.4 4.4a6.4 6.4 0 0 0 10.2 10.2z"/></svg>',
+  };
   function applyTheme(t) {
     if (t === 'auto') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', t);
     $('#theme-btn').title = '화면 밝기: ' + THEME_LABEL[t];
-    $('#theme-btn').textContent = t === 'dark' ? '☾' : t === 'light' ? '☀' : '◐';
+    $('#theme-btn').setAttribute('aria-label', '화면 밝기 바꾸기 (지금: ' + THEME_LABEL[t] + ')');
+    $('#theme-btn').innerHTML = THEME_ICON[t];
   }
   let theme = 'auto';
   try { theme = localStorage.getItem('studypromotion.theme') || localStorage.getItem('studygambit.theme') || localStorage.getItem('studymate.theme') || 'auto'; } catch (e) { /* 무시 */ }

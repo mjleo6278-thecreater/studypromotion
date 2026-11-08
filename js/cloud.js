@@ -84,12 +84,24 @@
     $('#acc-form').querySelectorAll('button, input').forEach((b) => { b.disabled = !ready; });
     let text;
     if (!ready) text = '계정 기능 준비 중이에요. 곧 구글 계정이나 이메일로 로그인해서 여러 기기에서 같은 기록을 쓸 수 있어요.';
-    else if (!on) text = '로그인하면 기록이 계정에 저장되고, 다른 폰·PC에서 같은 계정으로 로그인하면 그대로 이어서 쓸 수 있어요.';
+    else if (!on) text = '구글 계정이나 이메일로 로그인할 수 있어요.';
     else {
       const when = meta.syncedAt ? new Date(meta.syncedAt).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '아직 없음';
       text = `${user.email || '구글 계정'} 로그인됨 · 마지막 동기화 ${when}${meta.dirty ? ' · 올릴 변경 있음' : ''}${navigator.onLine === false ? ' · 오프라인' : ''}`;
     }
     $('#acc-status').textContent = msg || text;
+    // 계정 화면 머리글과 오른쪽 위 아이콘
+    const name = on ? (user.displayName || (user.email || '').split('@')[0] || '내 계정') : '';
+    const title = $('#acc-title');
+    if (title) title.textContent = on ? `${name} 님` : '로그인하지 않았어요';
+    const av = $('#acc-avatar');
+    if (av) {
+      av.classList.toggle('on', on);
+      if (on) av.textContent = (name || '나').trim().charAt(0).toUpperCase();
+      else if (!av.querySelector('svg')) av.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20c1.1-3.9 4-6 7.4-6s6.3 2.1 7.4 6"/></svg>';
+    }
+    const btn = $('#account-btn');
+    if (btn) { btn.classList.toggle('on', on); btn.title = on ? `계정·설정 (${user.email || name} 로그인됨)` : '계정·설정 (로그인 안 함)'; }
   }
 
   function loadScript(src) {

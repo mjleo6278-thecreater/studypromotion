@@ -71,18 +71,19 @@ const FAKE = `
 
   // 기기 A: 이메일로 가입 → 기록이 계정에 올라감
   const a = await device();
-  await a.goto(base + '#stats');
+  await a.goto(base + '#account');
   assert(await a.isVisible('#acc-google') && await a.isVisible('#acc-form'), '로그인 화면 보임');
   await a.evaluate(() => App.store.update((s) => s.tasks.push({ id: 'x1', title: '수학 1단원', done: false })));
   await a.fill('#acc-email', 'me@test.com'); await a.fill('#acc-pass', 'secret12');
   await a.click('#acc-form [data-mode="signup"]');
   await a.waitForFunction(() => /me@test.com 로그인됨/.test(document.querySelector('#acc-status').textContent));
   await a.waitForFunction(() => Cloud.meta.remoteAt && !Cloud.meta.dirty);
+  assert(await a.evaluate(() => document.querySelector('#account-btn').classList.contains('on') && /me 님/.test(document.querySelector('#acc-title').textContent)), '로그인하면 계정 아이콘·이름 표시');
   assert(JSON.parse(docs.u0.data).tasks[0].title === '수학 1단원', '가입하면 기록이 계정에 저장됨');
 
   // 같은 이메일로 또 가입하면 안내
   const b = await device();
-  await b.goto(base + '#stats');
+  await b.goto(base + '#account');
   await b.fill('#acc-email', 'me@test.com'); await b.fill('#acc-pass', 'secret12');
   await b.click('#acc-form [data-mode="signup"]');
   await b.waitForFunction(() => /이미 가입된/.test(document.querySelector('#toast').textContent));
@@ -113,7 +114,7 @@ const FAKE = `
 
   // 구글 로그인 버튼
   const c = await device();
-  await c.goto(base + '#stats');
+  await c.goto(base + '#account');
   await c.click('#acc-google');
   await c.waitForFunction(() => /student@gmail.com 로그인됨/.test(document.querySelector('#acc-status').textContent));
   await c.waitForFunction(() => Cloud.meta.remoteAt);
