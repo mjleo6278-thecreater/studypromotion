@@ -637,3 +637,22 @@ h1 { font-weight: 800; letter-spacing: -0.02em; }
 /* 잠금 화면: 남은 시간에 블루 포인트 */
 .lock-time { color: #fff; }
 .lock-screen .lock-sub { color: #3da0ff; }
+
+/* 포인트 컬러: 진로학술동아리 발표자료의 청록 블루 (#04BECD)
+   - 채우기(링·막대·진행 칸)는 원색, 글자는 흰 바탕에서 잘 읽히게 조금 진하게 */
+:root { --accent: #04becd; --accent-soft: #e0f7f9; --accent-text: #058a96; --ok: #04becd; --done: #04becd; --done-soft: #e0f7f9; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --accent: #04becd; --accent-soft: #06343a; --accent-text: #3fd3df; --ok: #04becd; --done: #04becd; --done-soft: #06343a; }
+}
+:root[data-theme="dark"] { --accent: #04becd; --accent-soft: #06343a; --accent-text: #3fd3df; --ok: #04becd; --done: #04becd; --done-soft: #06343a; }
+a, .btn.link, .tab.active, .badge { color: var(--accent-text); }
+.btn.primary:hover { color: #0a0a0a; }
+.pt-sq.passed { background: #b4ecf0; }
+.pt-sq.dark.passed { background: #7fdee5; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pt-sq.passed { background: #0b5560; }
+  :root:not([data-theme="light"]) .pt-sq.dark.passed { background: #084149; }
+}
+:root[data-theme="dark"] .pt-sq.passed { background: #0b5560; }
+:root[data-theme="dark"] .pt-sq.dark.passed { background: #084149; }
+.lock-screen .lock-sub { color: #3fd3df; }
