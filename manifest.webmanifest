@@ -1,7 +1,7 @@
 {
   "name": "스터디 프로모션 — 한 칸씩 전진하는 시험 공부",
   "short_name": "스터디 프로모션",
-  "description": "시험 범위 화이트보드, 학습 계획, 집중 타이머, 플래시카드 복습, 공부 통계를 한 곳에서.",
+  "description": "시험 범위를 과목별로 적고 한 칸씩 체크해요. 오늘 할 범위 추천, 집중 타이머, 플래시카드 복습, 공부 달력과 통계를 한 곳에서.",
   "lang": "ko",
   "start_url": "./index.html#home",
   "scope": "./",
@@ -15,7 +15,7 @@
     { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "shortcuts": [
-    { "name": "시험 범위 화이트보드", "short_name": "범위", "url": "./index.html#board", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "시험 범위", "short_name": "범위", "url": "./index.html#board", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "집중 타이머", "short_name": "타이머", "url": "./index.html#timer", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "플래시카드 복습", "short_name": "복습", "url": "./index.html#review", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
   ]

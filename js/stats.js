@@ -122,7 +122,28 @@
     };
   }
 
-  const api = { monthGoal, monthKey, lastNMonths, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes };
+  /**
+   * 공부 달력: 그달 날마다 공부 시간과 진하기 단계.
+   * level 0 없음 · 1 1시간 미만 · 2 1~2시간 · 3 2~4시간 · 4 4시간 이상
+   * lead = 1일 앞의 빈칸 수 (일요일 시작)
+   */
+  function monthCalendar(sessions, year, month0) {
+    const map = minutesByDay(sessions);
+    const n = new Date(year, month0 + 1, 0).getDate();
+    const days = [];
+    let total = 0, studied = 0, best = 0;
+    for (let d = 1; d <= n; d++) {
+      const key = year + '-' + String(month0 + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      const minutes = map[key] || 0;
+      total += minutes;
+      if (minutes > 0) studied++;
+      if (minutes > best) best = minutes;
+      days.push({ key, day: d, minutes, level: minutes <= 0 ? 0 : minutes < 60 ? 1 : minutes < 120 ? 2 : minutes < 240 ? 3 : 4 });
+    }
+    return { year, month: month0 + 1, lead: new Date(year, month0, 1).getDay(), days, total, studied, best };
+  }
+
+  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);

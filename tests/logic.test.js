@@ -215,3 +215,26 @@ test('월 목표: 달마다 다른 날 수(28·29·30·31일)를 반영', () => 
   assert.strictEqual(Stats.monthGoal(600, 0, new Date(2026, 1, 28, 9).getTime(), 0).daysLeft, 1); // 2월 마지막 날
   assert.strictEqual(Stats.monthGoal(600, 0, new Date(2026, 0, 28, 9).getTime(), 0).daysLeft, 4); // 1월 28일 → 31일까지
 });
+
+test('공부 달력: 날마다 공부 시간과 진하기, 1일 앞 빈칸, 달마다 다른 날 수', () => {
+  const at = (y, m, d, h) => new Date(y, m, d, h || 12).getTime();
+  const sessions = [
+    { minutes: 30, endedAt: at(2026, 10, 1) },
+    { minutes: 45, endedAt: at(2026, 10, 1, 20) },
+    { minutes: 130, endedAt: at(2026, 10, 7) },
+    { minutes: 250, endedAt: at(2026, 10, 30) },
+    { minutes: 40, endedAt: at(2026, 9, 31) }, // 10월
+  ];
+  const cal = Stats.monthCalendar(sessions, 2026, 10);
+  assert.strictEqual(cal.month, 11);
+  assert.strictEqual(cal.days.length, 30);
+  assert.strictEqual(cal.lead, 0); // 2026-11-01은 일요일
+  assert.deepStrictEqual([cal.days[0].minutes, cal.days[0].level], [75, 2]);
+  assert.strictEqual(cal.days[6].level, 3);
+  assert.strictEqual(cal.days[29].level, 4);
+  assert.strictEqual(cal.days[1].level, 0);
+  assert.deepStrictEqual([cal.total, cal.studied, cal.best], [455, 3, 250]);
+  assert.strictEqual(Stats.monthCalendar([], 2026, 1).days.length, 28);
+  assert.strictEqual(Stats.monthCalendar([], 2028, 1).days.length, 29);
+  assert.strictEqual(Stats.monthCalendar([{ minutes: 20, endedAt: at(2026, 9, 31) }], 2026, 9).days[30].level, 1);
+});

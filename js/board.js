@@ -909,6 +909,7 @@
     if (!examId) return;
     menu.innerHTML = [
       ['new-exam', '＋ 새 시험 만들기'],
+      ['edit-exam', '✎ 시험 이름·날짜·과목 바꾸기'],
       ['add-subject', '＋ 과목 추가'],
       ['paste', '범위 목록 붙여넣기'],
       store.canUndo() ? ['undo', '↶ 되돌리기'] : null,
@@ -927,6 +928,7 @@
 
   async function boardAction(act) {
     if (act === 'new-exam') return openExamDialog(null);
+    if (act === 'edit-exam') return openExamDialog(examId);
     if (act === 'paste') return openPaste();
     if (act === 'undo') return undo();
     if (act === 'add-subject') return openSubjectAdd();

@@ -228,12 +228,19 @@
   function renderHomeExams() {
     const st = store.get();
     const t = now();
-    const exams = st.exams.slice().sort((a, b) => ((a.date || '9999') < (b.date || '9999') ? -1 : 1));
+    // 다가오는 시험(가까운 순) → 날짜 없는 시험 → 끝난 시험(최근 순)
+    const tk = todayKey();
+    const past = (e) => !!e.date && e.date < tk;
+    const exams = st.exams.slice().sort((a, b) => {
+      if (past(a) !== past(b)) return past(a) ? 1 : -1;
+      if (past(a)) return a.date < b.date ? 1 : -1;
+      return (a.date || '9999') < (b.date || '9999') ? -1 : 1;
+    });
     $('#h-exams').innerHTML = exams.length ? exams.map((ex) => {
       const p = Scope.examProgress(st.topics, ex.id);
       const dd = Scope.ddayLabel(ex.date, t);
-      return `<a class="exam-row" href="#board" data-open-exam="${esc(ex.id)}">
-        <span class="exam-name">${esc(ex.name)}</span>${dd ? `<span class="badge">${dd}</span>` : ''}
+      return `<a class="exam-row${past(ex) ? ' past' : ''}" href="#board" data-open-exam="${esc(ex.id)}">
+        <span class="exam-name">${esc(ex.name)}</span>${dd ? `<span class="badge${past(ex) ? ' zero' : ''}">${past(ex) ? '끝남 · ' + dd : dd}</span>` : ''}
         <span class="pawn-track" aria-label="진행률 ${p.pct}%">${pawnTrack(p.pct)}</span>
         <span class="exam-pct">${(() => {
           const plan = Scope.timePlan(p, ex, t);
@@ -593,6 +600,13 @@
     $$('.mode-switch [data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === timer.mode));
     $('#timer-mode').textContent = timer.mode === 'focus' ? '집중' : '휴식';
     $('#timer-start').textContent = timer.running ? '일시정지' : (timer.remaining < timer.total ? '계속' : '시작');
+    // 시작 전에는 집중·휴식 시간을 바로 고를 수 있게 (설정의 집중·휴식 시간과 같은 값)
+    const fresh = !timer.running && timer.remaining === timer.total;
+    const lenKey = timer.mode === 'focus' ? 'focusMin' : 'breakMin';
+    const cur = store.get().settings[lenKey];
+    const opts = (timer.mode === 'focus' ? [25, 50, 90] : [5, 10, 15]).filter((m) => m !== cur).concat(cur).sort((a, b) => a - b);
+    $('#len-chips').classList.toggle('off', !fresh);
+    $('#len-chips').innerHTML = opts.map((m) => `<button type="button" class="chip${m === cur ? ' active' : ''}" data-len="${m}" aria-pressed="${m === cur}"${fresh ? '' : ' tabindex="-1"'}>${m}분</button>`).join('');
     if (timer.subjectId && !subjectById(timer.subjectId)) timer.subjectId = '';
     $('#timer-subject').innerHTML = subjectOptions(timer.subjectId, true);
     $('#timer-topic').hidden = !timer.label;
@@ -608,6 +622,14 @@
   $('#timer-reset').addEventListener('click', () => { timer.startedAt = 0; setMode(timer.mode); });
   $('#timer-skip').addEventListener('click', () => finishPhase(false));
   $('#timer-subject').addEventListener('change', (e) => { timer.subjectId = e.target.value; saveTimer(); });
+  $('#len-chips').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-len]');
+    if (!b || timer.running || timer.remaining !== timer.total) return;
+    const m = Math.min(timer.mode === 'focus' ? 120 : 60, Math.max(1, +b.dataset.len));
+    store.update((st) => { st.settings[timer.mode === 'focus' ? 'focusMin' : 'breakMin'] = m; });
+    timer.startedAt = 0;
+    setMode(timer.mode);
+  });
   // 집중/휴식 전환 (로그인 버튼 같은 다른 data-mode 버튼은 건드리지 않게 범위를 좁힘)
   $$('.mode-switch [data-mode]').forEach((b) => b.addEventListener('click', async () => {
     if (timer.running && !(await ask('진행 중인 타이머를 멈추고 바꿀까요?'))) return;
@@ -654,10 +676,22 @@
     $('#deck-title').textContent = d.name;
     $('#deck-summary').textContent = `카드 ${cards.length}장 · 오늘 복습할 카드 ${due}장`;
     $('#deck-study').disabled = due === 0;
+    // 고치는 중인 카드는 다시 그려도 입력한 글자와 커서를 유지
+    const form = $('#card-list .card-edit');
+    const draft = form && form.dataset.cardEdit === editingCardId ? { front: form.front.value, back: form.back.value, focus: document.activeElement && form.contains(document.activeElement) ? document.activeElement.name : null } : null;
+    if (editingCardId && !cards.some((c) => c.id === editingCardId)) editingCardId = null;
     $('#card-list').innerHTML = cards.map((c) => {
+      if (c.id === editingCardId) {
+        const f = draft ? draft.front : c.front, b = draft ? draft.back : c.back;
+        return `<li class="card-row editing" data-card="${esc(c.id)}"><form class="card-edit" data-card-edit="${esc(c.id)}">
+          <input name="front" value="${esc(f)}" required maxlength="300" aria-label="앞면 (질문)" autocomplete="off">
+          <input name="back" value="${esc(b)}" required maxlength="500" aria-label="뒷면 (정답)" autocomplete="off">
+          <span class="card-edit-actions"><button class="btn sm" type="button" data-card-cancel>취소</button><button class="btn primary sm" type="submit">저장</button></span></form></li>`;
+      }
       const next = SRS.isDue(c, t) ? '복습 대기' : `${Stats.dayKey(c.due).slice(5).replace('-', '/')} 복습`;
-      return `<li class="card-row" data-card="${esc(c.id)}"><span>${esc(c.front)}</span><span class="muted-text">${esc(c.back)}</span><span class="muted">${next}</span><button class="icon-btn card-del" aria-label="카드 삭제">✕</button></li>`;
+      return `<li class="card-row" data-card="${esc(c.id)}"><span>${esc(c.front)}</span><span class="muted-text">${esc(c.back)}</span><span class="muted">${next}</span><button class="icon-btn card-edit-btn" aria-label="카드 고치기" title="고치기">✎</button><button class="icon-btn card-del" aria-label="카드 삭제" title="삭제">✕</button></li>`;
     }).join('') || '<li class="empty">카드를 추가해 보세요.</li>';
+    if (draft && draft.focus) { const el = $('#card-list .card-edit [name="' + draft.focus + '"]'); if (el) el.focus(); }
   }
 
   $('#deck-list').addEventListener('click', (e) => {
@@ -681,7 +715,7 @@
     $('#c-front').focus();
   });
 
-  $('#deck-back').addEventListener('click', () => { openDeckId = null; showReviewPane('home'); renderDecks(); });
+  $('#deck-back').addEventListener('click', () => { openDeckId = null; editingCardId = null; showReviewPane('home'); renderDecks(); });
   $('#deck-delete').addEventListener('click', async () => {
     const d = store.get().decks.find((x) => x.id === openDeckId);
     if (!d || !(await ask(`'${d.name}' 덱과 카드 ${deckCards(d.id).length}장을 삭제할까요?`))) return;
@@ -728,10 +762,37 @@
     toast(`카드 ${pairs.length}장을 추가했어요`);
   });
 
+  let editingCardId = null;
   $('#card-list').addEventListener('click', (e) => {
-    if (!e.target.classList.contains('card-del')) return;
-    const id = e.target.closest('[data-card]').dataset.card;
-    store.update((st) => { st.cards = st.cards.filter((c) => c.id !== id); });
+    const row = e.target.closest('[data-card]');
+    if (!row) return;
+    const id = row.dataset.card;
+    if (e.target.closest('.card-del')) {
+      if (editingCardId === id) editingCardId = null;
+      store.update((st) => { st.cards = st.cards.filter((c) => c.id !== id); });
+    } else if (e.target.closest('.card-edit-btn')) {
+      editingCardId = id;
+      renderDeckDetail();
+      const input = $('#card-list .card-edit [name="front"]');
+      if (input) { input.focus(); input.select(); }
+    } else if (e.target.closest('[data-card-cancel]')) {
+      editingCardId = null;
+      renderDeckDetail();
+    }
+  });
+  $('#card-list').addEventListener('submit', (e) => {
+    const f = e.target.closest('.card-edit');
+    if (!f) return;
+    e.preventDefault();
+    const front = f.front.value.trim(), back = f.back.value.trim();
+    if (!front || !back) return toast('앞면과 뒷면을 모두 적어 주세요');
+    const id = f.dataset.cardEdit;
+    editingCardId = null;
+    store.update((st) => { const c = st.cards.find((x) => x.id === id); if (c) { c.front = front; c.back = back; } });
+    toast('카드를 고쳤어요');
+  });
+  $('#card-list').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && e.target.closest('.card-edit')) { editingCardId = null; renderDeckDetail(); }
   });
 
   function startStudy() {
@@ -853,7 +914,12 @@
       <div class="wc-bar${m.minutes ? '' : ' zero'}" style="height:${Math.round((m.minutes / mMax) * 100)}px" title="${m.key} ${Stats.formatMinutes(m.minutes)}"></div>
       <div class="wc-label">${m.label}</div></div>`).join('');
 
-    const by = Stats.minutesBySubject(st.sessions);
+    renderCalendar();
+    // 과목별 공부 시간: 최근 7일 / 이번 달 / 전체
+    const d0 = new Date(now()); d0.setHours(0, 0, 0, 0);
+    const since = subjPeriod === 'week' ? Stats.addDays(d0.getTime(), -6) : subjPeriod === 'month' ? new Date(d0.getFullYear(), d0.getMonth(), 1).getTime() : 0;
+    $$('#subj-period [data-period]').forEach((b) => { const on = b.dataset.period === subjPeriod; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+    const by = Stats.minutesBySubject(st.sessions.filter((x) => x.endedAt >= since));
     const rows = Object.keys(by).map((k) => {
       const s = subjectById(k);
       return { name: s ? s.name : '과목 없음', color: s ? s.color : 'var(--muted)', minutes: by[k] };
@@ -861,9 +927,11 @@
     const top = rows.length ? rows[0].minutes : 1;
     $('#subject-bars').innerHTML = rows.length ? rows.map((r) => `<div class="sb-row"><span>${esc(r.name)}</span>
       <div class="sb-track"><div class="sb-fill" style="width:${(r.minutes / top) * 100}%;background:${esc(r.color)}"></div></div>
-      <span class="sb-val">${Stats.formatMinutes(r.minutes)}</span></div>`).join('') : '<p class="muted">타이머로 집중하면 여기에 쌓여요.</p>';
+      <span class="sb-val">${Stats.formatMinutes(r.minutes)}</span></div>`).join('') : `<p class="muted">${subjPeriod === 'all' ? '타이머로 집중하면 여기에 쌓여요.' : subjPeriod === 'week' ? '최근 7일 동안의 기록이 없어요.' : '이번 달 기록이 아직 없어요.'}</p>`;
 
-    const recent = st.sessions.slice().sort((a, b) => b.endedAt - a.endedAt).slice(0, 10);
+    const sorted = st.sessions.slice().sort((a, b) => b.endedAt - a.endedAt);
+    const recent = sorted.slice(0, sessionLimit);
+    const more = sorted.length - recent.length;
     $('#session-list').innerHTML = recent.length ? recent.map((s) => {
       const sub = subjectById(s.subjectId);
       const d = new Date(s.endedAt);
@@ -871,10 +939,67 @@
       return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.manual ? ' <span class="sl-tag">직접</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>
         <span class="muted sl-when">${d.getMonth() + 1}/${d.getDate()}${s.manual ? '' : ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`} · ${Stats.formatMinutes(s.minutes)}</span>
         <button class="icon-btn" data-del-session="${esc(s.id)}" aria-label="이 기록 삭제" title="기록 삭제">✕</button></li>`;
-    }).join('') : '<li class="empty">아직 기록이 없어요. 타이머로 집중하거나 <button class="btn link inline" type="button" data-log-open>직접 기록</button>해 보세요.</li>';
+    }).join('') + (more > 0 ? `<li class="sl-more"><button class="btn link" type="button" data-more-sessions>이전 기록 더 보기 (${more}개)</button></li>` : '')
+      : '<li class="empty">아직 기록이 없어요. 타이머로 집중하거나 <button class="btn link inline" type="button" data-log-open>직접 기록</button>해 보세요.</li>';
   }
+  let sessionLimit = 10;
+
+  let subjPeriod = 'month';
+  $('#subj-period').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-period]');
+    if (!b) return;
+    subjPeriod = b.dataset.period;
+    renderStats();
+  });
+
+  /* 공부 달력: 날마다 공부한 만큼 진하게, 날짜를 누르면 그날 과목별 시간 */
+  let calYM = null; // [연, 월(0~11)] — null이면 이번 달
+  let calPick = null; // 고른 날 'YYYY-MM-DD'
+  const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
+  function renderCalendar() {
+    const st = store.get();
+    const t = new Date(now());
+    const [y, m] = calYM || [t.getFullYear(), t.getMonth()];
+    const cal = Stats.monthCalendar(st.sessions, y, m);
+    const tk = todayKey();
+    $('#cal-title').textContent = `${y}년 ${m + 1}월`;
+    $('#cal-next').disabled = y > t.getFullYear() || (y === t.getFullYear() && m >= t.getMonth());
+    $('#cal-grid').innerHTML = '<span class="cal-cell blank"></span>'.repeat(cal.lead) + cal.days.map((d) => {
+      const future = d.key > tk;
+      return `<button type="button" class="cal-cell lv${d.level}${d.key === tk ? ' today' : ''}${future ? ' future' : ''}${d.key === calPick ? ' picked' : ''}" data-cal="${d.key}" aria-label="${m + 1}월 ${d.day}일 ${d.minutes ? Stats.formatMinutes(d.minutes) : '기록 없음'}"${future ? ' disabled' : ''}><i aria-hidden="true"></i><b>${d.day}</b></button>`;
+    }).join('');
+    $('#cal-sum').textContent = cal.studied ? `공부한 날 ${cal.studied}일 · 최고 ${Stats.formatMinutes(cal.best)}` : '이달에는 기록이 없어요';
+    const ym = `${y}-${String(m + 1).padStart(2, '0')}`;
+    const key = calPick && calPick.startsWith(ym) ? calPick : (y === t.getFullYear() && m === t.getMonth() ? tk : null);
+    const det = $('#cal-detail');
+    if (!key) { det.textContent = '날짜를 누르면 그날 공부한 과목을 볼 수 있어요.'; det.classList.add('muted'); return; }
+    det.classList.remove('muted');
+    const list = st.sessions.filter((x) => Stats.dayKey(x.endedAt) === key);
+    const sum = list.reduce((a, x) => a + x.minutes, 0);
+    const bySub = Stats.minutesBySubject(list);
+    const dd = new Date(key + 'T12:00');
+    const parts = Object.keys(bySub).sort((a, b) => bySub[b] - bySub[a]).map((k) => { const sb = subjectById(k); return `${esc(sb ? sb.name : '과목 없음')} ${Stats.formatMinutes(bySub[k])}`; });
+    det.innerHTML = `<b>${dd.getMonth() + 1}월 ${dd.getDate()}일 (${WEEK[dd.getDay()]})${key === tk ? ' · 오늘' : ''}</b> ` +
+      (sum ? `${Stats.formatMinutes(sum)}<span class="muted"> · ${parts.join(', ')}</span>` : '<span class="muted">공부 기록이 없어요</span>');
+  }
+  function shiftCalendar(delta) {
+    const t = new Date(now());
+    const [y, m] = calYM || [t.getFullYear(), t.getMonth()];
+    const d = new Date(y, m + delta, 1);
+    calYM = d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() ? null : [d.getFullYear(), d.getMonth()];
+    renderCalendar();
+  }
+  $('#cal-prev').addEventListener('click', () => shiftCalendar(-1));
+  $('#cal-next').addEventListener('click', () => shiftCalendar(1));
+  $('#cal-grid').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-cal]');
+    if (!b || b.disabled) return;
+    calPick = b.dataset.cal;
+    renderCalendar();
+  });
 
   $('#session-list').addEventListener('click', async (e) => {
+    if (e.target.closest('[data-more-sessions]')) { sessionLimit += 30; renderStats(); return; }
     const b = e.target.closest('[data-del-session]');
     if (!b) return;
     const id = b.dataset.delSession;
@@ -948,7 +1073,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.2';
+  const APP_VERSION = '2.3';
   const APP_DATE = '2026년 11월 9일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
