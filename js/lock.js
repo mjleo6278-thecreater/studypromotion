@@ -20,7 +20,7 @@
 
   const App = root.App;
   if (!App) return;
-  const { store, toast, ask, $, $$, uid } = App;
+  const { store, toast, ask, $, $$ } = App;
 
   const MSGS = ['지금은 공부 시간이에요.', '한 칸씩 전진 중이에요.', '폰은 내려놓고, 책을 펴요.', '끝나면 스스로를 칭찬해 줘요.', '집중한 만큼 승급해요.'];
   let lock = null; // { startAt, endAt, minutes, subjectId, leaves, awayMs, hiddenAt }
@@ -86,19 +86,25 @@
     if (left <= 0) finish(true);
   }
 
+  function hide() {
+    clearInterval(tick);
+    $('#lock-screen').hidden = true;
+    document.body.style.overflow = '';
+    try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) { /* 무시 */ }
+    try { if (wakeLock) wakeLock.release(); } catch (e) { /* 무시 */ }
+  }
+
   function finish(completed) {
     const at = Date.now();
     const minutes = studiedMinutes(lock, at);
     const done = lock;
     lock = null;
     write();
-    clearInterval(tick);
-    $('#lock-screen').hidden = true;
-    document.body.style.overflow = '';
-    try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) { /* 무시 */ }
-    try { if (wakeLock) wakeLock.release(); } catch (e) { /* 무시 */ }
-    if (minutes > 0) {
-      store.update((st) => st.sessions.push({ id: uid(), subjectId: done.subjectId, minutes, endedAt: Math.min(at, done.endAt), label: completed ? '잠금 모드 완료' : '잠금 모드 (중단)', lock: true, leaves: done.leaves }));
+    hide();
+    // 시작 시각으로 정한 id: 탭 두 개에서 같은 잠금이 끝나도 한 번만 기록
+    const id = 'lock-' + done.startAt;
+    if (minutes > 0 && !store.get().sessions.some((x) => x.id === id)) {
+      store.update((st) => st.sessions.push({ id, subjectId: done.subjectId, minutes, endedAt: Math.min(at, done.endAt), label: completed ? '잠금 모드 완료' : '잠금 모드 (중단)', lock: true, leaves: done.leaves }));
     }
     try { if (completed && navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* 무시 */ }
     toast(completed ? `잠금 완료! ${Stats.formatMinutes(minutes)} 공부를 기록했어요` : `잠금을 그만뒀어요. ${Stats.formatMinutes(minutes)}만 기록했어요`);
@@ -158,9 +164,28 @@
       lock.hiddenAt = null;
       write();
     }
-    if (Date.now() >= lock.endAt) finish(true);
-    else show(false);
+    if (Date.now() >= lock.endAt) {
+      // 동기화 등 다른 스크립트가 다 준비된 뒤 기록
+      const done = () => { if (lock) finish(true); };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', done, { once: true });
+      else setTimeout(done, 0);
+    } else show(false);
   }
+
+  // 다른 탭(창)에서 잠금을 시작하거나 끝내면 이 탭도 맞춘다
+  window.addEventListener('storage', (e) => {
+    if (e.key !== KEY) return;
+    let next = null;
+    try { next = e.newValue ? JSON.parse(e.newValue) : null; } catch (err) { next = null; }
+    if (next && next.endAt) {
+      const was = lock;
+      lock = next;
+      if (!was) show(false); else update();
+    } else if (lock) {
+      lock = null;
+      hide();
+    }
+  });
 
   root.Lock = { get state() { return lock; } };
 })(typeof window !== 'undefined' ? window : globalThis);

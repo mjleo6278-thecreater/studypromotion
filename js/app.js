@@ -34,10 +34,13 @@
   }
 
   // 브라우저 confirm 대신 쓰는 확인 창 (임베드 환경에서도 동작)
-  function ask(message) {
+  function ask(message, opts) {
+    opts = opts || {};
     return new Promise((resolve) => {
       const dlg = $('#ask');
       $('#ask-msg').textContent = message;
+      $('#ask-ok').textContent = opts.ok || '확인';
+      $('#ask-cancel').textContent = opts.cancel || '취소';
       dlg.hidden = false;
       $('#ask-ok').focus();
       const done = (v) => { dlg.hidden = true; $('#ask-ok').onclick = $('#ask-cancel').onclick = dlg.onkeydown = null; resolve(v); };
@@ -271,14 +274,131 @@
     $('#h-streak').textContent = sk + '일';
     const h = new Date().getHours();
     $('#home-greeting').textContent = h < 12 ? '좋은 아침이에요' : h < 18 ? '오늘도 한 걸음씩' : '오늘 하루 마무리해 볼까요';
+    touchPlans();
     renderHomeExams();
+    renderHomeNext();
+    renderWelcome();
     renderTaskList($('#h-tasklist'), todayList, '오늘까지 할 일이 없어요. <a href="#plan" data-go="plan">계획 추가하기</a>');
   }
 
+  // 시험마다 오늘 아침 남은 양을 기록해 둔다 (그래야 오늘 한 양·오늘 남은 양이 맞다)
+  function touchPlans() {
+    const st = store.get();
+    const t = now();
+    const changes = [];
+    for (const ex of st.exams) {
+      const copy = Object.assign({}, ex);
+      if (Scope.touchPlan(copy, Scope.examProgress(st.topics, ex.id), t)) changes.push(copy);
+    }
+    if (changes.length) {
+      store.update((s) => changes.forEach((c) => { const e = s.exams.find((x) => x.id === c.id); if (e) { e.planStart = c.planStart; e.paceSnap = c.paceSnap; } }), { silent: true });
+    }
+  }
+
+  // 오늘 할 범위: 가장 가까운 시험에서, 과목을 번갈아 오늘 할 양만큼
+  function nextExam() {
+    const st = store.get();
+    const tk = todayKey();
+    // 날짜가 지난 시험은 빼고, 날짜가 가까운 시험부터 (날짜 없는 시험은 그다음)
+    const left = st.exams.filter((e) => { if (e.date && e.date < tk) return false; const p = Scope.examProgress(st.topics, e.id); return p.total && p.done < p.total; });
+    const upcoming = left.filter((e) => e.date).sort((a, b) => (a.date < b.date ? -1 : 1));
+    return upcoming[0] || left.find((e) => e.id === st.activeExamId) || left[0] || null;
+  }
+
+  function topicPath(byId, n) {
+    const names = [];
+    let cur = n.parentId ? byId.get(n.parentId) : null;
+    while (cur) { names.unshift(cur.title); cur = cur.parentId ? byId.get(cur.parentId) : null; }
+    return names;
+  }
+
+  function renderHomeNext() {
+    const st = store.get();
+    const ex = nextExam();
+    $('#h-next-panel').hidden = !ex;
+    if (!ex) return;
+    const t = now();
+    const p = Scope.examProgress(st.topics, ex.id);
+    const plan = Scope.timePlan(p, ex, t);
+    const pc = plan ? null : Scope.pace(p.total - p.done, ex.date, t);
+    const quotaDone = plan && !plan.finished && plan.days > 0 && plan.todayLeft === 0;
+    const quota = plan && !plan.finished && !quotaDone ? plan.todayLeft : 0;
+    const items = Scope.suggestToday(st.topics, ex.id, quota, quotaDone ? 2 : plan ? 6 : Math.max(2, Math.min(5, pc ? pc.perDay : 3)));
+    const dd = Scope.ddayLabel(ex.date, t);
+    $('#h-next-sub').textContent = `${ex.name}${dd ? ' ' + dd : ''}` + (plan ? (plan.finished ? '' : plan.todayLeft ? ` · 오늘 ${Stats.formatMinutes(plan.todayLeft)} 더` : ' · 오늘 몫 완료 ✓') : pc && pc.days > 0 ? ` · 하루 ${pc.perDay}개씩` : '');
+    if (!items.length) {
+      $('#h-next').innerHTML = '';
+      $('#h-next-foot').innerHTML = `과목마다 공부할 내용을 적으면, 여기에서 오늘 할 범위를 골라 드려요. <a href="#board" data-open-exam="${esc(ex.id)}">공부할 내용 적기</a>`;
+      return;
+    }
+    const byId = new Map(st.topics.map((n) => [n.id, n]));
+    $('#h-next').innerHTML = items.map((it) => {
+      const n = byId.get(it.id);
+      const card = byId.get(it.cardId);
+      const path = topicPath(byId, n);
+      const pct = Scope.leafPct(n);
+      return `<li class="next-item">
+        <button class="bchk s-${pct > 0 ? 'some' : 'none'}" data-next-check="${esc(n.id)}" role="checkbox" aria-checked="${pct > 0 ? 'mixed' : 'false'}" aria-label="${esc(n.title)} 끝냄"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.8 3.8 7.4-8.2"/><path class="dash" d="M5.5 10h9"/></svg></button>
+        <div class="next-body"><div class="next-title">${esc(n.title)}</div>
+          <div class="next-meta"><i class="dot" style="background:${esc(card.color || '#888')}"></i>${esc(path.join(' · ') || card.title)}${it.left ? ` · ${pct > 0 ? `${pct}% · ` : ''}남은 ${Stats.formatMinutes(it.left)}` : ''}</div></div>
+        <button class="icon-btn next-play" data-next-focus="${esc(n.id)}" aria-label="${esc(n.title)} 타이머 시작" title="이 범위로 타이머 시작">▶</button>
+      </li>`;
+    }).join('');
+    $('#h-next-foot').innerHTML = quotaDone ? '오늘 몫을 다 했어요 🎉 더 하고 싶다면 위 범위를 이어서 해 보세요.'
+      : !plan ? '항목마다 ⏱ 걸리는 시간을 적으면, 오늘 할 양에 딱 맞춰 골라 드려요.'
+      : '과목을 번갈아 가며, 오늘 할 양만큼 골랐어요.';
+  }
+
+  $('#h-next').addEventListener('click', (e) => {
+    const chk = e.target.closest('[data-next-check]');
+    if (chk) {
+      const id = chk.dataset.nextCheck;
+      const n = store.get().topics.find((x) => x.id === id);
+      if (!n) return;
+      store.update((s) => { Scope.setDone(s.topics, id, true); }, { undoable: true });
+      const ep = Scope.examProgress(store.get().topics, n.examId);
+      const ex = store.get().exams.find((x) => x.id === n.examId);
+      toast(ep.total && ep.done === ep.total ? `체크메이트! ${ex ? ex.name + ' ' : ''}범위를 모두 끝냈어요 ♛` : `'${n.title}' 끝! 폰이 한 칸 전진 ♟`);
+      return;
+    }
+    const play = e.target.closest('[data-next-focus]');
+    if (play) {
+      const st = store.get();
+      const byId = new Map(st.topics.map((x) => [x.id, x]));
+      const n = byId.get(play.dataset.nextFocus);
+      if (!n) return;
+      let card = n;
+      while (card.parentId && byId.get(card.parentId)) card = byId.get(card.parentId);
+      focusOn({ label: card.id === n.id ? n.title : `${card.title} · ${n.title}`, subjectName: card.title, topicId: n.id });
+    }
+  });
+
+  // 처음 쓰는 사람을 위한 안내
+  const WELCOME_KEY = 'studypromotion.welcomeClosed';
+  function renderWelcome() {
+    const st = store.get();
+    let closed = false;
+    try { closed = !!localStorage.getItem(WELCOME_KEY); } catch (e) { /* 무시 */ }
+    $('#h-welcome').hidden = closed || !!(st.exams.length || st.sessions.length || st.tasks.length || st.cards.length);
+  }
+  $('#welcome-close').addEventListener('click', () => {
+    try { localStorage.setItem(WELCOME_KEY, '1'); } catch (e) { /* 무시 */ }
+    $('#h-welcome').hidden = true;
+  });
+
   /* ---------- 타이머 ---------- */
-  const timer = { mode: 'focus', running: false, endAt: 0, remaining: 0, total: 0, startedAt: 0, tick: null };
+  const TIMER_KEY = 'studypromotion.timer';
+  const timer = { mode: 'focus', running: false, endAt: 0, remaining: 0, total: 0, startedAt: 0, tick: null, subjectId: '', label: null, topicId: null };
   const CIRC = 2 * Math.PI * 88;
   $('#ring-fg').style.strokeDasharray = CIRC;
+
+  // 앱을 닫았다 열어도 타이머가 이어지게 상태를 저장한다
+  function saveTimer() {
+    try {
+      const { mode, running, endAt, remaining, total, startedAt, subjectId, label, topicId } = timer;
+      localStorage.setItem(TIMER_KEY, JSON.stringify({ mode, running, endAt, remaining, total, startedAt, subjectId, label, topicId }));
+    } catch (e) { /* 무시 */ }
+  }
 
   function modeSeconds(mode) {
     const s = store.get().settings;
@@ -290,10 +410,20 @@
     timer.mode = mode;
     timer.running = false;
     timer.total = timer.remaining = modeSeconds(mode);
+    releaseAwake();
+    saveTimer();
     renderTimer();
   }
 
   function stopTick() { clearInterval(timer.tick); timer.tick = null; }
+
+  // 타이머가 도는 동안 화면이 꺼지지 않게 (꺼지면 끝나는 소리·알림이 늦어진다)
+  let awake = null;
+  async function keepAwake() {
+    if (store.get().settings.keepAwake === false || !('wakeLock' in navigator) || awake) return;
+    try { awake = await navigator.wakeLock.request('screen'); awake.addEventListener('release', () => { awake = null; }); } catch (e) { /* 지원 안 함 */ }
+  }
+  function releaseAwake() { try { if (awake) awake.release(); } catch (e) { /* 무시 */ } awake = null; }
 
   function startTimer() {
     if (timer.running) return;
@@ -305,6 +435,8 @@
     if (window.Notification && Notification.permission === 'default') {
       try { Notification.requestPermission(); } catch (e) { /* 무시 */ }
     }
+    keepAwake();
+    saveTimer();
     renderTimer();
   }
 
@@ -313,32 +445,111 @@
     timer.remaining = Math.max(0, Math.round((timer.endAt - now()) / 1000));
     timer.running = false;
     stopTick();
+    releaseAwake();
+    saveTimer();
     renderTimer();
   }
 
   function onTick() {
     timer.remaining = Math.max(0, Math.ceil((timer.endAt - now()) / 1000));
-    if (timer.remaining <= 0) return finishPhase(true);
+    if (timer.remaining <= 0) return finishPhase(true, { at: timer.endAt });
     renderTimerFace();
   }
 
-  function recordFocus(minutes) {
+  // id: 끝까지 마친 집중은 끝나는 시각으로 정한 id를 써서, 탭 두 개가 같은 타이머를 끝내도 한 번만 기록
+  function recordFocus(minutes, at, id) {
     if (minutes < 1) return;
-    store.update((st) => st.sessions.push({ id: uid(), subjectId: $('#timer-subject').value || null, minutes, endedAt: now(), label: timer.label || null, topicId: timer.topicId || null }));
+    if (id && store.get().sessions.some((x) => x.id === id)) return;
+    const sid = timer.subjectId && subjectById(timer.subjectId) ? timer.subjectId : null;
+    store.update((st) => st.sessions.push({ id: id || uid(), subjectId: sid, minutes, endedAt: Math.min(now(), at || now()), label: timer.label || null, topicId: timer.topicId || null }));
   }
 
-  function finishPhase(completed) {
+  // opts.at: 끝난 시각, opts.quiet: 앱이 닫혀 있는 동안 끝남(소리 없이)
+  function finishPhase(completed, opts) {
+    opts = opts || {};
     stopTick();
     timer.running = false;
+    const topicId = timer.topicId, label = timer.label;
     if (timer.mode === 'focus') {
       const elapsedMin = completed ? timer.total / 60 : Math.floor((timer.total - timer.remaining) / 60);
-      recordFocus(Math.round(elapsedMin));
-      if (completed) { beep(); notify('집중 완료! 잠깐 쉬어요.'); toast(`${Stats.formatMinutes(elapsedMin)} 집중 기록 완료`); }
-      else if (elapsedMin >= 1) toast(`${Stats.formatMinutes(elapsedMin)} 기록했어요`);
-    } else if (completed) { beep(); notify('휴식 끝! 다시 집중해 볼까요?'); }
+      const at = completed ? opts.at || timer.endAt : now();
+      recordFocus(Math.round(elapsedMin), at, completed ? 'focus-' + Math.round(at) : null);
+      if (completed) {
+        if (opts.quiet) toast(`앱이 닫혀 있는 동안 집중 ${Stats.formatMinutes(elapsedMin)}이 끝나서 기록했어요`);
+        else { beep(); notify('집중 완료! 잠깐 쉬어요.'); toast(`${Stats.formatMinutes(elapsedMin)} 집중 기록 완료`); }
+        if (topicId) setTimeout(() => askTopicDone(topicId, label), opts.quiet ? 1200 : 500);
+      } else if (elapsedMin >= 1) toast(`${Stats.formatMinutes(elapsedMin)} 기록했어요`);
+    } else if (completed && !opts.quiet) { beep(); notify('휴식 끝! 다시 집중해 볼까요?'); }
     timer.startedAt = 0;
     setMode(timer.mode === 'focus' ? 'break' : 'focus');
   }
+
+  // 범위에서 시작한 집중이 끝나면: 그 범위를 끝냈는지 물어보고 체크
+  async function askTopicDone(topicId, label) {
+    const st = store.get();
+    const n = st.topics.find((t) => t.id === topicId);
+    if (!n || Scope.progress(st.topics, topicId).state === 'all') return;
+    if (!$('#ask').hidden) return;
+    const yes = await ask(`'${label || n.title}' 공부를 끝냈나요?\n끝냈다면 범위에서 체크해 둘게요.`, { ok: '끝냈어요 ✓', cancel: '아직이에요' });
+    if (!yes) return;
+    store.update((s) => { Scope.setDone(s.topics, topicId, true); }, { undoable: true });
+    const ex = store.get().exams.find((e) => e.id === n.examId);
+    const ep = Scope.examProgress(store.get().topics, n.examId);
+    toast(ep.total && ep.done === ep.total ? `체크메이트! ${ex ? ex.name + ' ' : ''}범위를 모두 끝냈어요 ♛` : '범위에서 체크했어요. 폰이 한 칸 전진! ♟');
+  }
+
+  const readTimer = (raw) => { try { const s = JSON.parse(raw); return s && (s.mode === 'focus' || s.mode === 'break') ? s : null; } catch (e) { return null; } };
+
+  // 저장된 타이머 상태를 이 화면에 적용한다. opened: 앱을 막 열었을 때(닫혀 있는 동안 끝났으면 기록)
+  function applyTimerState(s, opened) {
+    stopTick();
+    timer.subjectId = s.subjectId || '';
+    timer.label = s.label || null;
+    timer.topicId = s.topicId || null;
+    timer.mode = s.mode;
+    timer.total = s.total > 0 ? s.total : modeSeconds(s.mode);
+    timer.startedAt = s.startedAt || 0;
+    if (s.running && s.endAt) {
+      if (s.endAt > now() || !opened) {
+        timer.endAt = s.endAt;
+        timer.running = true;
+        timer.remaining = Math.max(0, Math.ceil((s.endAt - now()) / 1000));
+        timer.tick = setInterval(onTick, 250);
+        keepAwake();
+        renderTimer();
+        return;
+      }
+      // 앱이 닫혀 있는 동안 끝남: 다른 스크립트(동기화 등)가 다 준비된 뒤 기록
+      timer.running = false;
+      timer.remaining = 0;
+      renderTimer();
+      const done = () => { if (!timer.running && timer.remaining === 0 && timer.mode === s.mode) finishPhase(true, { at: s.endAt, quiet: true }); };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', done, { once: true });
+      else setTimeout(done, 0);
+      return;
+    }
+    timer.running = false;
+    releaseAwake();
+    if (!(s.remaining > 0 && s.remaining < timer.total)) { timer.total = modeSeconds(s.mode); timer.remaining = timer.total; } // 일시정지가 아니면 처음부터
+    else timer.remaining = s.remaining;
+    renderTimer();
+  }
+
+  // 저장해 둔 타이머 이어 가기 (없으면 false)
+  function restoreTimer() {
+    let s = null;
+    try { s = readTimer(localStorage.getItem(TIMER_KEY)); } catch (e) { s = null; }
+    if (!s) return false;
+    applyTimerState(s, true);
+    return true;
+  }
+
+  // 다른 탭(창)에서 타이머를 시작·멈추면 이 탭도 맞춘다 (두 탭이 따로 기록하지 않게)
+  window.addEventListener('storage', (e) => {
+    if (e.key !== TIMER_KEY || !e.newValue) return;
+    const s = readTimer(e.newValue);
+    if (s) applyTimerState(s, false);
+  });
 
   function beep() {
     try {
@@ -352,10 +563,17 @@
         o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.2);
       });
     } catch (e) { /* 소리 불가 */ }
+    try { if (navigator.vibrate) navigator.vibrate([180, 90, 180]); } catch (e) { /* 무시 */ }
   }
 
   function notify(msg) {
-    try { if (window.Notification && Notification.permission === 'granted') new Notification('스터디 프로모션', { body: msg }); } catch (e) { /* 무시 */ }
+    try {
+      if (!window.Notification || Notification.permission !== 'granted') return;
+      // 설치한 앱(서비스 워커)에서는 서비스 워커로 띄워야 휴대폰에서도 보인다
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then((r) => r.showNotification('스터디 프로모션', { body: msg, icon: 'icons/icon-192.png', badge: 'icons/favicon-64.png', tag: 'timer', renotify: true })).catch(() => { /* 무시 */ });
+      } else new Notification('스터디 프로모션', { body: msg });
+    } catch (e) { /* 무시 */ }
   }
 
   function fmtClock(sec) {
@@ -375,26 +593,33 @@
     $$('.mode-switch [data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === timer.mode));
     $('#timer-mode').textContent = timer.mode === 'focus' ? '집중' : '휴식';
     $('#timer-start').textContent = timer.running ? '일시정지' : (timer.remaining < timer.total ? '계속' : '시작');
-    const sel = timer.subjectPick !== undefined ? timer.subjectPick : $('#timer-subject').value;
-    timer.subjectPick = undefined;
-    $('#timer-subject').innerHTML = subjectOptions(sel, true);
+    if (timer.subjectId && !subjectById(timer.subjectId)) timer.subjectId = '';
+    $('#timer-subject').innerHTML = subjectOptions(timer.subjectId, true);
     $('#timer-topic').hidden = !timer.label;
     $('#timer-topic-text').textContent = timer.label ? '공부 중: ' + timer.label : '';
     const st = store.get();
     const todays = st.sessions.filter((s) => Stats.dayKey(s.endedAt) === todayKey());
-    $('#timer-today').textContent = `오늘 집중 ${todays.length}회 · ${Stats.formatMinutes(todays.reduce((a, s) => a + s.minutes, 0))}`;
+    // 직접 기록한 시간은 공부 시간에는 넣고, 집중 횟수에는 넣지 않는다
+    $('#timer-today').textContent = `오늘 공부 ${Stats.formatMinutes(todays.reduce((a, s) => a + s.minutes, 0))} · 집중 ${todays.filter((s) => !s.manual).length}회`;
     renderTimerFace();
   }
 
   $('#timer-start').addEventListener('click', () => (timer.running ? pauseTimer() : startTimer()));
   $('#timer-reset').addEventListener('click', () => { timer.startedAt = 0; setMode(timer.mode); });
   $('#timer-skip').addEventListener('click', () => finishPhase(false));
+  $('#timer-subject').addEventListener('change', (e) => { timer.subjectId = e.target.value; saveTimer(); });
   // 집중/휴식 전환 (로그인 버튼 같은 다른 data-mode 버튼은 건드리지 않게 범위를 좁힘)
   $$('.mode-switch [data-mode]').forEach((b) => b.addEventListener('click', async () => {
     if (timer.running && !(await ask('진행 중인 타이머를 멈추고 바꿀까요?'))) return;
     timer.startedAt = 0;
     setMode(b.dataset.mode);
   }));
+  // 다른 앱에 갔다 오면 바로 남은 시간을 맞추고, 화면 켜 두기를 다시 건다
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || !timer.running) return;
+    onTick();
+    if (timer.running) keepAwake();
+  });
 
   /* ---------- 플래시카드 ---------- */
   let openDeckId = null;
@@ -642,10 +867,74 @@
     $('#session-list').innerHTML = recent.length ? recent.map((s) => {
       const sub = subjectById(s.subjectId);
       const d = new Date(s.endedAt);
-      return `<li><span>${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.label ? ` <span class="muted">· ${esc(s.label)}</span>` : ''}</span>
-        <span class="muted">${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} · ${Stats.formatMinutes(s.minutes)}</span></li>`;
-    }).join('') : '<li class="empty">아직 기록이 없어요.</li>';
+      const label = s.manual && s.label === '직접 기록' ? '' : s.label;
+      return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.manual ? ' <span class="sl-tag">직접</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>
+        <span class="muted sl-when">${d.getMonth() + 1}/${d.getDate()}${s.manual ? '' : ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`} · ${Stats.formatMinutes(s.minutes)}</span>
+        <button class="icon-btn" data-del-session="${esc(s.id)}" aria-label="이 기록 삭제" title="기록 삭제">✕</button></li>`;
+    }).join('') : '<li class="empty">아직 기록이 없어요. 타이머로 집중하거나 <button class="btn link inline" type="button" data-log-open>직접 기록</button>해 보세요.</li>';
   }
+
+  $('#session-list').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-del-session]');
+    if (!b) return;
+    const id = b.dataset.delSession;
+    const s = store.get().sessions.find((x) => x.id === id);
+    if (!s) return;
+    const d = new Date(s.endedAt);
+    if (!(await ask(`${d.getMonth() + 1}/${d.getDate()} ${Stats.formatMinutes(s.minutes)} 기록을 지울까요?\n통계와 목표에서도 빠져요.`, { ok: '지우기' }))) return;
+    store.update((st) => { st.sessions = st.sessions.filter((x) => x.id !== id); });
+    toast('기록을 지웠어요');
+  });
+
+  /* ---------- 공부 시간 직접 기록 (학원·독서실·인강 등) ---------- */
+  let logReturnFocus = null;
+  function openLog() {
+    logReturnFocus = document.activeElement;
+    const sid = timer.subjectId && subjectById(timer.subjectId) ? timer.subjectId : '';
+    $('#log-subject').innerHTML = subjectOptions(sid, true);
+    $('#log-h').value = '';
+    $('#log-m').value = '';
+    $('#log-date').value = todayKey();
+    $('#log-date').max = todayKey();
+    $('#log-label').value = '';
+    $$('#log-quick [data-min]').forEach((x) => x.classList.remove('active'));
+    $('#log-dlg').hidden = false;
+    $('#log-h').focus();
+  }
+  function closeLog() {
+    $('#log-dlg').hidden = true;
+    try { if (logReturnFocus && logReturnFocus.focus) logReturnFocus.focus(); } catch (e) { /* 무시 */ }
+  }
+  document.addEventListener('click', (e) => { if (e.target.closest('[data-log-open]')) { e.preventDefault(); openLog(); } });
+  $('#log-cancel').addEventListener('click', closeLog);
+  $('#log-dlg').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLog(); });
+  $('#log-dlg').addEventListener('click', (e) => { if (e.target === $('#log-dlg')) closeLog(); });
+  $('#log-quick').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-min]');
+    if (!b) return;
+    const m = +b.dataset.min;
+    $('#log-h').value = Math.floor(m / 60) || '';
+    $('#log-m').value = m % 60 || '';
+    $$('#log-quick [data-min]').forEach((x) => x.classList.toggle('active', x === b));
+  });
+  ['#log-h', '#log-m'].forEach((sel) => $(sel).addEventListener('input', () => $$('#log-quick [data-min]').forEach((x) => x.classList.remove('active'))));
+  $('#log-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const h = Math.max(0, parseInt($('#log-h').value, 10) || 0);
+    const m = Math.max(0, parseInt($('#log-m').value, 10) || 0);
+    const minutes = Math.min(24 * 60, h * 60 + m);
+    if (minutes < 1) { toast('공부한 시간을 적어 주세요'); $('#log-h').focus(); return; }
+    const tk = todayKey();
+    const day = /^\d{4}-\d{2}-\d{2}$/.test($('#log-date').value) ? $('#log-date').value : tk;
+    if (day > tk) { toast('오늘 이후 날짜는 기록할 수 없어요'); $('#log-date').focus(); return; }
+    // 오늘이면 지금 시각, 지난 날이면 그날 저녁에 끝난 것으로 (날짜별 통계에 맞게 들어가도록)
+    const endedAt = day === tk ? now() : new Date(day + 'T21:00').getTime();
+    const memo = $('#log-label').value.trim();
+    const subjectId = $('#log-subject').value || null;
+    store.update((st) => st.sessions.push({ id: uid(), subjectId, minutes, endedAt, label: memo || '직접 기록', manual: true }));
+    closeLog();
+    toast(`${day === tk ? '오늘' : `${+day.slice(5, 7)}/${+day.slice(8)}`} ${Stats.formatMinutes(minutes)} 공부를 기록했어요`);
+  });
 
   /* ---------- 계정·설정 ---------- */
   function renderAccount() {
@@ -654,11 +943,12 @@
       $('#set-goal').value = set.dailyGoalMin;
       $('#set-focus').value = set.focusMin;
       $('#set-break').value = set.breakMin;
+      $('#set-awake').checked = set.keepAwake !== false;
     }
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.1';
+  const APP_VERSION = '2.2';
   const APP_DATE = '2026년 11월 9일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
@@ -703,7 +993,9 @@
       st.settings.dailyGoalMin = clamp($('#set-goal').value, 10, 1440, 120);
       st.settings.focusMin = clamp($('#set-focus').value, 1, 120, 25);
       st.settings.breakMin = clamp($('#set-break').value, 1, 60, 5);
+      st.settings.keepAwake = $('#set-awake').checked;
     });
+    if (!store.get().settings.keepAwake) releaseAwake(); else if (timer.running) keepAwake();
     if (!timer.running) setMode(timer.mode);
     $('#set-goal').blur();
     renderAccount();
@@ -827,12 +1119,12 @@
     timer.label = opts.label || null;
     timer.topicId = opts.topicId || null;
     const subj = opts.subjectName ? store.get().subjects.find((s) => s.name === opts.subjectName) : null;
-    timer.subjectPick = subj ? subj.id : '';
+    timer.subjectId = subj ? subj.id : '';
     timer.startedAt = 0;
     setMode('focus');
     go('timer');
   }
-  $('#timer-topic-clear').addEventListener('click', () => { timer.label = null; timer.topicId = null; renderTimer(); });
+  $('#timer-topic-clear').addEventListener('click', () => { timer.label = null; timer.topicId = null; saveTimer(); renderTimer(); });
 
   /* ---------- 화면 밝기(자동/밝게/어둡게) ---------- */
   const THEMES = ['auto', 'light', 'dark'];
@@ -863,7 +1155,7 @@
 
   window.App = { store, focusOn, pawnTrack, $, $$, esc, toast, ask, uid, go, now, render, get view() { return currentView; } };
 
-  setMode('focus');
+  if (!restoreTimer()) setMode('focus');
   go(location.hash.slice(1) || 'home');
 
   // 테스트/디버그용

@@ -138,6 +138,39 @@
     };
   }
 
+  /**
+   * 오늘 할 범위 추천: 과목(카드)을 번갈아 가며 아직 안 끝낸 항목을 순서대로 고른다.
+   * 오늘 할 양(quotaMin, 분)을 채우거나 max개가 되면 멈춘다. (quotaMin이 0이면 max개)
+   * 아직 공부할 내용을 안 적은 빈 과목은 고르지 않는다 (과목 통째로 체크하게 되므로).
+   * 반환: [{ id, cardId, left }]  left = 그 항목의 남은 시간(분, 시간을 안 적었으면 0)
+   */
+  function suggestToday(nodes, examId, quotaMin, max) {
+    const index = indexByParent(nodes);
+    max = max || 5;
+    const queues = kids(index, 'root:' + examId).filter((c) => c.kind !== 'note').map((c) => {
+      const list = [];
+      (function walk(n) {
+        const ks = kids(index, n.id);
+        if (!ks.length) { if (n !== c && leafPct(n) < 100) list.push(n); return; }
+        ks.forEach(walk);
+      })(c);
+      return { card: c, list };
+    }).filter((q) => q.list.length);
+    const out = [];
+    let sum = 0;
+    while (out.length < max && queues.some((q) => q.list.length)) {
+      for (const q of queues) {
+        if (!q.list.length) continue;
+        const n = q.list.shift();
+        const left = +n.est > 0 ? Math.round((+n.est * (100 - leafPct(n))) / 100) : 0;
+        out.push({ id: n.id, cardId: q.card.id, left });
+        sum += left;
+        if (out.length >= max || (quotaMin > 0 && sum >= quotaMin)) return out;
+      }
+    }
+    return out;
+  }
+
   // 계획 시작일과 오늘 아침 남은 양을 기록한다 (exam을 직접 수정, 바뀌었으면 true)
   function touchPlan(exam, prog, now) {
     if (!exam || !prog.timeTotal) return false;
@@ -401,7 +434,7 @@
   const api = {
     CARD_W, GAP, COLORS, SAMPLE,
     childrenOf, indexByParent, subtreeIds, leavesUnder, progress, examProgress,
-    setDone, setLeafProgress, leafPct, summarize, timePlan, touchPlan, toggle, removeSubtree, depthOf, nextOrder,
+    setDone, setLeafProgress, leafPct, summarize, timePlan, touchPlan, suggestToday, toggle, removeSubtree, depthOf, nextOrder,
     parseOutline, countOutline, addOutline, autoLayout, estimateHeight, bounds,
     daysUntil, ddayLabel, toOutline, pace, pawnRank,
   };

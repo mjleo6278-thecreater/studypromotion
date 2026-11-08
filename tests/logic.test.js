@@ -126,6 +126,40 @@ test('저장소: 이름을 바꾸기 전(studymate.v1) 데이터를 자동으로
   assert.ok(storage.getItem(StoreLib.KEY), '새 이름으로 저장');
 });
 
+test('저장소: 되돌리기는 시험 범위만 되돌리고, 그사이 쌓인 공부 기록·카드·할 일은 그대로 둔다', () => {
+  const s = StoreLib.createStore(memoryStorage());
+  s.update((st) => { st.topics.push({ id: 'a', title: '1단원', done: false }); });
+  s.update((st) => { st.topics[0].done = true; }, { undoable: true });
+  // 체크한 뒤 타이머 기록, 카드, 할 일이 생김 (되돌리기 대상 아님)
+  s.update((st) => { st.sessions.push({ id: 's1', minutes: 25, endedAt: NOW }); st.cards.push({ id: 'c1' }); st.tasks.push({ id: 't1' }); st.settings.focusMin = 50; });
+  assert.ok(s.canUndo());
+  assert.strictEqual(s.undo(), true);
+  assert.strictEqual(s.get().topics[0].done, false, '범위 체크는 되돌아감');
+  assert.strictEqual(s.get().sessions.length, 1, '공부 기록은 남음');
+  assert.strictEqual(s.get().cards.length, 1);
+  assert.strictEqual(s.get().tasks.length, 1);
+  assert.strictEqual(s.get().settings.focusMin, 50);
+  assert.strictEqual(s.undo(), false, '더 되돌릴 것 없음');
+});
+
+test('저장소: 다른 탭에서 저장한 기록을 받아 온다 (보드 위치는 이 탭 것, 되돌리기는 비움)', () => {
+  const s = StoreLib.createStore(memoryStorage());
+  s.update((st) => { st.boardView.e1 = { x: 1, y: 2, z: 1 }; st.topics.push({ id: 'a', done: false }); });
+  s.update((st) => { st.topics[0].done = true; }, { undoable: true });
+  const seen = [];
+  s.subscribe((st, info) => seen.push(info && info.external));
+  const other = StoreLib.defaults();
+  other.tasks.push({ id: 'from-other-tab' });
+  other.boardView = { e1: { x: 9, y: 9, z: 2 } };
+  assert.strictEqual(s.adopt(JSON.stringify(other)), true);
+  assert.strictEqual(s.get().tasks[0].id, 'from-other-tab');
+  assert.deepStrictEqual(s.get().boardView.e1, { x: 1, y: 2, z: 1 });
+  assert.strictEqual(s.canUndo(), false);
+  assert.deepStrictEqual(seen, [true]);
+  assert.strictEqual(s.adopt('{broken'), false);
+  assert.strictEqual(s.adopt(null), false);
+});
+
 test('저장소: 스터디갬빗 시절(studygambit.v1) 데이터도 불러온다', () => {
   const storage = memoryStorage();
   storage.setItem('studygambit.v1', JSON.stringify({ exams: [{ id: 'e', name: '기말' }], tasks: [] }));

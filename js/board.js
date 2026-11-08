@@ -102,7 +102,10 @@
     clearTimeout(saveT);
     const id = examId;
     saveT = setTimeout(() => {
-      store.update((s) => { s.boardView[id] = { x: Math.round(view.x), y: Math.round(view.y), z: +view.z.toFixed(3) }; }, { silent: true });
+      const v = { x: Math.round(view.x), y: Math.round(view.y), z: +view.z.toFixed(3) };
+      const old = st().boardView[id];
+      if (old && old.x === v.x && old.y === v.y && old.z === v.z) return; // 그대로면 저장 안 함 (다른 탭과 주고받기 반복 방지)
+      store.update((s) => { s.boardView[id] = v; }, { silent: true });
     }, 300);
   }
 

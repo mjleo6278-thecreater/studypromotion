@@ -175,3 +175,26 @@ test('계획 시작일과 아침 스냅샷 기록', () => {
   assert.strictEqual(Scope.touchPlan(exam, { timeTotal: 100, timeLeft: 70 }, now), false);
   assert.strictEqual(Scope.touchPlan({ date: 'x' }, { timeTotal: 0 }, now), false);
 });
+
+test('오늘 할 범위 추천: 과목을 번갈아, 오늘 할 양을 채울 때까지', () => {
+  const nodes = [];
+  Scope.addOutline(nodes, 'e1', Scope.parseOutline('# 수학\n- 1단원\n  - 다항식\n  - 인수분해\n- 2단원\n# 영어\n- 본문 1과\n- 본문 2과\n# 국어'), uid);
+  const by = (t) => nodes.find((n) => n.title === t);
+  by('다항식').est = 60; by('인수분해').est = 60; by('2단원').est = 30; by('본문 1과').est = 40; by('본문 2과').est = 40;
+  by('다항식').done = true; by('다항식').pct = 100;
+  // 남은 잎(순서대로): 수학[인수분해, 2단원], 영어[본문 1과, 본문 2과], 국어는 빈 과목이라 고르지 않음
+  const all = Scope.suggestToday(nodes, 'e1', 0, 10).map((x) => nodes.find((n) => n.id === x.id).title);
+  assert.deepStrictEqual(all, ['인수분해', '본문 1과', '2단원', '본문 2과']);
+  // 오늘 할 양 90분: 인수분해(60) + 본문 1과(40) = 100 ≥ 90 에서 멈춤
+  const q = Scope.suggestToday(nodes, 'e1', 90, 10);
+  assert.deepStrictEqual(q.map((x) => x.left), [60, 40]);
+  // 부분 진행은 남은 시간만
+  by('인수분해').pct = 50;
+  assert.strictEqual(Scope.suggestToday(nodes, 'e1', 0, 1)[0].left, 30);
+  // 최대 개수
+  assert.strictEqual(Scope.suggestToday(nodes, 'e1', 0, 2).length, 2);
+  // 빈 과목만 남았거나 다 끝낸 시험은 빈 목록
+  assert.deepStrictEqual(Scope.suggestToday(nodes.filter((n) => n.title === '국어'), 'e1', 0, 5), []);
+  nodes.forEach((n) => { n.done = true; n.pct = 100; });
+  assert.deepStrictEqual(Scope.suggestToday(nodes, 'e1', 60, 5), []);
+});

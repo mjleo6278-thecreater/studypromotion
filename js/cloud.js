@@ -203,9 +203,9 @@
     }
   }
 
-  // 기록이 바뀌면 잠시 뒤 계정에 올린다
-  store.subscribe(() => {
-    if (applyingRemote || !meta.uid) return;
+  // 기록이 바뀌면 잠시 뒤 계정에 올린다 (다른 탭에서 받아 온 변경은 그 탭이 올린다)
+  store.subscribe((st, info) => {
+    if (applyingRemote || !meta.uid || (info && info.external)) return;
     if (!meta.dirty) { meta.dirty = true; saveMeta(); }
     clearTimeout(pushTimer);
     pushTimer = setTimeout(pushNow, 2500);

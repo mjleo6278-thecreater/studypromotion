@@ -27,7 +27,7 @@
       strokes: [], // 화이트보드 펜 자국 { id, examId, d, color, width }
       boardView: {}, // examId → { x, y, z }
       activeExamId: null,
-      settings: { dailyGoalMin: 120, focusMin: 25, breakMin: 5, monthlyGoalMin: 0 },
+      settings: { dailyGoalMin: 120, focusMin: 25, breakMin: 5, monthlyGoalMin: 0, keepAwake: true },
     };
   }
 
@@ -78,11 +78,15 @@
     }
 
     // opts.undoable: 되돌리기 기록을 남긴다 / opts.silent: 화면 갱신 알림 없이 저장만
+    // 되돌리기는 시험 범위(항목·시험·펜 자국)만 되돌린다. 그사이 쌓인 공부 기록·카드·할 일은 그대로 둔다.
+    const UNDO_KEYS = ['topics', 'exams', 'strokes', 'activeExamId'];
     const undoStack = [];
     function update(fn, opts) {
       opts = opts || {};
       if (opts.undoable) {
-        undoStack.push(JSON.stringify(state));
+        const snap = {};
+        UNDO_KEYS.forEach((k) => { snap[k] = state[k]; });
+        undoStack.push(JSON.stringify(snap));
         if (undoStack.length > UNDO_LIMIT) undoStack.shift();
       }
       fn(state);
@@ -94,7 +98,7 @@
     function undo() {
       if (!undoStack.length) return false;
       const keepView = state.boardView;
-      state = normalize(JSON.parse(undoStack.pop()));
+      state = normalize(Object.assign({}, state, JSON.parse(undoStack.pop())));
       state.boardView = keepView;
       save();
       return true;
@@ -118,6 +122,24 @@
       save();
     }
 
+    // 다른 탭(창)에서 저장한 기록을 받아 온다. 같은 기기에서 탭 두 개를 열어도 서로 덮어쓰지 않게.
+    // 리스너에는 { external: true }를 같이 넘긴다 (계정 동기화는 이 변경을 다시 올리지 않음).
+    function adopt(raw) {
+      if (!raw) return false;
+      let next;
+      try { next = normalize(JSON.parse(raw)); } catch (e) { return false; }
+      next.boardView = state.boardView; // 보드 보는 위치는 탭마다 따로
+      state = next;
+      undoStack.length = 0; // 다른 탭의 변경까지 되돌리지 않게
+      listeners.forEach((fn) => fn(state, { external: true }));
+      return true;
+    }
+    try {
+      if (typeof window !== 'undefined' && window.addEventListener && storage && storage === window.localStorage) {
+        window.addEventListener('storage', (e) => { if (e.key === KEY && e.storageArea === storage) adopt(e.newValue); });
+      }
+    } catch (e) { /* 저장소 접근 불가 */ }
+
     load();
     return {
       get: () => state,
@@ -125,6 +147,7 @@
       undo,
       canUndo: () => undoStack.length > 0,
       subscribe: (fn) => listeners.push(fn),
+      adopt,
       exportJSON,
       importJSON,
       reset,

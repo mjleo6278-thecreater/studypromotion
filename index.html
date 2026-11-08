@@ -40,6 +40,16 @@
     <section id="view-home" class="view">
       <h1 id="home-greeting">오늘도 한 걸음</h1>
       <p class="tagline muted">한 칸씩 전진해서, 시험 날엔 퀸으로.</p>
+      <div class="panel welcome" id="h-welcome" hidden>
+        <h2>처음 오셨나요?</h2>
+        <p class="muted small">스터디 프로모션은 시험 범위를 한 칸씩 정복하는 공부 앱이에요. 이렇게 시작해 보세요.</p>
+        <ol class="welcome-steps">
+          <li><b>시험 범위 만들기</b> — 과목을 고르고, 과목마다 공부할 내용을 하나씩 적어요.</li>
+          <li><b>타이머로 집중</b> — 공부한 시간이 과목별로 쌓여요.</li>
+          <li><b>끝낸 범위 체크</b> — 체크할 때마다 폰이 한 칸씩 전진하고, 다 끝내면 퀸으로 승급해요.</li>
+        </ol>
+        <div class="btn-row left"><a class="btn primary" href="#board" data-go="board">시험 범위 만들기</a><a class="btn" href="#about" data-go="about">사용설명서</a><button class="btn link" type="button" id="welcome-close">닫기</button></div>
+      </div>
       <div class="cards4">
         <div class="stat"><div class="stat-label">오늘 공부</div><div class="stat-value" id="h-today">0분</div>
           <div class="bar"><div class="bar-fill" id="h-goalbar"></div></div><div class="stat-sub" id="h-goal"></div><div class="stat-sub" id="h-month-pace" hidden></div></div>
@@ -50,6 +60,11 @@
       <div class="panel" id="h-exams-panel">
         <div class="panel-head"><h2>시험 준비</h2><a href="#board" data-go="board">시험 범위 열기</a></div>
         <div id="h-exams"></div>
+      </div>
+      <div class="panel" id="h-next-panel" hidden>
+        <div class="panel-head"><h2>오늘 할 범위</h2><span class="muted small" id="h-next-sub"></span></div>
+        <ul class="next-list" id="h-next"></ul>
+        <p class="muted small next-foot" id="h-next-foot"></p>
       </div>
       <div class="panel">
         <div class="panel-head"><h2>오늘 할 일</h2><a href="#plan" data-go="plan">전체 보기</a></div>
@@ -181,6 +196,7 @@
           <button class="btn" id="timer-skip">건너뛰기</button>
         </div>
         <p class="muted" id="timer-today"></p>
+        <button class="btn link log-link" type="button" data-log-open>＋ 타이머 없이 공부한 시간 기록하기</button>
         <div class="lock-setup">
           <h3>🔒 폰 잠금 모드</h3>
           <p class="muted small">정한 시간 동안 이 화면만 보이게 잠가요. 앱을 닫았다 다시 열어도 시간이 끝날 때까지 잠금 화면이 이어지고, 다른 앱으로 나간 횟수가 기록돼요.</p>
@@ -287,7 +303,7 @@
         <div id="subject-bars"></div>
       </div>
       <div class="panel">
-        <div class="panel-head"><h2>최근 집중 기록</h2></div>
+        <div class="panel-head"><h2>최근 공부 기록</h2><button class="btn link" type="button" data-log-open>＋ 직접 기록</button></div>
         <ul class="simple-list" id="session-list"></ul>
       </div>
       <p class="muted small stats-foot">하루 목표와 집중·휴식 시간은 <a href="#account" data-go="account">계정·설정</a>에서 바꿀 수 있어요.</p>
@@ -334,6 +350,7 @@
           <label class="field">하루 목표(분)<input type="number" id="set-goal" min="10" step="10" inputmode="numeric"></label>
           <label class="field">집중 시간(분)<input type="number" id="set-focus" min="1" max="120" inputmode="numeric"></label>
           <label class="field">휴식 시간(분)<input type="number" id="set-break" min="1" max="60" inputmode="numeric"></label>
+          <label class="check-field"><input type="checkbox" id="set-awake"> 타이머가 도는 동안 화면 켜 두기 <small class="muted">(꺼지면 끝나는 소리가 늦을 수 있어요)</small></label>
           <button class="btn" type="submit">저장</button>
         </form>
       </div>
@@ -402,6 +419,7 @@
         <details>
           <summary>⌂ 홈</summary>
           <p>오늘 공부한 시간과 하루 목표, 남은 할 일, 오늘 복습할 카드, 연속 학습일을 한눈에 보여 줘요. <b>시험 준비</b>에는 시험마다 D-day, 진행률(폰이 걷는 체스 칸), 남은 시간과 오늘 더 해야 할 양이 나와요.</p>
+          <p><b>오늘 할 범위</b>는 가장 가까운 시험에서 아직 안 끝낸 내용을 과목을 번갈아 가며 오늘 할 양만큼 골라 줘요. 바로 체크할 수 있고, ▶를 누르면 그 범위로 타이머가 준비돼요.</p>
         </details>
         <details>
           <summary>▦ 범위 — 목록과 보드</summary>
@@ -424,7 +442,9 @@
           <summary>◷ 타이머와 폰 잠금 모드</summary>
           <ul>
             <li>집중(기본 25분)과 휴식(기본 5분)을 번갈아 해요. 시간이 끝나면 소리와 알림으로 알려 주고, 집중한 시간은 과목별로 기록돼요.</li>
-            <li>범위의 ⋯ 메뉴에서 <b>이 범위로 타이머 시작</b>을 누르면 무엇을 공부했는지도 함께 남아요.</li>
+            <li>범위의 ⋯ 메뉴나 홈의 ▶에서 시작하면 무엇을 공부했는지도 함께 남고, 집중이 끝나면 그 범위를 끝냈는지 물어본 뒤 체크해 줘요.</li>
+            <li>앱을 닫거나 다른 앱에 다녀와도 타이머는 계속 돌아요. 다시 열면 남은 시간부터 이어지고, 닫혀 있는 동안 끝났다면 그 시간까지 기록해요. 타이머가 도는 동안은 화면이 꺼지지 않아요(계정·설정에서 끌 수 있어요).</li>
+            <li>학원·독서실·인강처럼 타이머 없이 공부했다면 <b>＋ 타이머 없이 공부한 시간 기록하기</b>로 날짜와 시간을 직접 남겨요.</li>
             <li><b>폰 잠금 모드</b>: 정한 시간 동안 잠금 화면만 보여요. 다른 앱으로 나간 시간은 공부 시간에서 빠지고, 그만두려면 3초 동안 길게 눌러야 해요.</li>
           </ul>
         </details>
@@ -434,7 +454,7 @@
         </details>
         <details>
           <summary>▥ 통계와 월 목표</summary>
-          <p>이번 달 공부 시간과 지난달 비교, 최근 6개월과 7일 그래프, 과목별 누적 시간, 최근 기록을 보여 줘요. <b>월 목표</b>를 정하면 달마다 다른 날 수에 맞춰 하루 기본 페이스와 오늘 남은 양을 계산해 줘요.</p>
+          <p>이번 달 공부 시간과 지난달 비교, 최근 6개월과 7일 그래프, 과목별 누적 시간, 최근 기록을 보여 줘요. <b>월 목표</b>를 정하면 달마다 다른 날 수에 맞춰 하루 기본 페이스와 오늘 남은 양을 계산해 줘요. 잘못 남긴 기록은 ✕로 지우고, 빠진 시간은 <b>＋ 직접 기록</b>으로 채워요.</p>
         </details>
         <details>
           <summary>계정·동기화와 백업</summary>
@@ -450,7 +470,7 @@
         <h2>잘 쓰는 법</h2>
         <ol class="routine">
           <li><b>시험 3~4주 전</b> 과목별 범위를 모두 적고, 항목마다 걸리는 시간을 적어 두세요.</li>
-          <li><b>매일 아침</b> 홈에서 ‘오늘 할 양’을 확인해요. 밀렸다면 페이스 띠가 하루에 얼마나 더 해야 하는지 알려 줘요.</li>
+          <li><b>매일 아침</b> 홈의 ‘오늘 할 범위’를 확인해요. 밀렸다면 페이스 띠가 하루에 얼마나 더 해야 하는지 알려 줘요.</li>
           <li><b>공부할 때</b> 타이머나 폰 잠금 모드를 켜서 딴짓을 막아요.</li>
           <li><b>끝낸 범위는 바로 체크</b>하세요. 폰이 퀸에 가까워지는 걸 보는 게 생각보다 큰 힘이 돼요.</li>
           <li><b>외울 것</b>(단어·개념·공식)은 플래시카드로 만들고, ‘복습 대기 카드’를 매일 0으로 만들어요.</li>
@@ -466,6 +486,9 @@
       <div class="panel">
         <h2>업데이트 소식</h2>
         <ul class="news" id="about-news">
+          <li><b>오늘 할 범위</b>: 홈에서 가까운 시험의 오늘 할 내용을 과목을 번갈아 골라 줘요</li>
+          <li><b>타이머 이어 가기</b>: 앱을 닫았다 열어도 타이머가 이어지고, 도는 동안 화면이 꺼지지 않아요</li>
+          <li><b>직접 기록</b>: 학원·독서실처럼 타이머 없이 공부한 시간도 남기고, 잘못된 기록은 지울 수 있어요</li>
           <li><b>범위를 쉽게</b>: 시험을 만들 때 과목을 고르고, 과목마다 공부할 내용을 하나씩 적는 목록 보기</li>
           <li><b>계정·설정</b>을 따로 모으고, 앱 소개와 사용설명서를 새로 만들었어요</li>
         </ul>
@@ -545,6 +568,27 @@
       <div class="ask-actions spread">
         <button class="btn danger" id="ee-delete" type="button">시험 삭제</button>
         <span><button class="btn" id="ee-cancel" type="button">취소</button> <button class="btn primary" type="submit">저장</button></span>
+      </div>
+    </form>
+  </div>
+
+  <!-- 공부 시간 직접 기록 -->
+  <div class="ask-backdrop" id="log-dlg" hidden>
+    <form class="ask-box" id="log-form" role="dialog" aria-modal="true" aria-labelledby="log-title">
+      <h2 id="log-title">공부 시간 직접 기록</h2>
+      <p class="muted small">타이머 없이 공부한 시간(학원·독서실·인강 등)을 적어 두면 통계와 목표에 함께 들어가요.</p>
+      <label class="field">과목<select id="log-subject"></select></label>
+      <label class="field">공부한 시간
+        <span class="time-input"><input type="number" id="log-h" min="0" max="24" inputmode="numeric" aria-label="시간"> 시간 <input type="number" id="log-m" min="0" max="59" step="5" inputmode="numeric" aria-label="분"> 분</span>
+      </label>
+      <div class="lock-chips" id="log-quick">
+        <button class="chip" type="button" data-min="30">30분</button><button class="chip" type="button" data-min="60">1시간</button><button class="chip" type="button" data-min="90">1시간 30분</button><button class="chip" type="button" data-min="120">2시간</button><button class="chip" type="button" data-min="180">3시간</button>
+      </div>
+      <label class="field">날짜<input type="date" id="log-date"></label>
+      <label class="field"><span>메모 <small>(선택)</small></span><input id="log-label" maxlength="40" placeholder="예: 학원 수학 수업" autocomplete="off"></label>
+      <div class="ask-actions">
+        <button class="btn" type="button" id="log-cancel">취소</button>
+        <button class="btn primary" type="submit">기록하기</button>
       </div>
     </form>
   </div>
