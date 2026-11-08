@@ -317,7 +317,7 @@
         <div class="cal-week" aria-hidden="true"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
         <div class="cal-grid" id="cal-grid"></div>
         <div class="cal-foot"><span class="muted small" id="cal-sum"></span><span class="cal-legend muted small" title="1시간 미만 · 1~2시간 · 2~4시간 · 4시간 이상">적게<i class="lv1"></i><i class="lv2"></i><i class="lv3"></i><i class="lv4"></i>많이</span></div>
-        <p class="cal-detail" id="cal-detail" aria-live="polite"></p>
+        <div class="cal-detail" id="cal-detail" aria-live="polite"></div>
       </div>
       <div class="panel">
         <div class="panel-head"><h2>과목별 공부 시간</h2>
@@ -478,7 +478,7 @@
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-stats"/></svg>통계와 월 목표</summary>
           <p>이번 달 공부 시간과 지난달 비교, 최근 6개월과 7일 그래프, 과목별 공부 시간(최근 7일·이번 달·전체), 최근 기록을 보여 줘요. <b>월 목표</b>를 정하면 달마다 다른 날 수에 맞춰 하루 기본 페이스와 오늘 남은 양을 계산해 줘요.</p>
-          <p><b>공부 달력</b>은 날마다 공부한 만큼 진하게 칠해져요(1시간 미만 · 1~2시간 · 2~4시간 · 4시간 이상). 날짜를 누르면 그날 과목별로 얼마나 했는지 나와요. 잘못 남긴 기록은 ✕로 지우고, 빠진 시간은 <b>＋ 직접 기록</b>으로 채워요.</p>
+          <p><b>공부 달력</b>은 날마다 공부한 만큼 진하게 칠해져요(1시간 미만 · 1~2시간 · 2~4시간 · 4시간 이상). 날짜를 누르면 그날 과목별로 얼마나 했는지와 함께, 스터디 플래너처럼 한 줄이 한 시간·한 칸이 10분인 <b>시간표</b>가 과목 색으로 칠해져 나와요. <b>인증 이미지</b>를 누르면 그날 공부를 인스타 스토리 크기 그림으로 만들어 공유하거나 저장할 수 있어요. 잘못 남긴 기록은 ✕로 지우고, 빠진 시간은 <b>＋ 직접 기록</b>으로 채워요.</p>
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-user"/></svg>계정·동기화와 백업</summary>
@@ -510,7 +510,8 @@
       <div class="panel">
         <h2>업데이트 소식</h2>
         <ul class="news" id="about-news">
-          <li><b>공부 달력</b>: 날마다 공부한 만큼 칠해지고, 날짜를 누르면 그날 과목별 시간이 나와요</li>
+          <li><b>공부 인증 이미지</b>: 그날 공부 시간·과목·시간표를 스토리 크기 그림으로 만들어 공유해요 (목표를 달성하면 알림에서 바로)</li>
+          <li><b>공부 달력·시간표</b>: 날마다 공부한 만큼 칠해지고, 날짜를 누르면 그날 과목별 시간과 10분 칸 시간표가 나와요</li>
           <li><b>오늘 할 범위</b>: 홈에서 가까운 시험의 오늘 할 내용을 과목을 번갈아 골라 줘요</li>
           <li><b>타이머 이어 가기</b>: 앱을 닫았다 열어도 타이머가 이어지고, 도는 동안 화면이 꺼지지 않아요. 집중 중에 다른 범위로 바꿔도 그때까지 한 시간은 기록해요</li>
           <li><b>하루 목표 달성</b>: 오늘 공부 시간이 하루 목표를 넘는 순간 축하해 줘요. PC에서는 스페이스 키로 타이머를 켜고 멈춰요</li>
@@ -620,6 +621,20 @@
     </form>
   </div>
 
+  <!-- 공부 인증 이미지 -->
+  <div class="ask-backdrop" id="share-dlg" hidden>
+    <div class="ask-box share-box" role="dialog" aria-modal="true" aria-labelledby="share-title">
+      <h2 id="share-title">공부 인증 이미지</h2>
+      <div class="share-preview"><img id="share-img" alt="공부 인증 이미지 미리 보기" hidden><span class="muted small" id="share-wait">이미지를 만드는 중…</span></div>
+      <p class="muted small share-hint">휴대폰에서는 이미지를 길게 눌러 사진에 저장할 수도 있어요.</p>
+      <div class="ask-actions">
+        <button class="btn" type="button" id="share-close">닫기</button>
+        <a class="btn" id="share-save" download>이미지 저장</a>
+        <button class="btn primary" type="button" id="share-send" hidden>공유하기</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 범위: 과목 추가 -->
   <div class="ask-backdrop" id="subj-dlg" hidden>
     <form class="ask-box" id="subj-form" role="dialog" aria-modal="true" aria-labelledby="subj-title">
@@ -647,6 +662,7 @@
   <script src="js/stats.js"></script>
   <script src="js/store.js"></script>
   <script src="js/scope.js"></script>
+  <script src="js/share.js"></script>
   <script src="js/app.js"></script>
   <script src="js/board.js"></script>
   <script src="js/lock.js"></script>

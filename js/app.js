@@ -1061,10 +1061,102 @@
     const sum = list.reduce((a, x) => a + x.minutes, 0);
     const bySub = Stats.minutesBySubject(list);
     const dd = new Date(key + 'T12:00');
-    const parts = Object.keys(bySub).sort((a, b) => bySub[b] - bySub[a]).map((k) => { const sb = subjectById(k); return `${esc(sb ? sb.name : '과목 없음')} ${Stats.formatMinutes(bySub[k])}`; });
-    det.innerHTML = `<b>${dd.getMonth() + 1}월 ${dd.getDate()}일 (${WEEK[dd.getDay()]})${key === tk ? ' · 오늘' : ''}</b> ` +
-      (sum ? `${Stats.formatMinutes(sum)}<span class="muted"> · ${parts.join(', ')}</span>` : '<span class="muted">공부 기록이 없어요</span>');
+    const parts = Object.keys(bySub).sort((a, b) => bySub[b] - bySub[a]).map((k) => { const sb = subjectById(k); return `<i class="dot" style="background:${esc(sb ? sb.color : 'var(--muted)')}"></i>${esc(sb ? sb.name : '과목 없음')} ${Stats.formatMinutes(bySub[k])}`; });
+    det.innerHTML = `<p class="cal-day"><b>${dd.getMonth() + 1}월 ${dd.getDate()}일 (${WEEK[dd.getDay()]})${key === tk ? ' · 오늘' : ''}</b> ` +
+      (sum ? `${Stats.formatMinutes(sum)}<span class="muted"> · ${parts.join(', ')}</span>` : '<span class="muted">공부 기록이 없어요</span>') + '</p>' +
+      timetableHTML(st.sessions, key);
   }
+
+  // 하루 시간표: 한 줄이 한 시간, 한 칸이 10분 (스터디 플래너처럼). 과목 색으로 칠한다
+  function hhmm(t, key) {
+    const d = new Date(t);
+    return (Stats.dayKey(t) === key ? d.getHours() : 24) + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+  function timetableHTML(sessions, key) {
+    const tl = Stats.dayTimeline(sessions, key);
+    const fm = Stats.formatMinutes;
+    const share = `<button type="button" class="btn link tt-share" data-share-day="${key}">인증 이미지</button>`;
+    if (!tl.hours.length) return tl.untimed ? `<div class="tt-foot"><span class="muted small">직접 기록한 ${fm(tl.untimed)}은 공부한 시각이 없어 시간표에는 안 나와요.</span>${share}</div>` : '';
+    const color = (sid) => { const sb = sid && subjectById(sid); return sb ? sb.color : 'var(--muted)'; };
+    const from = hhmm(tl.start, key), to = hhmm(tl.end, key);
+    const rows = tl.hours.map((h) => `<div class="tt-row"><span class="tt-h">${h.hour}</span><div class="tt-bar">${h.segs.map((g) =>
+      `<i style="left:${((g.from / 60) * 100).toFixed(2)}%;width:${(((g.to - g.from) / 60) * 100).toFixed(2)}%;background:${esc(color(g.subjectId))}"></i>`).join('')}</div></div>`).join('');
+    return `<div class="tt" id="cal-tt" role="img" aria-label="공부 시간표: ${from}부터 ${to}까지, 공부 ${fm(tl.timed)}">` +
+      `<div class="tt-row tt-head" aria-hidden="true"><span class="tt-h"></span><div class="tt-ticks"><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span></div></div>${rows}</div>` +
+      `<div class="tt-foot"><span class="muted small">${from} ~ ${to}${tl.untimed ? ` · 직접 기록 ${fm(tl.untimed)}은 시간표 밖` : ''}</span>${share}</div>`;
+  }
+
+  /* ---------- 공부 인증 이미지 (인스타 스토리 크기) ---------- */
+  function shareData(key) {
+    const st = store.get();
+    const list = st.sessions.filter((x) => Stats.dayKey(x.endedAt) === key);
+    const total = list.reduce((a, x) => a + x.minutes, 0);
+    const by = Stats.minutesBySubject(list);
+    const colorOf = (sid) => { const sb = sid && subjectById(sid); return sb && /^#[0-9a-f]{3,8}$/i.test(sb.color || '') ? sb.color : '#8f8f8f'; };
+    const subjects = Object.keys(by).sort((a, b) => by[b] - by[a]).map((k) => { const sb = subjectById(k); return { name: sb ? sb.name : '과목 없음', color: colorOf(k), minutes: by[k] }; });
+    const tl = Stats.dayTimeline(st.sessions, key);
+    const dd = new Date(key + 'T12:00');
+    const goal = +st.settings.dailyGoalMin || 0;
+    const isToday = key === todayKey();
+    const ex = isToday ? nextExam() : null;
+    const dday = ex && ex.date ? Scope.ddayLabel(ex.date, now()) : '';
+    const track = goal ? Scope.pawnRank(Math.min(100, (total / goal) * 100)) : ex ? Scope.pawnRank(Scope.examProgress(st.topics, ex.id).pct) : Scope.pawnRank(0);
+    return {
+      title: isToday ? '오늘의 공부' : `${dd.getMonth() + 1}월 ${dd.getDate()}일의 공부`,
+      date: `${dd.getFullYear()}. ${dd.getMonth() + 1}. ${dd.getDate()}. (${WEEK[dd.getDay()]})`,
+      total, goal, subjects, timeline: tl, colorOf, track,
+      range: tl.hours.length ? `${hhmm(tl.start, key)} ~ ${hhmm(tl.end, key)}` : '',
+      exam: dday ? { name: ex.name, dday } : null,
+    };
+  }
+  let shareURL = null, shareFile = null, shareReturn = null, shareSeq = 0;
+  async function openShare(key) {
+    if (!window.StudyCard) return;
+    const seq = ++shareSeq;
+    const dlg = $('#share-dlg'), img = $('#share-img'), save = $('#share-save');
+    if (dlg.hidden) shareReturn = document.activeElement;
+    img.hidden = true;
+    $('#share-wait').hidden = false;
+    $('#share-send').hidden = true;
+    save.removeAttribute('href');
+    save.classList.add('disabled');
+    dlg.hidden = false;
+    $('#share-close').focus();
+    let blob = null;
+    try {
+      const canvas = await StudyCard.render(shareData(key));
+      blob = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+    } catch (e) { blob = null; }
+    if (seq !== shareSeq || dlg.hidden) return;
+    if (!blob) { closeShare(); toast('이미지를 만들지 못했어요'); return; }
+    if (shareURL) URL.revokeObjectURL(shareURL);
+    shareURL = URL.createObjectURL(blob);
+    const name = `studypromotion-${key}.png`;
+    try { shareFile = new File([blob], name, { type: 'image/png' }); } catch (e) { shareFile = null; }
+    img.src = shareURL;
+    img.hidden = false;
+    $('#share-wait').hidden = true;
+    save.href = shareURL;
+    save.download = name;
+    save.classList.remove('disabled');
+    let can = false;
+    try { can = !!(shareFile && navigator.canShare && navigator.canShare({ files: [shareFile] })); } catch (e) { can = false; }
+    $('#share-send').hidden = !can;
+  }
+  function closeShare() {
+    shareSeq++;
+    $('#share-dlg').hidden = true;
+    if (shareReturn && document.contains(shareReturn)) { try { shareReturn.focus(); } catch (e) { /* 무시 */ } }
+    shareReturn = null;
+  }
+  $('#cal-detail').addEventListener('click', (e) => { const b = e.target.closest('[data-share-day]'); if (b) openShare(b.dataset.shareDay); });
+  $('#share-close').addEventListener('click', closeShare);
+  $('#share-dlg').addEventListener('click', (e) => { if (e.target.id === 'share-dlg') closeShare(); });
+  $('#share-dlg').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeShare(); });
+  $('#share-send').addEventListener('click', async () => {
+    if (!shareFile) return;
+    try { await navigator.share({ files: [shareFile], title: '스터디 프로모션 · 공부 인증' }); } catch (e) { /* 취소하면 그대로 */ }
+  });
   function shiftCalendar(delta) {
     const t = new Date(now());
     const [y, m] = calYM || [t.getFullYear(), t.getMonth()];
@@ -1155,7 +1247,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.4';
+  const APP_VERSION = '2.5';
   const APP_DATE = '2026년 11월 9일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
@@ -1272,7 +1364,7 @@
     if (done === day) return;
     try { localStorage.setItem(GOAL_KEY, day); } catch (e) { /* 무시 */ }
     setTimeout(() => {
-      toast(`오늘 목표 ${Stats.formatMinutes(goal)} 달성! 오늘의 폰이 퀸이 됐어요 ♛`);
+      toast(`오늘 목표 ${Stats.formatMinutes(goal)} 달성! 오늘의 폰이 퀸이 됐어요 ♛`, { action: '인증 이미지', onAction: () => openShare(todayKey()) });
       try { if (navigator.vibrate) navigator.vibrate([80, 60, 80, 60, 160]); } catch (e) { /* 무시 */ }
     }, 2400); // 기록 알림을 먼저 보여 주고
   });

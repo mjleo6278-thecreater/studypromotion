@@ -122,6 +122,7 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   await page.evaluate(() => App.store.update((s) => s.sessions.push({ id: 'g2', subjectId: null, minutes: 30, endedAt: Date.now() })));
   await page.waitForFunction(() => /오늘 목표 1시간 달성/.test(document.querySelector('#toast').textContent), null, { timeout: 4000 });
   assert(true, '목표를 넘는 순간 축하 알림');
+  assert((await page.textContent('#toast .toast-act')) === '인증 이미지', '축하 알림에서 바로 인증 이미지');
   await page.evaluate(() => { document.querySelector('#toast').textContent = ''; App.store.update((s) => s.sessions.push({ id: 'g3', subjectId: null, minutes: 30, endedAt: Date.now() })); });
   await page.waitForTimeout(2600);
   assert(!(await page.textContent('#toast')).includes('목표'), '축하는 하루에 한 번만');
@@ -140,6 +141,39 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   assert(await page.isVisible(`#cal-grid [data-cal="${today}"].today.lv3`), '오늘 칸이 2시간 10분만큼 진하게 (2~4시간 단계)');
   const detail = await page.textContent('#cal-detail');
   assert(detail.includes('오늘') && detail.includes('2시간 10분') && detail.includes('수학 1시간 40분') && detail.includes('국어 30분'), '오늘 과목별 공부 시간 (' + detail + ')');
+  // 하루 시간표 (10분 칸)
+  assert(await page.isVisible('#cal-tt') && (await page.$$eval('#cal-tt .tt-bar i', (els) => els.length)) >= 2, '고른 날의 10분 칸 시간표');
+  const ttLabel = await page.getAttribute('#cal-tt', 'aria-label');
+  assert(/\d+:\d\d부터 \d+:\d\d까지/.test(ttLabel), '시간표에 공부한 시간대 (' + ttLabel + ')');
+  const segColors = await page.$$eval('#cal-tt .tt-bar i', (els) => els.map((e) => e.style.background));
+  assert(new Set(segColors).size >= 2, '과목마다 다른 색으로 칠함');
+  await page.evaluate((n) => App.store.update((s) => s.sessions.push({ id: 'man', subjectId: null, minutes: 45, endedAt: n, manual: true, label: '직접 기록' })), now);
+  assert((await page.textContent('#cal-detail')).includes('직접 기록 45분은 시간표 밖'), '직접 기록은 시각이 없어 시간표 밖으로 따로 알림');
+  await page.evaluate(() => App.store.update((s) => { s.sessions = s.sessions.filter((x) => x.id !== 'man'); }));
+  // 공부 인증 이미지 (스토리 크기)
+  await page.tap('#cal-detail [data-share-day]');
+  await page.waitForFunction(() => { const i = document.querySelector('#share-img'); return i && !i.hidden && i.complete && i.naturalWidth > 0; }, null, { timeout: 10000 });
+  const card = await page.evaluate(() => {
+    const i = document.querySelector('#share-img');
+    const c = document.createElement('canvas'); c.width = 54; c.height = 96;
+    const g = c.getContext('2d'); g.drawImage(i, 0, 0, 54, 96);
+    const px = g.getImageData(0, 0, 54, 96).data; const colors = new Set();
+    for (let k = 0; k < px.length; k += 4) colors.add(((px[k] >> 4) << 8) | ((px[k + 1] >> 4) << 4) | (px[k + 2] >> 4));
+    return { w: i.naturalWidth, h: i.naturalHeight, colors: colors.size, dl: document.querySelector('#share-save').getAttribute('download'), href: document.querySelector('#share-save').getAttribute('href') };
+  });
+  assert(card.w === 1080 && card.h === 1920 && card.colors > 8, '인증 이미지 1080×1920 (' + card.colors + '색)');
+  assert(/^studypromotion-\d{4}-\d\d-\d\d\.png$/.test(card.dl) && /^blob:/.test(card.href), '이미지 저장 링크');
+  await page.keyboard.press('Escape');
+  assert(!(await page.isVisible('#share-dlg')), '인증 이미지 창 Esc로 닫기');
+  // 공유를 지원하는 휴대폰에서는 공유하기 버튼
+  await page.evaluate(() => { navigator.canShare = () => true; navigator.share = async (d) => { window.__shared = d.files[0].name; }; });
+  await page.tap('#cal-detail [data-share-day]');
+  await page.waitForSelector('#share-send', { state: 'visible', timeout: 10000 });
+  await page.tap('#share-send');
+  await page.waitForFunction(() => !!window.__shared);
+  assert(/\.png$/.test(await page.evaluate(() => window.__shared)), '공유하기로 이미지 파일 보내기');
+  await page.tap('#share-close');
+  assert(!(await page.isVisible('#share-dlg')), '닫기');
   assert(await page.isDisabled('#cal-next'), '다음 달로는 못 감');
   await page.tap('#cal-prev');
   const prevTitle = await page.textContent('#cal-title');

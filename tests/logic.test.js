@@ -238,3 +238,29 @@ test('공부 달력: 날마다 공부 시간과 진하기, 1일 앞 빈칸, 달�
   assert.strictEqual(Stats.monthCalendar([], 2028, 1).days.length, 29);
   assert.strictEqual(Stats.monthCalendar([{ minutes: 20, endedAt: at(2026, 9, 31) }], 2026, 9).days[30].level, 1);
 });
+
+test('하루 시간표: 시간대별 조각, 자정 넘긴 기록, 직접 기록은 따로', () => {
+  const at = (d, h, mi) => new Date(2026, 10, d, h, mi || 0).getTime();
+  const sessions = [
+    { minutes: 25, endedAt: at(9, 9, 28), subjectId: 'kor' }, // 9:03~9:28
+    { minutes: 50, endedAt: at(9, 11, 20), subjectId: 'math' }, // 10:30~11:20
+    { minutes: 40, endedAt: at(10, 0, 20), subjectId: 'eng' }, // 23:40~다음날 0:20
+    { minutes: 90, endedAt: at(9, 12), subjectId: 'math', manual: true },
+    { minutes: 30, endedAt: at(8, 15), subjectId: 'kor' }, // 다른 날
+  ];
+  const tl = Stats.dayTimeline(sessions, '2026-11-09');
+  assert.deepStrictEqual(tl.hours.map((h) => h.hour), [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]);
+  assert.deepStrictEqual(tl.hours[0].segs, [{ from: 3, to: 28, subjectId: 'kor' }]);
+  assert.deepStrictEqual(tl.hours[1].segs, [{ from: 30, to: 60, subjectId: 'math' }]);
+  assert.deepStrictEqual(tl.hours[2].segs, [{ from: 0, to: 20, subjectId: 'math' }]);
+  assert.deepStrictEqual(tl.hours[3].segs, []);
+  assert.deepStrictEqual(tl.hours[14].segs, [{ from: 40, to: 60, subjectId: 'eng' }]);
+  assert.strictEqual(tl.timed, 25 + 50 + 20);
+  assert.strictEqual(tl.untimed, 90);
+  assert.strictEqual(tl.start, at(9, 9, 3));
+  assert.strictEqual(tl.end, at(10, 0, 0));
+  const next = Stats.dayTimeline(sessions, '2026-11-10');
+  assert.deepStrictEqual(next.hours, [{ hour: 0, segs: [{ from: 0, to: 20, subjectId: 'eng' }] }]);
+  const none = Stats.dayTimeline(sessions.slice(3, 4), '2026-11-09');
+  assert.deepStrictEqual([none.hours.length, none.timed, none.untimed, none.start], [0, 0, 90, null]);
+});

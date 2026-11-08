@@ -143,7 +143,45 @@
     return { year, month: month0 + 1, lead: new Date(year, month0, 1).getDay(), days, total, studied, best };
   }
 
-  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes };
+  /**
+   * 하루 공부 시간표 (10분 칸 스터디 플래너처럼 시간대별로)
+   *  key 'YYYY-MM-DD' 하루에 걸친 기록을 시(0~23)마다 조각으로 나눈다. 자정을 넘긴 기록은 그날 몫만.
+   *  직접 기록은 언제 했는지 모르니 시간표에 넣지 않고 untimed(분)로 합만 낸다.
+   *  반환: { hours: [{ hour, segs: [{ from, to, subjectId }] }], start, end, timed, untimed }
+   *   hours는 처음 공부한 시부터 마지막 시까지, from/to는 그 시 안의 분(0~60), start/end는 시각(ms)
+   */
+  function dayTimeline(sessions, key) {
+    const [y, m, d] = key.split('-').map(Number);
+    const d0 = new Date(y, m - 1, d).getTime(), d1 = new Date(y, m - 1, d + 1).getTime();
+    const segs = [];
+    let untimed = 0, timed = 0, start = null, end = null;
+    for (const s of sessions) {
+      if (!(s.minutes > 0)) continue;
+      if (s.manual) { if (dayKey(s.endedAt) === key) untimed += s.minutes; continue; }
+      const from = Math.max(s.endedAt - s.minutes * 60000, d0), to = Math.min(s.endedAt, d1);
+      if (to <= from) continue;
+      timed += (to - from) / 60000;
+      start = start === null ? from : Math.min(start, from);
+      end = end === null ? to : Math.max(end, to);
+      segs.push({ from, to, subjectId: s.subjectId || null });
+    }
+    const hours = [];
+    if (segs.length) {
+      segs.sort((a, b) => a.from - b.from);
+      const h0 = new Date(start).getHours(), h1 = new Date(end - 1).getHours();
+      for (let h = h0; h <= h1; h++) {
+        const t0 = new Date(y, m - 1, d, h).getTime(), t1 = new Date(y, m - 1, d, h + 1).getTime();
+        hours.push({ hour: h, segs: segs.filter((g) => g.to > t0 && g.from < t1).map((g) => ({
+          from: Math.round(((Math.max(g.from, t0) - t0) / 60000) * 10) / 10,
+          to: Math.round(((Math.min(g.to, t1) - t0) / 60000) * 10) / 10,
+          subjectId: g.subjectId,
+        })) });
+      }
+    }
+    return { hours, start, end, timed: Math.round(timed), untimed };
+  }
+
+  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);
