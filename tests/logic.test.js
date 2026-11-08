@@ -171,3 +171,13 @@ test('월 목표 하루 페이스: 오늘 몫과 남은 양', () => {
   assert.strictEqual(g.todayQuota, 135); // (60-15)시간 ÷ 20일
   assert.strictEqual(g.todayLeft, 95);
 });
+
+test('월 목표: 달마다 다른 날 수(28·29·30·31일)를 반영', () => {
+  const base = (y, m) => Stats.monthGoal(31 * 60, 0, new Date(y, m, 1, 9).getTime(), 0).basePerDay;
+  assert.strictEqual(base(2026, 0), 60);   // 1월 31일
+  assert.strictEqual(base(2026, 1), 67);   // 2월 28일 → 1860/28 = 66.4 → 67
+  assert.strictEqual(base(2028, 1), 65);   // 윤년 2월 29일 → 64.1 → 65
+  assert.strictEqual(base(2026, 10), 62);  // 11월 30일
+  assert.strictEqual(Stats.monthGoal(600, 0, new Date(2026, 1, 28, 9).getTime(), 0).daysLeft, 1); // 2월 마지막 날
+  assert.strictEqual(Stats.monthGoal(600, 0, new Date(2026, 0, 28, 9).getTime(), 0).daysLeft, 4); // 1월 28일 → 31일까지
+});
