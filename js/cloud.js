@@ -4,7 +4,14 @@
  * - 인터넷이 없으면 이 기기에만 저장하고, 연결되면 올린다
  * Firebase 콘솔의 웹 앱 설정값을 아래 FIREBASE_CONFIG에 넣어야 동작한다. */
 (function (root) {
-  const FIREBASE_CONFIG = null; // ▼ { apiKey, authDomain, projectId, appId, ... }
+  const FIREBASE_CONFIG = {
+    apiKey: 'AIzaSyCVU1TC83-4CquiKHZKJ-4F_lcUHZUcqCA',
+    authDomain: 'studypromotionbyleo.firebaseapp.com',
+    projectId: 'studypromotionbyleo',
+    storageBucket: 'studypromotionbyleo.firebasestorage.app',
+    messagingSenderId: '1023406231883',
+    appId: '1:1023406231883:web:ee44f5259650d1994658ce',
+  };
 
   const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
   const META_KEY = 'studypromotion.cloud';

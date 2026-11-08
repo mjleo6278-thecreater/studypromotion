@@ -27,7 +27,7 @@ const server = http.createServer((req, res) => {
   const file = path.join(root, p);
   if (!file.startsWith(root) || !fs.existsSync(file)) { res.writeHead(404); return res.end(); }
   let body = fs.readFileSync(file);
-  if (p === '/js/cloud.js') body = body.toString().replace('const FIREBASE_CONFIG = null;', "const FIREBASE_CONFIG = { apiKey: 'x', projectId: 'test' };");
+  if (p === '/js/cloud.js') body = body.toString();
   res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
   res.end(body);
 });
