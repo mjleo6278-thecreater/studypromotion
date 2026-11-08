@@ -581,6 +581,21 @@
       <div class="wc-bar${d.minutes ? '' : ' zero'}" style="height:${Math.round((d.minutes / max) * 130)}px" title="${d.key} ${Stats.formatMinutes(d.minutes)}"></div>
       <div class="wc-label">${d.label}</div></div>`).join('');
 
+    const months = Stats.lastNMonths(st.sessions, now(), 6);
+    const cur = months[5], prev = months[4];
+    $('#month-total').textContent = Stats.formatMinutes(cur.minutes);
+    const daysInMonthSoFar = new Date(now()).getDate();
+    $('#month-sub').textContent = `${cur.month}월 합계 · 공부한 날 ${cur.days}일 / ${daysInMonthSoFar}일` + (cur.days ? ` · 공부한 날 평균 ${Stats.formatMinutes(cur.minutes / cur.days)}` : '');
+    const diff = cur.minutes - prev.minutes;
+    $('#month-compare').textContent = prev.minutes || cur.minutes
+      ? `지난달(${prev.month}월) ${Stats.formatMinutes(prev.minutes)} · ${diff >= 0 ? '▲ ' : '▼ '}${Stats.formatMinutes(Math.abs(diff))}`
+      : '';
+    const mMax = Math.max(60, ...months.map((m) => m.minutes));
+    $('#month-chart').innerHTML = months.map((m, i) => `<div class="wc-col${i === 5 ? ' today' : ''}">
+      <div class="wc-val">${m.minutes ? (m.minutes < 60 ? m.minutes + '분' : (Math.round(m.minutes / 6) / 10) + '시간') : ''}</div>
+      <div class="wc-bar${m.minutes ? '' : ' zero'}" style="height:${Math.round((m.minutes / mMax) * 100)}px" title="${m.key} ${Stats.formatMinutes(m.minutes)}"></div>
+      <div class="wc-label">${m.label}</div></div>`).join('');
+
     const by = Stats.minutesBySubject(st.sessions);
     const rows = Object.keys(by).map((k) => {
       const s = subjectById(k);

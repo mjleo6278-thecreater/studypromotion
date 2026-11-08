@@ -512,3 +512,28 @@ body.board-mode main { margin: 0; width: 100%; }
 .gsync .btn-row { margin-top: 8px; }
 #ask-msg { white-space: pre-line; }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 월간 공부 시간 */
+.month-total { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.month-hero { margin-bottom: 12px; }
+.month-chart { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; align-items: end; height: 150px; }
+
+/* 폰 잠금 모드 */
+.lock-setup { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
+.lock-setup h3 { font-size: 15px; margin: 0 0 4px; }
+.lock-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; align-items: center; }
+.lock-chips input { width: 76px; }
+.lock-screen { position: fixed; inset: 0; z-index: 1000; background: #000; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); text-align: center; touch-action: none; user-select: none; -webkit-user-select: none; }
+.lock-screen[hidden] { display: none; }
+.lock-icon { width: 64px; height: 64px; opacity: .9; }
+.lock-time { font-size: clamp(56px, 18vw, 96px); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 1px; }
+.lock-sub { color: #aaa; font-size: 15px; }
+.lock-msg { color: #ddd; font-size: 16px; min-height: 1.4em; }
+.lock-leaves { color: #888; font-size: 13px; }
+.lock-quit { margin-top: 28px; position: relative; overflow: hidden; background: none; color: #888; border: 1px solid #444; border-radius: 999px; padding: 10px 20px; font: inherit; font-size: 13px; }
+.lock-quit .fill { position: absolute; inset: 0; background: rgba(255,255,255,.18); transform: scaleX(0); transform-origin: left; }
+.lock-quit.holding .fill { transform: scaleX(1); transition: transform 3s linear; }
+.lock-quit span { position: relative; }
+.lock-screen.shake .lock-time { animation: lockshake .4s; }
+@keyframes lockshake { 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+#ask, #toast { z-index: 1100; }

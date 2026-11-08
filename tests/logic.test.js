@@ -131,3 +131,21 @@ test('저장소: 스터디갬빗 시절(studygambit.v1) 데이터도 불러온�
   storage.setItem('studygambit.v1', JSON.stringify({ exams: [{ id: 'e', name: '기말' }], tasks: [] }));
   assert.strictEqual(StoreLib.createStore(storage).get().exams[0].name, '기말');
 });
+
+test('최근 몇 달 공부 시간 합계와 공부한 날 수', () => {
+  const now = new Date(2026, 10, 20, 12).getTime(); // 2026-11-20
+  const at = (m, d) => new Date(2026, m, d, 10).getTime();
+  const sessions = [
+    { minutes: 30, endedAt: at(10, 1) }, { minutes: 45, endedAt: at(10, 1) }, { minutes: 60, endedAt: at(10, 15) },
+    { minutes: 100, endedAt: at(9, 31) }, { minutes: 20, endedAt: at(7, 5) },
+  ];
+  const m = Stats.lastNMonths(sessions, now, 6);
+  assert.strictEqual(m.length, 6);
+  assert.deepStrictEqual(m[5], { key: '2026-11', label: '11월', year: 2026, month: 11, minutes: 135, days: 2 });
+  assert.strictEqual(m[4].minutes, 100);
+  assert.strictEqual(m[3].minutes, 0);
+  assert.strictEqual(m[2].minutes, 20);
+  // 1월에서 거꾸로 가면 작년으로 넘어간다
+  const jan = Stats.lastNMonths([], new Date(2027, 0, 3).getTime(), 3);
+  assert.deepStrictEqual(jan.map((x) => x.key), ['2026-11', '2026-12', '2027-01']);
+});

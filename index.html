@@ -164,6 +164,18 @@
           <button class="btn" id="timer-skip">건너뛰기</button>
         </div>
         <p class="muted" id="timer-today"></p>
+        <div class="lock-setup">
+          <h3>🔒 폰 잠금 모드</h3>
+          <p class="muted small">정한 시간 동안 이 화면만 보이게 잠가요. 앱을 닫았다 다시 열어도 시간이 끝날 때까지 잠금 화면이 이어지고, 다른 앱으로 나간 횟수가 기록돼요.</p>
+          <div class="lock-chips" id="lock-chips">
+            <button class="chip" data-lock="30" type="button">30분</button>
+            <button class="chip active" data-lock="60" type="button">1시간</button>
+            <button class="chip" data-lock="90" type="button">1시간 30분</button>
+            <button class="chip" data-lock="120" type="button">2시간</button>
+            <label class="muted small">직접 <input type="number" id="lock-custom" min="1" max="600" placeholder="분"></label>
+          </div>
+          <button class="btn primary" id="lock-start" type="button">잠금 시작</button>
+        </div>
       </div>
     </section>
 
@@ -228,6 +240,13 @@
     <section id="view-stats" class="view">
       <h1>통계</h1>
       <div class="panel">
+        <div class="panel-head"><h2>월간 공부 시간</h2><span class="muted" id="month-compare"></span></div>
+        <div class="month-hero">
+          <div><div class="month-total" id="month-total">0분</div><div class="muted small" id="month-sub"></div></div>
+        </div>
+        <div class="month-chart" id="month-chart"></div>
+      </div>
+      <div class="panel">
         <div class="panel-head"><h2>최근 7일 공부 시간</h2><span class="muted" id="week-total"></span></div>
         <div class="week-chart" id="week-chart"></div>
       </div>
@@ -270,6 +289,16 @@
       </div>
     </section>
   </main>
+
+  <!-- 폰 잠금 모드 화면 -->
+  <div class="lock-screen" id="lock-screen" hidden aria-live="polite">
+    <svg class="lock-icon" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 80 C40 74 28 73 18 75 L18 47 C28 45 40 46 50 52 C60 46 72 45 82 47 L82 75 C72 73 60 74 50 80 Z" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/><path d="M50 52 L50 80" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M31 40 L28 20 L40 29 L50 15 L60 29 L72 20 L69 40 Z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
+    <div class="lock-time" id="lock-time">00:00</div>
+    <div class="lock-sub" id="lock-sub"></div>
+    <div class="lock-msg" id="lock-msg">지금은 공부 시간이에요.</div>
+    <div class="lock-leaves" id="lock-leaves"></div>
+    <button class="lock-quit" id="lock-quit" type="button"><i class="fill"></i><span>3초 길게 눌러 포기하기</span></button>
+  </div>
 
   <!-- 화이트보드: 범위 붙여넣기 -->
   <div class="ask-backdrop" id="paste-dlg" hidden>
@@ -319,6 +348,7 @@
   <script src="js/scope.js"></script>
   <script src="js/app.js"></script>
   <script src="js/board.js"></script>
+  <script src="js/lock.js"></script>
   <script src="js/gsync.js"></script>
 </body>
 </html>

@@ -73,7 +73,30 @@
     return m ? h + '시간 ' + m + '분' : h + '시간';
   }
 
-  const api = { dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes };
+  function monthKey(ts) {
+    const d = new Date(ts);
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+  }
+
+  // 최근 n개월 [{key, label, minutes, days}] (오래된 달 → 이번 달). days = 공부한 날 수
+  function lastNMonths(sessions, now, n) {
+    const mins = {}, daySets = {};
+    for (const s of sessions) {
+      const k = monthKey(s.endedAt);
+      mins[k] = (mins[k] || 0) + s.minutes;
+      (daySets[k] = daySets[k] || new Set()).add(dayKey(s.endedAt));
+    }
+    const out = [];
+    const base = new Date(now);
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+      const k = monthKey(d.getTime());
+      out.push({ key: k, label: (d.getMonth() + 1) + '월', year: d.getFullYear(), month: d.getMonth() + 1, minutes: mins[k] || 0, days: daySets[k] ? daySets[k].size : 0 });
+    }
+    return out;
+  }
+
+  const api = { monthKey, lastNMonths, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);
