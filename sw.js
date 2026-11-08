@@ -1,9 +1,10 @@
 /* 스터디 프로모션 서비스 워커: 앱 파일을 저장해 두고 오프라인에서도 열리게 한다 */
-const CACHE = 'studypromotion-v14';
+const CACHE = 'studypromotion-v15';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
+  './fonts/pretendard/pretendard.css',
   './manifest.webmanifest',
   './js/srs.js',
   './js/stats.js',
