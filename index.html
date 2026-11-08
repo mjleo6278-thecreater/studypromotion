@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>스터디 프로모션</title>
-  <meta name="description" content="시험 범위 화이트보드, 학습 계획, 집중 타이머, 플래시카드 복습, 공부 통계를 한 곳에서.">
+  <meta name="description" content="시험 범위 정리(목록·화이트보드), 학습 계획, 집중 타이머, 플래시카드 복습, 공부 통계를 한 곳에서.">
   <meta name="theme-color" content="#0a0a0a">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -44,7 +44,7 @@
         <div class="stat"><div class="stat-label">연속 학습일</div><div class="stat-value" id="h-streak">0일</div><div class="stat-sub">하루에 조금이라도</div></div>
       </div>
       <div class="panel" id="h-exams-panel">
-        <div class="panel-head"><h2>시험 준비</h2><a href="#board" data-go="board">범위 화이트보드 열기</a></div>
+        <div class="panel-head"><h2>시험 준비</h2><a href="#board" data-go="board">시험 범위 열기</a></div>
         <div id="h-exams"></div>
       </div>
       <div class="panel">
@@ -64,16 +64,22 @@
           <div class="pawn-track" id="bb-track" title="전체 진행률: 폰이 끝 칸에 닿으면 퀸으로 승급"></div>
           <span class="bb-pct" id="bb-pct"></span>
         </div>
-        <div class="bb-group">
-          <button class="bb-btn text" id="bb-paste" title="범위 목록을 붙여넣어 한 번에 추가">범위 붙여넣기</button>
-          <button class="bb-btn text" id="bb-add-card" title="과목·범주 카드 추가">＋ 카드</button>
+        <div class="bb-group bb-modes">
+          <div class="seg" role="group" aria-label="보기 방식">
+            <button class="seg-btn" type="button" data-scope-mode="list" aria-pressed="false" title="과목 → 공부할 내용 목록으로 보기"><span class="seg-ico" aria-hidden="true">☰</span>목록</button>
+            <button class="seg-btn" type="button" data-scope-mode="board" aria-pressed="false" title="넓은 화이트보드로 보기"><span class="seg-ico" aria-hidden="true">▦</span>보드</button>
+          </div>
+        </div>
+        <div class="bb-group board-only">
+          <button class="bb-btn text" id="bb-add-card" title="과목 추가">＋ 과목</button>
+          <button class="bb-btn text" id="bb-paste" title="범위 목록을 붙여넣어 한 번에 추가">붙여넣기</button>
           <button class="bb-btn text" id="bb-add-note" title="메모 붙이기">＋ 메모</button>
           <form class="bb-search" id="bb-search" role="search">
             <input id="bb-search-input" type="search" placeholder="범위 검색" aria-label="범위에서 항목 찾기" autocomplete="off">
             <span class="bb-search-count muted" id="bb-search-count"></span>
           </form>
         </div>
-        <div class="bb-group" role="group" aria-label="도구">
+        <div class="bb-group board-only" role="group" aria-label="도구">
           <button class="bb-btn tool active" data-tool="select" title="선택·이동 (V)" aria-label="선택">✋</button>
           <button class="bb-btn tool" data-tool="pen" title="펜 (P) — 체크 표시·밑줄" aria-label="펜">✎</button>
           <button class="bb-btn tool" data-tool="marker" title="형광펜 (H)" aria-label="형광펜">▍</button>
@@ -81,12 +87,12 @@
           <span class="bb-colors" id="bb-colors"></span>
         </div>
         <div class="bb-group">
-          <button class="bb-btn" id="bb-zoom-out" title="축소" aria-label="축소">−</button>
-          <button class="bb-btn text" id="bb-zoom-label" title="100%로">100%</button>
-          <button class="bb-btn" id="bb-zoom-in" title="확대" aria-label="확대">＋</button>
-          <button class="bb-btn text" id="bb-fit" title="전체 범위가 한눈에 보이게">한눈에 보기</button>
-          <button class="bb-btn text" id="bb-arrange" title="카드 자동 정렬">정렬</button>
-          <button class="bb-btn" id="bb-undo" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
+          <button class="bb-btn board-only" id="bb-zoom-out" title="축소" aria-label="축소">−</button>
+          <button class="bb-btn text board-only" id="bb-zoom-label" title="100%로">100%</button>
+          <button class="bb-btn board-only" id="bb-zoom-in" title="확대" aria-label="확대">＋</button>
+          <button class="bb-btn text board-only" id="bb-fit" title="전체 범위가 한눈에 보이게">한눈에 보기</button>
+          <button class="bb-btn text board-only" id="bb-arrange" title="카드 자동 정렬">정렬</button>
+          <button class="bb-btn board-only" id="bb-undo" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
           <button class="bb-btn" id="bb-more" title="더 보기" aria-label="더 보기">⋯</button>
         </div>
       </div>
@@ -98,14 +104,18 @@
         </div>
         <div class="board-empty" id="board-empty" hidden>
           <div class="panel">
-            <h2>시험 범위 화이트보드</h2>
-            <p class="muted">시험 범위를 과목, 단원, 세부 항목으로 나눠 넓은 보드에 펼쳐 놓고, 끝낸 곳을 하나씩 체크하세요.</p>
-            <form class="form-grid exam-form" id="exam-form">
-              <input id="ex-name" placeholder="시험 이름 예: 2학기 기말고사" required maxlength="40">
-              <input id="ex-date" type="date" aria-label="시험 날짜">
-              <button class="btn primary" type="submit">시험 만들기</button>
+            <h2>시험 범위 만들기</h2>
+            <p class="muted small">시험 이름과 날짜를 적고 과목을 고르세요. 그다음 과목마다 공부할 내용을 하나씩 적으면, 끝낼 때마다 체크하며 폰이 한 칸씩 전진해요.</p>
+            <form class="exam-wizard" id="exam-form">
+              <label class="field">시험 이름<input id="ex-name" placeholder="예: 2학기 기말고사" required maxlength="40" autocomplete="off"></label>
+              <label class="field">시험 날짜<input id="ex-date" type="date"></label>
+              <div class="field"><span>과목 고르기 <small>(여러 개 · 나중에 더 추가할 수 있어요)</small></span>
+                <div class="sas-chips" id="ex-subjects" role="group" aria-label="과목 고르기"></div>
+                <div class="sas-form"><input id="ex-subject-custom" placeholder="다른 과목 직접 입력" maxlength="40" autocomplete="off" aria-label="다른 과목 이름"><button class="btn" type="button" id="ex-subject-add">추가</button></div>
+              </div>
+              <button class="btn primary big" type="submit">시험 만들기</button>
             </form>
-            <button class="btn link" id="exam-sample">예시 범위로 둘러보기</button>
+            <p class="ex-alt muted small"><button class="btn link" type="button" id="exam-sample">예시 범위로 둘러보기</button><span aria-hidden="true">·</span><button class="btn link" type="button" id="exam-paste">범위 목록을 붙여넣어 만들기</button></p>
           </div>
         </div>
         <div class="board-legend" id="board-legend"></div>
@@ -385,10 +395,25 @@
       <h2 id="exam-dlg-title">시험</h2>
       <label class="field">시험 이름<input id="ee-name" required maxlength="40"></label>
       <label class="field">시험 날짜<input id="ee-date" type="date"></label>
+      <div class="field" id="ee-subjects-wrap"><span>과목 고르기 <small>(여러 개)</small></span>
+        <div class="sas-chips" id="ee-subjects" role="group" aria-label="과목 고르기"></div>
+        <div class="sas-form"><input id="ee-subject-custom" placeholder="다른 과목 직접 입력" maxlength="40" autocomplete="off" aria-label="다른 과목 이름"><button class="btn" type="button" id="ee-subject-add">추가</button></div>
+      </div>
       <div class="ask-actions spread">
         <button class="btn danger" id="ee-delete" type="button">시험 삭제</button>
         <span><button class="btn" id="ee-cancel" type="button">취소</button> <button class="btn primary" type="submit">저장</button></span>
       </div>
+    </form>
+  </div>
+
+  <!-- 범위: 과목 추가 -->
+  <div class="ask-backdrop" id="subj-dlg" hidden>
+    <form class="ask-box" id="subj-form" role="dialog" aria-modal="true" aria-labelledby="subj-title">
+      <h2 id="subj-title">과목 추가</h2>
+      <p class="muted small">누르면 바로 추가돼요.</p>
+      <div class="sas-chips" id="subj-chips"></div>
+      <label class="field">직접 입력<input id="subj-name" maxlength="40" placeholder="예: 한국사" autocomplete="off"></label>
+      <div class="ask-actions"><button class="btn" type="button" id="subj-cancel">닫기</button><button class="btn primary" type="submit">추가</button></div>
     </form>
   </div>
 

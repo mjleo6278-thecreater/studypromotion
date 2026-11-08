@@ -23,7 +23,12 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.fill('#ex-name', '2학기 기말고사');
   await page.fill('#ex-date', '2026-12-10');
   await page.click('#exam-form button[type=submit]');
-  assert(await page.isVisible('#paste-dlg'), '시험을 만들면 범위 붙여넣기 창');
+  assert((await page.evaluate(() => Board.mode)) === 'list', '시험을 만들면 목록 보기(과목 고르기)');
+  assert(await page.isVisible('#subj-picker'), '과목 고르기 칸');
+  await page.click('[data-scope-mode=board]');
+  assert((await page.evaluate(() => Board.mode)) === 'board', '보드 보기로 전환');
+  await page.click('#bb-paste');
+  assert(await page.isVisible('#paste-dlg'), '범위 붙여넣기 창');
   await page.fill('#paste-text', '# 수학\n- 1단원\n  - 다항식\n  - 인수분해\n- 2단원\n  - 복소수\n# 영어\n- [x] 본문 1과\n- 본문 2과\n# 국어');
   assert((await page.textContent('#paste-count')).includes('카드 3개'), '붙여넣기 미리 세기');
   await page.click('#paste-ok');
@@ -186,6 +191,7 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.selectOption('#bb-exam', '__new');
   await page.fill('#ee-name', '모의고사');
   await page.click('#exam-edit-form button[type=submit]');
+  await page.click('#bb-paste');
   await page.click('#paste-sample');
   await page.click('#paste-ok');
   await page.waitForTimeout(150);
@@ -201,9 +207,9 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.locator('.exam-row', { hasText: '모의고사' }).click();
   assert((await page.textContent('#bb-exam option:checked')) === '모의고사', '홈에서 시험 눌러 보드 열기');
 
-  // 새로고침 후 유지 (보기 위치 포함)
+  // 새로고침 후 유지 (보기 위치 포함) — 화면 맞춤(다음 프레임)과 저장(0.3초 뒤)이 끝난 뒤에 비교
+  await page.waitForTimeout(500);
   const vBefore = await page.evaluate(() => window.Board.view);
-  await page.waitForTimeout(400);
   await page.reload();
   await page.waitForTimeout(200);
   const vAfter = await page.evaluate(() => window.Board.view);

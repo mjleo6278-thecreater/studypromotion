@@ -231,6 +231,7 @@
     index = index || indexByParent(nodes);
     const card = nodes.find((n) => n.id === cardId);
     if (card && card.kind === 'note') return 60 + Math.ceil(((card.title || '').length || 1) / 18) * 22;
+    if (card && card.collapsed) return 96;
     let rows = 0;
     (function walk(id) {
       for (const c of kids(index, id)) {

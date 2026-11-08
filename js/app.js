@@ -236,7 +236,7 @@
           const pc = Scope.pace(p.total - p.done, ex.date, t);
           return `${p.done}/${p.total} · ${p.pct}%` + (pc && pc.days > 0 ? ` · 하루 ${pc.perDay}개` : '');
         })()}</span></a>`;
-    }).join('') : '<p class="muted" style="margin:0">시험 범위를 화이트보드에 펼쳐 놓고 하나씩 체크해 보세요. <a href="#board" data-go="board">시험 만들기</a></p>';
+    }).join('') : '<p class="muted" style="margin:0">시험 이름과 과목을 정하고, 과목마다 공부할 내용을 적어 하나씩 체크해 보세요. <a href="#board" data-go="board">시험 범위 만들기</a></p>';
   }
 
   document.addEventListener('click', (e) => {
@@ -370,7 +370,7 @@
 
   function renderTimer() {
     $('.timer-panel').classList.toggle('break', timer.mode === 'break');
-    $$('[data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === timer.mode));
+    $$('.mode-switch [data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === timer.mode));
     $('#timer-mode').textContent = timer.mode === 'focus' ? '집중' : '휴식';
     $('#timer-start').textContent = timer.running ? '일시정지' : (timer.remaining < timer.total ? '계속' : '시작');
     const sel = timer.subjectPick !== undefined ? timer.subjectPick : $('#timer-subject').value;
@@ -387,7 +387,8 @@
   $('#timer-start').addEventListener('click', () => (timer.running ? pauseTimer() : startTimer()));
   $('#timer-reset').addEventListener('click', () => { timer.startedAt = 0; setMode(timer.mode); });
   $('#timer-skip').addEventListener('click', () => finishPhase(false));
-  $$('[data-mode]').forEach((b) => b.addEventListener('click', async () => {
+  // 집중/휴식 전환 (로그인 버튼 같은 다른 data-mode 버튼은 건드리지 않게 범위를 좁힘)
+  $$('.mode-switch [data-mode]').forEach((b) => b.addEventListener('click', async () => {
     if (timer.running && !(await ask('진행 중인 타이머를 멈추고 바꿀까요?'))) return;
     timer.startedAt = 0;
     setMode(b.dataset.mode);

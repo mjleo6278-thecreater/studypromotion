@@ -691,3 +691,81 @@ a, .btn.link, .tab.active, .badge { color: var(--accent-text); }
   background: var(--ink); color: var(--ink-text); border-radius: 12px; padding: 8px 8px 8px 16px; font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.2); max-width: calc(100% - 32px); }
 .update-bar[hidden] { display: none; }
 .update-bar .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; padding: 6px 12px; }
+
+/* ================================================================
+   범위: 목록 보기 (과목 → 공부할 내용을 하나씩) · 과목 고르기
+   ================================================================ */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; padding: 2px; background: var(--bg); gap: 2px; }
+.seg-btn { font: inherit; font-size: 13px; border: 0; background: none; color: var(--muted); padding: 5px 10px; border-radius: 8px; cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
+.seg-btn.active { background: var(--ink); color: var(--ink-text); font-weight: 700; }
+.seg-ico { font-size: 12px; }
+
+#view-board.list-mode .board-only,
+#view-board.list-mode #bb-pace,
+#view-board.list-mode #bb-track,
+#view-board.list-mode #bb-pct { display: none !important; }
+#view-board.list-mode .board-bar { flex-wrap: nowrap; overflow: visible; }
+#view-board.list-mode .board-bar .bb-group:first-child { flex: 1 1 auto; min-width: 0; }
+#view-board.list-mode #bb-exam { flex: 1 1 auto; min-width: 0; max-width: 320px; }
+#view-board.list-mode .board-bar .bb-group:last-child { margin-left: auto; }
+
+.board-viewport.list-mode { overflow-x: hidden; overflow-y: auto; touch-action: auto; user-select: text; -webkit-user-select: text; cursor: auto; background: var(--bg); background-image: none; overscroll-behavior: contain; }
+.list-mode .board-world { position: static; transform: none !important; width: auto; height: auto; }
+.list-mode .board-ink, .list-mode .board-legend { display: none !important; }
+.list-mode .board-cards { position: static; max-width: 720px; margin: 0 auto; padding: 12px 12px 40px; display: flex; flex-direction: column; gap: 12px; }
+.list-mode .bcard { position: relative; left: auto !important; top: auto !important; width: auto; box-shadow: none; }
+.list-mode .bcard.note { transform: none; }
+.list-mode .bcard-head, .list-mode .bnote-head { cursor: default; }
+.list-mode .bcard-title { font-size: 17px; }
+.list-mode .bitem .brow { min-height: 40px; }
+.list-mode .bchk { width: 24px; height: 24px; }
+.list-mode .bcard-head .bchk { width: 28px; height: 28px; }
+
+.bcard-head .btoggle { width: 18px; height: 28px; flex: none; }
+.bcard.folded .bcard-prog { padding-bottom: 10px; }
+
+.sl-head { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.sl-prog { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.sl-prog .pawn-track { width: 144px; }
+.sl-pace { color: var(--accent-text); font-weight: 700; }
+.sl-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.sl-actions .chip:disabled { opacity: .45; cursor: default; }
+.sl-left { display: inline-flex; align-items: center; gap: 4px; }
+.sl-left input { width: auto; margin: 0; accent-color: var(--accent); }
+
+.sadd { display: flex; gap: 6px; padding: 6px 10px 4px; }
+.sadd input { padding: 9px 11px; font-size: 15px; }
+.sadd .btn { padding: 8px 14px; flex: none; }
+.badd-form { display: flex; gap: 4px; align-items: center; }
+.btn.sm { padding: 4px 10px; font-size: 13px; flex: none; }
+
+.subj-picker { background: var(--surface); border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 14px; }
+.subj-picker.first { border-color: var(--accent); border-style: solid; }
+.subj-picker h3 { font-size: 16px; margin: 0 0 4px; }
+.subj-picker p { margin: 0 0 4px; line-height: 1.55; }
+.sas-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.sas-chip { font-size: 14px; padding: 6px 12px; color: var(--text); }
+.sas-chip.pick[aria-pressed="true"] { background: var(--ink); color: var(--ink-text); border-color: var(--ink); font-weight: 600; }
+.sas-form { display: flex; gap: 6px; }
+.sas-form .btn { flex: none; }
+
+/* 시험 만들기 */
+.board-empty { align-items: flex-start; }
+.board-empty .panel { margin: auto; }
+.exam-wizard { display: flex; flex-direction: column; gap: 12px; margin: 14px 0 6px; }
+.exam-wizard .field > span { color: var(--text); font-weight: 600; font-size: 14px; }
+.exam-wizard .field > span small { color: var(--muted); font-weight: 400; }
+.exam-wizard .field { color: var(--text); font-weight: 600; font-size: 14px; }
+.exam-wizard .field input { font-weight: 400; }
+.exam-wizard .btn.big { width: 100%; }
+.ex-alt { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; margin: 6px 0 0; }
+.ex-alt .btn.link { margin: 0; }
+#ee-subjects-wrap .sas-chips { margin: 6px 0; }
+
+@media (max-width: 720px) {
+  .bb-modes { order: -1; }
+  .seg-ico { display: none; }
+  .seg-btn { padding: 5px 9px; }
+  #view-board.list-mode .board-bar { gap: 8px; }
+  .list-mode .board-cards { padding: 10px 10px 32px; gap: 10px; }
+}

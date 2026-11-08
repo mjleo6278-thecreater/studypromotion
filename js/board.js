@@ -36,7 +36,37 @@
   const view = { x: 0, y: 0, z: 1 };
   let needsFit = false;
   let addTarget = null; // 항목 추가 입력칸이 열린 부모 id
+  let focusAddTarget = false; // 방금 연 입력칸에 커서 두기
   let renderingNow = false;
+  let settleAll = false; // 다음 렌더 때 겹친 카드 모두 정리
+  let lastH = new Map(); // 카드 높이 (자란 카드 아래 카드를 밀어 내리기 위해)
+
+  // 보기 방식: 목록(과목 → 공부할 내용, 휴대폰 기본) / 보드(화이트보드)
+  const MODE_KEY = 'studypromotion.scopeMode';
+  let modePref = null;
+  try { modePref = localStorage.getItem(MODE_KEY); } catch (e) { /* 무시 */ }
+  let mode = modePref === 'list' || modePref === 'board' ? modePref : (window.innerWidth < 720 ? 'list' : 'board');
+
+  // 한글 입력 중(조합 중)에 Enter가 눌려도 글자가 빠지지 않도록
+  let composing = false;
+  document.addEventListener('compositionstart', () => { composing = true; });
+  document.addEventListener('compositionend', () => { composing = false; });
+  function afterComposition(fn) {
+    if (!composing) return fn();
+    const once = () => { document.removeEventListener('compositionend', once); setTimeout(fn, 0); };
+    document.addEventListener('compositionend', once);
+  }
+
+  // 과목 추천 (내 과목 → 자주 보는 과목 순)
+  const COMMON_SUBJECTS = ['국어', '수학', '영어', '한국사', '통합사회', '통합과학', '사회', '과학', '역사', '도덕', '정보', '기술·가정', '한문', '제2외국어'];
+  function subjectSuggestions(exclude) {
+    const ex = new Set((exclude || []).map((x) => String(x).trim()));
+    const out = [];
+    for (const n of st().subjects.map((s) => s.name).concat(COMMON_SUBJECTS)) {
+      if (n && !ex.has(n) && !out.includes(n)) out.push(n);
+    }
+    return out;
+  }
 
   /* ---------- 데이터 헬퍼 ---------- */
   const st = () => store.get();
@@ -55,6 +85,7 @@
 
   /* ---------- 보기(이동·확대) ---------- */
   function applyView() {
+    if (mode === 'list') return;
     world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.z})`;
     vp.style.setProperty('--z', view.z);
     const g = GRID * 4 * view.z; // 체스판 무늬 두 칸(48px × 2)
@@ -147,8 +178,44 @@
     return Object.keys(FLAG_INFO).filter((k) => f[k]).map((k) => `<span class="bflag ${FLAG_INFO[k].cls}" title="${FLAG_INFO[k].label}">${FLAG_INFO[k].icon}</span>`).join('');
   }
 
+  // 하위 항목 입력칸 (폼이라서 휴대폰 키보드의 Enter·이동 키로도 추가된다)
   function addRow(parentId) {
-    return `<li class="badd-row"><input class="badd-input" data-add-input="${esc(parentId)}" placeholder="항목 이름 입력 후 Enter" maxlength="200"></li>`;
+    return `<li class="badd-row"><form class="badd-form" data-add-form="${esc(parentId)}"><input class="badd-input" data-add-input="${esc(parentId)}" data-keep="sub:${esc(parentId)}" placeholder="항목 이름 입력 후 Enter" maxlength="200" autocomplete="off"><button class="btn sm" type="submit">추가</button></form></li>`;
+  }
+
+  // 목록 보기: 과목마다 늘 보이는 '공부할 내용 추가' 칸
+  function addFormHtml(cardId) {
+    return `<form class="sadd" data-add-form="${esc(cardId)}"><input class="sadd-input" data-keep="add:${esc(cardId)}" placeholder="공부할 내용 추가 (예: 1단원 다항식)" maxlength="200" autocomplete="off" aria-label="공부할 내용 추가"><button class="btn" type="submit">추가</button></form>`;
+  }
+
+  // 과목 고르기 (추천 칩 + 직접 입력)
+  function pickerHtml(cards) {
+    const used = cards.filter((c) => c.kind !== 'note').map((c) => c.title);
+    const first = !used.length;
+    const sugg = subjectSuggestions(used).slice(0, 12);
+    return `<div class="subj-picker${first ? ' first' : ''}" id="subj-picker">
+      <h3>${first ? '어떤 과목을 준비하나요?' : '＋ 과목 추가'}</h3>
+      ${first ? '<p class="muted small">과목을 고른 다음, 과목마다 공부할 내용을 하나씩 적어 보세요. 단원 → 세부 내용처럼 나누고 싶으면 항목의 ⋯ 메뉴에서 <b>하위 항목 추가</b>를 누르면 돼요.</p>' : ''}
+      ${sugg.length ? `<div class="sas-chips">${sugg.map((n) => `<button type="button" class="chip sas-chip" data-subject-add="${esc(n)}">＋ ${esc(n)}</button>`).join('')}</div>` : ''}
+      <form class="sas-form" data-subject-form><input class="sas-input" data-keep="subject" placeholder="과목 이름 직접 입력" maxlength="40" autocomplete="off" aria-label="과목 이름"><button class="btn" type="submit">추가</button></form>
+    </div>`;
+  }
+
+  // 목록 보기 맨 위: 진행률과 자주 쓰는 버튼
+  function listHeadHtml(info) {
+    const { p, plan, pc } = info;
+    const pace = plan ? (plan.finished ? '다 끝냈어요 ♛' : plan.days > 0 ? `하루 ${fm(plan.perDay)}씩` : `남은 ${fm(plan.left)}`)
+      : pc ? (pc.days > 0 ? `하루 ${pc.perDay}개씩` : `남은 ${pc.perDay}개`) : '';
+    return `<div class="sl-head">
+      <div class="sl-prog"><span class="pawn-track" aria-label="전체 진행률 ${p.pct}%">${A.pawnTrack(p.pct)}</span>
+        <b>${p.total ? (p.timeTotal ? `${p.pct}% · 남은 ${fm(p.timeLeft)}` : `${p.done}/${p.total} · ${p.pct}%`) : '아직 공부할 내용이 없어요'}</b>${pace ? `<span class="sl-pace">${pace}</span>` : ''}</div>
+      <div class="sl-actions">
+        <button class="chip" type="button" data-list-act="add-subject">＋ 과목</button>
+        <button class="chip" type="button" data-list-act="paste">목록 붙여넣기</button>
+        <button class="chip" type="button" data-list-act="undo"${store.canUndo() ? '' : ' disabled'}>↶ 되돌리기</button>
+        ${p.total ? `<label class="chip sl-left"><input type="checkbox" id="sl-only-left"${onlyLeft ? ' checked' : ''}> 남은 것만</label>` : ''}
+      </div>
+    </div>`;
   }
 
   function itemHtml(n, index, depth) {
@@ -193,20 +260,23 @@
     }
     const kids = index.get(c.id) || [];
     const p = Scope.progress(st().topics, c.id, index);
-    const list = kids.map((k) => itemHtml(k, index, 0)).join('');
-    const adding = addTarget === c.id;
+    const folded = !!c.collapsed && kids.length > 0;
+    const list = folded ? '' : kids.map((k) => itemHtml(k, index, 0)).join('');
+    const adding = addTarget === c.id && mode !== 'list';
     const doneAll = p.state === 'all';
-    return `<div class="bcard s-${p.state}${doneAll ? ' complete' : ''}" data-id="${esc(c.id)}" style="${style}">
+    const listMode = mode === 'list';
+    return `<div class="bcard s-${p.state}${doneAll ? ' complete' : ''}${folded ? ' folded' : ''}" data-id="${esc(c.id)}" style="${style}">
       <div class="bcard-head" data-drag="${esc(c.id)}">
+        ${kids.length ? `<button class="btoggle" data-collapse="${esc(c.id)}" aria-label="${folded ? '펼치기' : '접기'}" aria-expanded="${!folded}">${folded ? '▸' : '▾'}</button>` : ''}
         ${checkBtn(c.id, p.state, c.title)}
         <div class="bcard-title" data-rename="${esc(c.id)}">${esc(c.title)}</div>
         ${flagsHtml(c)}
         <button class="bmenu" data-menu="${esc(c.id)}" aria-label="${esc(c.title)} 메뉴">⋯</button>
       </div>
-      <div class="bcard-prog"><div class="bbar"><div style="width:${p.pct}%"></div></div><span>${p.timeTotal ? `${p.pct}% · 남은 ${fm(p.timeLeft)}` : `${p.done}/${p.total} · ${p.pct}%`}</span></div>
+      <div class="bcard-prog"><div class="bbar"><div style="width:${p.pct}%"></div></div><span>${!kids.length ? (c.done ? '완료 ✓' : '아직 공부할 내용이 없어요') : p.timeTotal ? `${p.pct}% · 남은 ${fm(p.timeLeft)}` : `${p.done}/${p.total} · ${p.pct}%`}</span></div>
       ${list || adding ? `<ul class="btree">${list}${adding ? addRow(c.id) : ''}</ul>` : ''}
-      ${onlyLeft && kids.length && !list && !adding ? '<p class="bcard-done muted">이 카드는 다 끝냈어요</p>' : ''}
-      <button class="badd" data-add="${esc(c.id)}">＋ 항목 추가</button>
+      ${onlyLeft && kids.length && !list && !adding && !folded ? '<p class="bcard-done muted">이 과목은 다 끝냈어요</p>' : ''}
+      ${folded ? '' : listMode ? addFormHtml(c.id) : `<button class="badd" data-add="${esc(c.id)}">＋ 공부할 내용 추가</button>`}
       ${doneAll ? '<div class="bstamp" aria-hidden="true">♛ 승급</div>' : ''}
     </div>`;
   }
@@ -264,6 +334,7 @@
       <span class="f-hard">! 어려움 ${count('hard')}</span>
       <span class="f-review">↻ 다시 보기 ${count('review')}</span>
       <label class="bl-toggle"><input type="checkbox" id="bl-only-left"${onlyLeft ? ' checked' : ''}> 남은 것만</label>` : '';
+    return { p, plan, pc };
   }
 
   // 시험 시간 페이스 띠
@@ -296,13 +367,43 @@
     if (e.target.closest('#bp-toggle')) { paceOpen = !paceOpen; renderBar(); }
   });
 
+  // 다시 그려도 쓰던 입력칸(커서·글자)이 그대로 남게
+  function captureFocus() {
+    const a = document.activeElement;
+    if (!a || !cardsEl.contains(a) || !a.dataset || !a.dataset.keep) return null;
+    return { key: a.dataset.keep, value: a.value, s: a.selectionStart, e: a.selectionEnd };
+  }
+  function restoreFocus(f) {
+    if (!f) return false;
+    const el = cardsEl.querySelector(`[data-keep="${CSS.escape(f.key)}"]`);
+    if (!el) return false;
+    el.value = f.value;
+    el.focus({ preventScroll: true });
+    try { el.setSelectionRange(f.s, f.e); } catch (e) { /* 무시 */ }
+    return true;
+  }
+  // 휴대폰 키보드에 가리지 않게 입력칸을 보이는 곳으로
+  function ensureVisible(el) {
+    if (mode !== 'list' || !el) return;
+    const r = el.getBoundingClientRect();
+    const vr = vp.getBoundingClientRect();
+    const bottom = Math.min(vr.bottom, window.visualViewport ? window.visualViewport.offsetTop + window.visualViewport.height : innerHeight) - 12;
+    if (r.bottom > bottom) vp.scrollTop += r.bottom - bottom;
+    else if (r.top < vr.top + 8) vp.scrollTop -= vr.top + 8 - r.top;
+  }
+
   function render() {
     if (renderingNow) return;
     renderingNow = true;
     try {
+      const keep = captureFocus();
       const prevExam = examId;
       examId = pickExam();
       const has = !!examId;
+      const list = mode === 'list';
+      $('#view-board').classList.toggle('list-mode', list);
+      vp.classList.toggle('list-mode', list);
+      $$('[data-scope-mode]').forEach((b) => { const on = b.dataset.scopeMode === mode; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
       $('#board-empty').hidden = has;
       world.hidden = !has;
       $('#board-bar').classList.toggle('disabled', !has);
@@ -312,7 +413,9 @@
         $('#bb-dday').hidden = true;
         $('#bb-pct').textContent = '';
         $('#bb-track').innerHTML = '';
+        $('#board-pace').hidden = true;
         vp.style.backgroundPosition = '0 0';
+        wizard.draw();
         return;
       }
       if (prevExam !== examId) {
@@ -320,6 +423,8 @@
         if (saved) Object.assign(view, saved);
         else needsFit = true;
         addTarget = null;
+        settleAll = true;
+        lastH = new Map();
       }
       setToolClass();
       const ex0 = exam();
@@ -330,23 +435,92 @@
           store.update((s) => { const e = s.exams.find((x) => x.id === examId); e.planStart = copy.planStart; e.paceSnap = copy.paceSnap; }, { silent: true });
         }
       }
-      renderBar();
+      const info = renderBar();
       const index = Scope.indexByParent(st().topics);
       const cards = index.get('root:' + examId) || [];
-      cardsEl.innerHTML = cards.map((c) => cardHtml(c, index)).join('') ||
-        '<div class="board-hint">위의 <b>범위 붙여넣기</b>로 시험 범위를 한 번에 넣거나, <b>＋ 카드</b>로 과목을 하나씩 추가하세요.</div>';
-      renderInk();
-      applyView();
-      if (needsFit) { needsFit = false; requestAnimationFrame(firstView); }
-      const input = cardsEl.querySelector('.badd-input');
-      if (input) input.focus({ preventScroll: true });
+      if (list) {
+        const subjects = cards.filter((c) => c.kind !== 'note');
+        const notes = cards.filter((c) => c.kind === 'note');
+        cardsEl.innerHTML = listHeadHtml(info) + subjects.map((c) => cardHtml(c, index)).join('') +
+          notes.map((c) => cardHtml(c, index)).join('') + pickerHtml(cards);
+      } else {
+        cardsEl.innerHTML = cards.map((c) => cardHtml(c, index)).join('') ||
+          '<div class="board-hint">위의 <b>＋ 과목</b>으로 과목을 하나씩 추가하거나, <b>붙여넣기</b>로 시험 범위 목록을 한 번에 넣으세요. 과목마다 <b>＋ 공부할 내용 추가</b>를 눌러 항목을 적으면 돼요.</div>';
+        renderInk();
+        applyView();
+        settle();
+        if (needsFit) { needsFit = false; requestAnimationFrame(firstView); }
+      }
+      if (!restoreFocus(keep) && focusAddTarget) {
+        focusAddTarget = false;
+        const input = cardsEl.querySelector('.badd-input');
+        if (input) { input.focus({ preventScroll: true }); ensureVisible(input); }
+      }
     } finally {
       renderingNow = false;
     }
   }
 
+  // 카드가 자라서(항목 추가·휴대폰에서 줄바꿈) 아래 카드와 겹치면 아래 카드를 밀어 내린다
+  function settle() {
+    if (mode !== 'board') return;
+    const items = $$('#board-cards .bcard:not(.note)').map((el) => ({ id: el.dataset.id, el, x: parseFloat(el.style.left) || 0, y: parseFloat(el.style.top) || 0, h: el.offsetHeight }));
+    if (!items.length) { settleAll = false; return; }
+    const grew = settleAll || items.some((c) => lastH.has(c.id) && c.h > lastH.get(c.id) + 1);
+    lastH = new Map(items.map((c) => [c.id, c.h]));
+    settleAll = false;
+    if (!grew) return;
+    items.sort((a, b) => a.y - b.y || a.x - b.x);
+    const placed = [];
+    const moved = [];
+    for (const c of items) {
+      const y0 = c.y;
+      for (let guard = 0; guard < 50; guard++) {
+        const hit = placed.find((o) => o.x < c.x + Scope.CARD_W && c.x < o.x + Scope.CARD_W && c.y < o.y + o.h + 12 && o.y < c.y + c.h);
+        if (!hit) break;
+        c.y = Math.round((hit.y + hit.h + Scope.GAP) / SNAP) * SNAP;
+      }
+      if (c.y !== y0) { c.el.style.top = c.y + 'px'; moved.push(c); }
+      placed.push(c);
+    }
+    if (moved.length) {
+      store.update((s) => moved.forEach((m) => { const t = s.topics.find((x) => x.id === m.id); if (t) t.y = m.y; }), { silent: true });
+    }
+  }
+
+  // 보기 방식 바꾸기
+  function setScopeMode(m, remember) {
+    if (m !== 'list' && m !== 'board') return;
+    if (remember !== false) { modePref = m; try { localStorage.setItem(MODE_KEY, m); } catch (e) { /* 무시 */ } }
+    closeMenu();
+    if (mode === m) return render();
+    mode = m;
+    addTarget = null;
+    vp.scrollTop = 0;
+    vp.scrollLeft = 0;
+    if (m === 'board') { settleAll = true; if (examId && !st().boardView[examId]) needsFit = true; }
+    render();
+    vp.scrollTop = 0;
+  }
+  $('#view-board').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-scope-mode]');
+    if (b) setScopeMode(b.dataset.scopeMode);
+  });
+
   /* ---------- 체크·접기·추가·이름 바꾸기 ---------- */
   cardsEl.addEventListener('click', (e) => {
+    const sub = e.target.closest('[data-subject-add]');
+    if (sub) { addSubjectCards([sub.dataset.subjectAdd]); return; }
+    const la = e.target.closest('[data-list-act]');
+    if (la && la.tagName === 'BUTTON') {
+      const act = la.dataset.listAct;
+      if (act === 'add-subject') {
+        const pk = $('#subj-picker');
+        if (pk) { pk.scrollIntoView({ block: 'center' }); const inp = pk.querySelector('input'); if (inp) inp.focus({ preventScroll: true }); }
+      } else if (act === 'paste') openPaste();
+      else if (act === 'undo') undo();
+      return;
+    }
     const chk = e.target.closest('[data-check]');
     if (chk) {
       const id = chk.dataset.check;
@@ -367,6 +541,95 @@
     const m = e.target.closest('[data-menu]');
     if (m) { openMenu(m.dataset.menu, m); return; }
   });
+
+  // 추가 버튼을 눌러도 입력칸의 커서(휴대폰 키보드)가 그대로 있게
+  ['pointerdown', 'mousedown'].forEach((ev) => cardsEl.addEventListener(ev, (e) => {
+    if (e.target.closest('.sadd button, .sas-form button, .badd-form button')) e.preventDefault();
+  }));
+
+  cardsEl.addEventListener('change', (e) => {
+    if (e.target.id === 'sl-only-left') { onlyLeft = e.target.checked; render(); }
+  });
+
+  // 공부할 내용·하위 항목·과목 추가 (폼 제출)
+  cardsEl.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const f = e.target;
+    afterComposition(() => {
+      const input = f.querySelector('input');
+      if (!input) return;
+      const text = input.value.trim();
+      if (f.matches('[data-subject-form]')) {
+        if (!text) { input.focus(); return; }
+        input.value = '';
+        addSubjectCards([text]);
+        return;
+      }
+      const parentId = f.dataset.addForm;
+      if (!parentId) return;
+      if (!text) {
+        if (input.dataset.addInput) { addTarget = null; render(); }
+        return;
+      }
+      input.value = '';
+      addItems(parentId, text);
+      const again = cardsEl.querySelector(`[data-keep="${CSS.escape(input.dataset.keep)}"]`);
+      if (again && document.activeElement !== again) again.focus({ preventScroll: true });
+      ensureVisible(again);
+    });
+  });
+
+  // 시간 바꾸기 등 공부가 아닌 변경으로 남은 시간이 달라지면, 오늘 아침 기준도 같이 옮긴다
+  // (그래야 항목을 지우거나 나눈 것이 '오늘 한 양'으로 잘못 잡히지 않는다)
+  function keepPace(s, exId, fn) {
+    const ex = s.exams.find((x) => x.id === exId);
+    const before = Scope.examProgress(s.topics, exId).timeLeft;
+    fn();
+    const after = Scope.examProgress(s.topics, exId).timeLeft;
+    if (ex && ex.paceSnap && ex.paceSnap.day === Stats.dayKey(Date.now()) && after !== before) {
+      ex.paceSnap.left = Math.max(0, ex.paceSnap.left + (after - before));
+    }
+  }
+
+  function addItems(parentId, text) {
+    mutate((s) => keepPace(s, examId, () => {
+      let order = Scope.nextOrder(s.topics, parentId, examId);
+      for (const line of String(text).split(/\n/)) {
+        const t = line.trim();
+        if (t) s.topics.push({ id: uid(), examId, parentId, kind: 'topic', title: t.slice(0, 200), done: false, flags: {}, order: order++, collapsed: false });
+      }
+    }));
+  }
+
+  // 과목 카드 만들기 (계획·타이머·통계에서 쓰는 과목 목록에도 없으면 넣는다)
+  function addSubjectCards(names, opts) {
+    opts = opts || {};
+    if (!examId) return [];
+    const existing = new Set(Scope.childrenOf(st().topics, null, examId).filter((c) => c.kind !== 'note').map((c) => c.title));
+    const list = [];
+    names.map((n) => String(n).trim().slice(0, 40)).forEach((n) => { if (n && !existing.has(n) && !list.includes(n)) list.push(n); });
+    if (!list.length) { if (names.length) toast('이미 있는 과목이에요'); return []; }
+    let created = [];
+    mutate((s) => {
+      const added = Scope.addOutline(s.topics, examId, list.map((t) => ({ title: t, done: false, children: [] })), uid);
+      added.forEach((c) => {
+        const subj = s.subjects.find((x) => x.name === c.title);
+        if (subj) c.color = subj.color;
+        else s.subjects.push({ id: uid(), name: c.title, color: c.color });
+      });
+      created = added.map((c) => c.id);
+    });
+    if (opts.quiet) return created;
+    if (mode === 'list') {
+      const inp = cardsEl.querySelector(`[data-keep="add:${CSS.escape(created[0])}"]`);
+      if (inp) { inp.focus({ preventScroll: true }); inp.closest('.bcard').scrollIntoView({ block: 'nearest' }); ensureVisible(inp); }
+    } else {
+      settleAll = true;
+      revealTopic(created[0]);
+      openAdd(created[0]);
+    }
+    return created;
+  }
 
   /* ---------- 소요시간·진행률 입력 ---------- */
   let timeId = null;
@@ -446,8 +709,16 @@
   }
 
   function openAdd(parentId) {
-    addTarget = parentId;
     const n = byId(parentId);
+    // 목록 보기에서 과목은 늘 보이는 입력칸으로
+    if (mode === 'list' && n && !n.parentId) {
+      if (n.collapsed) mutate((s) => { s.topics.find((x) => x.id === parentId).collapsed = false; }, false);
+      const inp = cardsEl.querySelector(`[data-keep="add:${CSS.escape(parentId)}"]`);
+      if (inp) { inp.focus({ preventScroll: true }); ensureVisible(inp); }
+      return;
+    }
+    addTarget = parentId;
+    focusAddTarget = true;
     if (n && n.collapsed) mutate((s) => { s.topics.find((x) => x.id === parentId).collapsed = false; }, false);
     else render();
   }
@@ -455,21 +726,7 @@
   cardsEl.addEventListener('keydown', (e) => {
     const input = e.target.closest('[data-add-input]');
     if (!input) return;
-    if (e.key === 'Escape') { addTarget = null; render(); return; }
-    if (e.key !== 'Enter' || e.isComposing) return;
-    e.preventDefault();
-    const title = input.value.trim();
-    if (!title) { addTarget = null; render(); return; }
-    const parentId = input.dataset.addInput;
-    // 여러 줄 붙여넣기 대비: 한 줄씩
-    mutate((s) => {
-      let order = Scope.nextOrder(s.topics, parentId, examId);
-      for (const line of title.split(/\n/)) {
-        const t = line.trim();
-        if (t) s.topics.push({ id: uid(), examId, parentId, kind: 'topic', title: t.slice(0, 200), done: false, flags: {}, order: order++, collapsed: false });
-      }
-      // 체크돼 있던 잎 항목에 하위가 생기면 그 체크는 하위로 옮겨 가지 않는다(새 항목은 미완료)
-    });
+    if (e.key === 'Escape') { addTarget = null; render(); }
   });
 
   cardsEl.addEventListener('focusout', (e) => {
@@ -549,7 +806,7 @@
       items.push(['colors', '']);
       items.push(['delete', '메모 삭제', 'danger']);
     } else {
-      items.push(['add', isCard ? '항목 추가' : '하위 항목 추가']);
+      items.push(['add', isCard ? '공부할 내용 추가' : '하위 항목 추가']);
       items.push(['rename', '이름 바꾸기']);
       for (const k of Object.keys(FLAG_INFO)) items.push(['flag:' + k, `${FLAG_INFO[k].icon} ${FLAG_INFO[k].label} ${n.flags && n.flags[k] ? '표시 빼기' : '표시'}`]);
       if (!(Scope.indexByParent(st().topics).get(id) || []).length) items.push(['time', '⏱ 소요시간·진행률']);
@@ -557,9 +814,10 @@
       items.push(['uncheck-all', '모두 체크 해제']);
       items.push(['focus', '◷ 이 범위로 타이머 시작']);
       items.push(['to-task', '오늘 할 일로 보내기']);
-      if (isCard) { items.push(['collapse-all', '모두 접기']); items.push(['expand-all', '모두 펼치기']); items.push(['colors', '']); }
-      else { items.push(['up', '위로 옮기기']); items.push(['down', '아래로 옮기기']); }
-      items.push(['delete', isCard ? '카드 삭제' : '항목 삭제', 'danger']);
+      if (isCard) { items.push(['collapse-all', '안쪽 모두 접기']); items.push(['expand-all', '안쪽 모두 펼치기']); }
+      if (!isCard || mode === 'list') { items.push(['up', '위로 옮기기']); items.push(['down', '아래로 옮기기']); }
+      if (isCard) items.push(['colors', '']);
+      items.push(['delete', isCard ? '과목 삭제' : '항목 삭제', 'danger']);
     }
     menu.innerHTML = items.map(([act, label, cls]) => act === 'colors'
       ? `<div class="pm-colors">${Scope.COLORS.map((c) => `<button data-act="color" data-val="${c}" style="--c:${c}" aria-label="색 ${c}"></button>`).join('')}</div>`
@@ -626,7 +884,7 @@
       mutate((s) => { s.topics.find((t) => t.id === id).color = b.dataset.val; });
     } else if (act === 'up' || act === 'down') {
       mutate((s) => {
-        const sib = Scope.childrenOf(s.topics, n.parentId, examId);
+        const sib = Scope.childrenOf(s.topics, n.parentId, examId).filter((x) => (x.kind === 'note') === (n.kind === 'note'));
         sib.forEach((x, i) => { x.order = i; });
         const i = sib.findIndex((x) => x.id === id);
         const j = act === 'up' ? i - 1 : i + 1;
@@ -636,9 +894,10 @@
       });
     } else if (act === 'delete') {
       const count = Scope.subtreeIds(st().topics, id).length - 1;
-      const what = n.kind === 'note' ? '메모' : n.parentId ? '항목' : '카드';
-      if (count > 0 && !(await ask(`'${n.title}' ${what}과 하위 항목 ${count}개를 삭제할까요? (되돌리기로 복구할 수 있어요)`))) return;
-      mutate((s) => { s.topics = Scope.removeSubtree(s.topics, id); });
+      const what = n.kind === 'note' ? '메모' : n.parentId ? '항목' : '과목';
+      if (count > 0 && !(await ask(`'${n.title}' ${what}과 안에 든 항목 ${count}개를 삭제할까요? (되돌리기로 복구할 수 있어요)`))) return;
+      mutate((s) => keepPace(s, examId, () => { s.topics = Scope.removeSubtree(s.topics, id); }));
+      toast(`${n.kind === 'note' ? '메모를' : `'${n.title}' ${what}을`} 삭제했어요 · ↶ 되돌리기로 복구할 수 있어요`);
     }
   });
 
@@ -647,12 +906,15 @@
     if (!examId) return;
     menu.innerHTML = [
       ['new-exam', '＋ 새 시험 만들기'],
+      ['add-subject', '＋ 과목 추가'],
+      ['paste', '범위 목록 붙여넣기'],
+      store.canUndo() ? ['undo', '↶ 되돌리기'] : null,
       ['copy-outline', '범위를 텍스트로 복사'],
       ['download-outline', '범위를 텍스트 파일로 저장'],
-      ['print', '보드 인쇄 / PDF'],
+      ['print', mode === 'list' ? '범위 인쇄 / PDF' : '보드 인쇄 / PDF'],
       ['uncheck-exam', '이 시험 체크 모두 해제'],
-      ['clear-ink', '펜 자국 모두 지우기'],
-    ].map(([a, l]) => `<button role="menuitem" data-act="${a}">${l}</button>`).join('');
+      mode === 'board' ? ['clear-ink', '펜 자국 모두 지우기'] : null,
+    ].filter(Boolean).map(([a, l]) => `<button role="menuitem" data-act="${a}">${l}</button>`).join('');
     menu.dataset.id = '__board';
     menu.hidden = false;
     const r = e.currentTarget.getBoundingClientRect();
@@ -662,6 +924,9 @@
 
   async function boardAction(act) {
     if (act === 'new-exam') return openExamDialog(null);
+    if (act === 'paste') return openPaste();
+    if (act === 'undo') return undo();
+    if (act === 'add-subject') return openSubjectAdd();
     if (act === 'copy-outline' || act === 'download-outline') {
       const text = `${exam().name}${exam().date ? ' (' + exam().date + ')' : ''}\n` + Scope.toOutline(st().topics, examId);
       if (act === 'copy-outline') {
@@ -697,7 +962,41 @@
 
   $('#bb-exam-edit').addEventListener('click', () => examId && openExamDialog(examId));
   $('#bb-paste').addEventListener('click', openPaste);
-  $('#bb-add-card').addEventListener('click', () => addCardAtCenter('topic'));
+  $('#bb-add-card').addEventListener('click', () => openSubjectAdd());
+
+  // 과목 추가: 목록 보기는 맨 아래 칸으로, 보드는 작은 창으로
+  function openSubjectAdd() {
+    if (!examId) return;
+    if (mode === 'list') {
+      const pk = $('#subj-picker');
+      if (pk) { pk.scrollIntoView({ block: 'center' }); const inp = pk.querySelector('input'); if (inp) inp.focus({ preventScroll: true }); }
+      return;
+    }
+    const used = Scope.childrenOf(st().topics, null, examId).filter((c) => c.kind !== 'note').map((c) => c.title);
+    $('#subj-chips').innerHTML = subjectSuggestions(used).slice(0, 14).map((n) => `<button type="button" class="chip sas-chip" data-subject-add="${esc(n)}">＋ ${esc(n)}</button>`).join('');
+    $('#subj-name').value = '';
+    $('#subj-dlg').hidden = false;
+    $('#subj-name').focus();
+  }
+  const closeSubjectDlg = () => { $('#subj-dlg').hidden = true; };
+  $('#subj-cancel').addEventListener('click', closeSubjectDlg);
+  $('#subj-dlg').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSubjectDlg(); });
+  $('#subj-dlg').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) return closeSubjectDlg();
+    const b = e.target.closest('[data-subject-add]');
+    if (!b) return;
+    closeSubjectDlg();
+    addSubjectCards([b.dataset.subjectAdd]);
+  });
+  $('#subj-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    afterComposition(() => {
+      const name = $('#subj-name').value.trim();
+      if (!name) return $('#subj-name').focus();
+      closeSubjectDlg();
+      addSubjectCards([name]);
+    });
+  });
   $('#bb-add-note').addEventListener('click', () => addCardAtCenter('note'));
   $('#bb-zoom-in').addEventListener('click', () => zoomBy(1.25));
   $('#bb-zoom-out').addEventListener('click', () => zoomBy(0.8));
@@ -786,12 +1085,76 @@
     return id;
   }
 
+  // 과목 여러 개 고르기 (시험 만들 때)
+  function subjectToggle(box, input, addBtn) {
+    let picked = [];
+    let extra = [];
+    const names = () => { const base = subjectSuggestions([]); return base.concat(extra.filter((n) => !base.includes(n))); };
+    const api = {
+      draw() {
+        box.innerHTML = names().map((n) => `<button type="button" class="chip sas-chip pick" aria-pressed="${picked.includes(n)}" data-pick="${esc(n)}">${picked.includes(n) ? '✓ ' : ''}${esc(n)}</button>`).join('');
+      },
+      picked() { const order = names(); return picked.slice().sort((a, b) => order.indexOf(a) - order.indexOf(b)); },
+      reset() { picked = []; extra = []; input.value = ''; api.draw(); },
+    };
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-pick]');
+      if (!b) return;
+      const n = b.dataset.pick;
+      picked = picked.includes(n) ? picked.filter((x) => x !== n) : picked.concat(n);
+      api.draw();
+    });
+    const addCustom = () => {
+      const n = input.value.trim().slice(0, 40);
+      if (!n) return;
+      if (!names().includes(n)) extra.push(n);
+      if (!picked.includes(n)) picked.push(n);
+      input.value = '';
+      api.draw();
+    };
+    addBtn.addEventListener('click', () => afterComposition(addCustom));
+    // 시험 만들기 폼이 제출되지 않게: Enter는 과목 추가로
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); afterComposition(addCustom); } });
+    api.draw();
+    return api;
+  }
+  const wizard = subjectToggle($('#ex-subjects'), $('#ex-subject-custom'), $('#ex-subject-add'));
+  const dlgSubjects = subjectToggle($('#ee-subjects'), $('#ee-subject-custom'), $('#ee-subject-add'));
+
+  // 새 시험 + 고른 과목 → 목록 보기에서 과목마다 공부할 내용 적기
+  function startExam(name, date, subjects) {
+    createExam(name, date);
+    if (!modePref) mode = 'list';
+    if (subjects.length) addSubjectCards(subjects, { quiet: true });
+    render();
+    if (mode === 'list') {
+      vp.scrollTop = 0;
+      const first = cardsEl.querySelector('.sadd-input') || cardsEl.querySelector('.sas-input');
+      if (first) first.focus({ preventScroll: true });
+      toast(subjects.length ? `${subjects[0]}부터 공부할 내용을 하나씩 적어 보세요` : '과목을 먼저 골라 주세요');
+    } else {
+      toast(subjects.length ? '과목 카드의 ＋ 공부할 내용 추가로 항목을 적어 보세요' : '＋ 과목으로 과목을 추가해 보세요');
+    }
+  }
+
   $('#exam-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const name = $('#ex-name').value.trim();
     if (!name) return;
+    const subjects = wizard.picked();
+    startExam(name, $('#ex-date').value, subjects);
+    $('#ex-name').value = '';
+    $('#ex-date').value = '';
+    wizard.reset();
+  });
+
+  $('#exam-paste').addEventListener('click', () => {
+    const name = $('#ex-name').value.trim();
+    if (!name) { toast('시험 이름을 먼저 적어 주세요'); $('#ex-name').focus(); return; }
     createExam(name, $('#ex-date').value);
     $('#ex-name').value = '';
+    $('#ex-date').value = '';
+    wizard.reset();
     openPaste();
   });
 
@@ -810,6 +1173,8 @@
     $('#ee-name').value = ex ? ex.name : '';
     $('#ee-date').value = ex && ex.date ? ex.date : '';
     $('#ee-delete').hidden = !ex;
+    $('#ee-subjects-wrap').hidden = !!ex;
+    if (!ex) dlgSubjects.reset();
     $('#exam-dlg').hidden = false;
     $('#ee-name').focus();
   }
@@ -825,8 +1190,7 @@
     if (editingExam) {
       mutate((s) => { const ex = s.exams.find((x) => x.id === editingExam); ex.name = name; ex.date = date; });
     } else {
-      createExam(name, date);
-      openPaste();
+      startExam(name, date, dlgSubjects.picked());
     }
   });
   $('#ee-delete').addEventListener('click', async () => {
@@ -870,6 +1234,11 @@
     const sel = `[data-id="${CSS.escape(id)}"]`;
     const el = cardsEl.querySelector(`.bitem${sel} > .brow`) || cardsEl.querySelector(`.bcard${sel}`);
     if (!el) return;
+    if (mode === 'list') {
+      el.scrollIntoView({ block: 'center' });
+      el.classList.remove('flash-hit'); void el.offsetWidth; el.classList.add('flash-hit');
+      return;
+    }
     const r = vp.getBoundingClientRect();
     const e = el.getBoundingClientRect();
     if (view.z < 0.8) {
@@ -951,7 +1320,7 @@
   }
 
   vp.addEventListener('pointerdown', (e) => {
-    if (!examId || e.target.closest('.board-empty, .board-legend')) return;
+    if (mode === 'list' || !examId || e.target.closest('.board-empty, .board-legend')) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointers.size === 2) {
@@ -1091,7 +1460,7 @@
   }
 
   vp.addEventListener('wheel', (e) => {
-    if (!examId || e.target.closest('.board-empty')) return;
+    if (mode === 'list' || !examId || e.target.closest('.board-empty')) return;
     e.preventDefault();
     const r = vp.getBoundingClientRect();
     if (e.ctrlKey || e.metaKey) {
@@ -1109,9 +1478,9 @@
   document.addEventListener('keydown', (e) => {
     if (A.view !== 'board' || !examId) return;
     if (e.target.closest('input, textarea, select, [contenteditable]')) return;
-    if (!$('#paste-dlg').hidden || !$('#exam-dlg').hidden || !$('#ask').hidden) return;
+    if (!$('#paste-dlg').hidden || !$('#exam-dlg').hidden || !$('#ask').hidden || !$('#subj-dlg').hidden || !$('#time-dlg').hidden) return;
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
-    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.ctrlKey || e.metaKey || e.altKey || mode === 'list') return;
     if (e.key === ' ') { spaceDown = true; vp.classList.add('space-pan'); e.preventDefault(); return; }
     const k = e.key.toLowerCase();
     if (k === 'v') setTool('select');
@@ -1130,6 +1499,16 @@
 
   window.addEventListener('resize', () => { if (A.view === 'board') applyView(); });
 
-  window.Board = { render, fit, get view() { return Object.assign({}, view); }, setTool, zoomAt };
+  // 보드에서는 브라우저 스크롤 대신 보드 이동으로 (입력칸에 커서를 둘 때 브라우저가 밀어 올린 만큼을 옮겨 담는다)
+  vp.addEventListener('scroll', () => {
+    if (mode !== 'board' || (!vp.scrollTop && !vp.scrollLeft)) return;
+    view.x -= vp.scrollLeft;
+    view.y -= vp.scrollTop;
+    vp.scrollTop = 0;
+    vp.scrollLeft = 0;
+    applyView();
+  });
+
+  window.Board = { render, fit, get view() { return Object.assign({}, view); }, get mode() { return mode; }, setMode: setScopeMode, setTool, zoomAt };
   if (A.view === 'board') render();
 })();
