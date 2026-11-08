@@ -552,3 +552,88 @@ body.board-mode main { margin: 0; width: 100%; }
 .mg-pace-label { font-size: 11px; color: var(--muted); }
 .mg-pace-val { font-size: 15px; word-break: keep-all; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mg-pace-sub { font-size: 11px; color: var(--muted); }
+
+/* ================================================================
+   흑백 + 밝은 블루 포인트 테마 (체스판처럼 깔끔하게)
+   - 바탕·글자·버튼은 흑백, 진행률·현재 위치·링크만 블루
+   ================================================================ */
+:root {
+  --bg: #f5f5f5; --surface: #ffffff; --text: #0a0a0a; --muted: #737373; --line: #e5e5e5;
+  --ink: #0a0a0a; --ink-text: #ffffff;
+  --accent: #1a8cff; --accent-soft: #e6f2ff;
+  --danger: #e5484d; --ok: #1a8cff; --warn: #8a8a8a;
+  --radius: 12px; --shadow: none;
+  --board: #fafafa; --dot: #d4d4d4; --card: #ffffff; --done: #1a8cff; --done-soft: #e6f2ff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0a0a0a; --surface: #141414; --text: #f5f5f5; --muted: #8f8f8f; --line: #262626;
+    --ink: #f5f5f5; --ink-text: #0a0a0a;
+    --accent: #3da0ff; --accent-soft: #0d2440;
+    --danger: #ff6b6f; --ok: #3da0ff; --warn: #8f8f8f;
+    --board: #0f0f0f; --dot: #2a2a2a; --card: #171717; --done: #3da0ff; --done-soft: #0d2440;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0a0a0a; --surface: #141414; --text: #f5f5f5; --muted: #8f8f8f; --line: #262626;
+  --ink: #f5f5f5; --ink-text: #0a0a0a;
+  --accent: #3da0ff; --accent-soft: #0d2440;
+  --danger: #ff6b6f; --ok: #3da0ff; --warn: #8f8f8f;
+  --board: #0f0f0f; --dot: #2a2a2a; --card: #171717; --done: #3da0ff; --done-soft: #0d2440;
+}
+body { letter-spacing: -0.005em; }
+h1 { font-weight: 800; letter-spacing: -0.02em; }
+.panel, .stat { border-color: var(--line); box-shadow: none; }
+
+/* 상단 바: 흑백 */
+.brand, :root[data-theme="dark"] .brand { color: var(--text); font-weight: 800; letter-spacing: -0.02em; }
+.brand-mark, :root[data-theme="dark"] .brand-mark { background: #000; border-radius: 8px; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .brand { color: var(--text); }
+  :root:not([data-theme="light"]) .brand-mark { background: #000; box-shadow: 0 0 0 1px #333; }
+}
+:root[data-theme="dark"] .brand-mark { box-shadow: 0 0 0 1px #333; }
+
+/* 탭: 지금 있는 곳만 블루 */
+.tab.active { color: var(--accent); background: transparent; font-weight: 700; }
+
+/* 버튼: 주요 버튼은 검정(다크 모드는 흰색), 보조는 테두리만 */
+.btn { border-radius: 10px; }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--ink-text); }
+.btn.primary:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn:hover { border-color: var(--text); }
+.chip.active { background: var(--ink); color: var(--ink-text); border-color: var(--ink); }
+
+/* 그래프: 기본은 검정, 오늘·이번 달만 블루 */
+.wc-bar { background: var(--ink); opacity: .85; }
+.wc-col.today .wc-bar { background: var(--accent); opacity: 1; }
+.wc-bar.zero { background: var(--line); opacity: 1; }
+.mg-fill.behind { background: var(--muted); }
+.mg-pace > div { background: var(--bg); border: 1px solid var(--line); }
+.month-total { letter-spacing: -0.02em; }
+
+/* 폰 진행 칸(체스판): 흑백 칸, 지나온 칸은 블루, 퀸도 블루 */
+.pt-sq { background: #f0f0f0; }
+.pt-sq.dark { background: #cfcfcf; }
+.pt-sq.passed { background: #cce5ff; }
+.pt-sq.dark.passed { background: #99caff; }
+.pt-piece { fill: #0a0a0a; stroke: #fff; }
+.pt-piece.queen { fill: var(--accent); color: var(--accent); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .pt-sq { background: #2a2a2a; }
+  :root:not([data-theme="light"]) .pt-sq.dark { background: #1c1c1c; }
+  :root:not([data-theme="light"]) .pt-sq.passed { background: #123a66; }
+  :root:not([data-theme="light"]) .pt-sq.dark.passed { background: #0d2b4d; }
+  :root:not([data-theme="light"]) .pt-piece { fill: #f5f5f5; stroke: #000; }
+  :root:not([data-theme="light"]) .pt-piece.queen { fill: var(--accent); }
+}
+:root[data-theme="dark"] .pt-sq { background: #2a2a2a; }
+:root[data-theme="dark"] .pt-sq.dark { background: #1c1c1c; }
+:root[data-theme="dark"] .pt-sq.passed { background: #123a66; }
+:root[data-theme="dark"] .pt-sq.dark.passed { background: #0d2b4d; }
+:root[data-theme="dark"] .pt-piece { fill: #f5f5f5; stroke: #000; }
+:root[data-theme="dark"] .pt-piece.queen { fill: var(--accent); }
+
+/* 잠금 화면: 남은 시간에 블루 포인트 */
+.lock-time { color: #fff; }
+.lock-screen .lock-sub { color: #3da0ff; }
