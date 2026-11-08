@@ -70,7 +70,12 @@
     const prev = currentView;
     currentView = view;
     $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
-    $$('.tab, .top-icon[data-view]').forEach((t) => t.classList.toggle('active', t.dataset.view === view));
+    $$('.tab, .top-icon[data-view]').forEach((t) => {
+      const on = t.dataset.view === view;
+      t.classList.toggle('active', on);
+      if (t.classList.contains('tab')) t.setAttribute('aria-selected', String(on));
+      else if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
+    });
     document.body.classList.toggle('board-mode', view === 'board');
     if (location.hash !== '#' + view) history.replaceState(null, '', '#' + view);
     if (prev === 'about' && view !== 'about') stopAboutTrack();
@@ -929,6 +934,14 @@
   $('#study-finish').addEventListener('click', () => { showReviewPane('detail'); renderDeckDetail(); });
 
   document.addEventListener('keydown', (e) => {
+    if (currentView !== 'timer' || e.key !== ' ' || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.target.closest && e.target.closest('input, textarea, select, button, [contenteditable]')) return;
+    if (!$('#ask').hidden || !$('#log-dlg').hidden || (window.Lock && window.Lock.state)) return;
+    e.preventDefault();
+    if (timer.running) pauseTimer(); else startTimer();
+  });
+
+  document.addEventListener('keydown', (e) => {
     if (currentView !== 'review' || $('#study').hidden) return;
     if (e.target.matches('input, textarea, select')) return;
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); }
@@ -1243,6 +1256,26 @@
   }
 
   store.subscribe(() => { if ($('#study').hidden || currentView !== 'review') render(); });
+
+  // 오늘 공부 시간이 하루 목표를 넘는 순간 한 번 축하 (하루에 한 번만)
+  const GOAL_KEY = 'studypromotion.goalDay';
+  let goalSeen = { day: todayKey(), min: Stats.minutesOn(store.get().sessions, now()) };
+  store.subscribe(() => {
+    const day = todayKey();
+    const min = Stats.minutesOn(store.get().sessions, now());
+    const goal = store.get().settings.dailyGoalMin || 0;
+    const before = goalSeen.day === day ? goalSeen.min : 0;
+    goalSeen = { day, min };
+    if (!goal || before >= goal || min < goal) return;
+    let done = null;
+    try { done = localStorage.getItem(GOAL_KEY); } catch (e) { /* 무시 */ }
+    if (done === day) return;
+    try { localStorage.setItem(GOAL_KEY, day); } catch (e) { /* 무시 */ }
+    setTimeout(() => {
+      toast(`오늘 목표 ${Stats.formatMinutes(goal)} 달성! 오늘의 폰이 퀸이 됐어요 ♛`);
+      try { if (navigator.vibrate) navigator.vibrate([80, 60, 80, 60, 160]); } catch (e) { /* 무시 */ }
+    }, 2400); // 기록 알림을 먼저 보여 주고
+  });
 
   // 자정이 지나면 화면 갱신
   let lastDay = todayKey();

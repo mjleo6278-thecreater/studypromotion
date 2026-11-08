@@ -970,3 +970,6 @@ a, .btn.link, .tab.active, .badge { color: var(--accent-text); }
   .task-edit .card-edit-actions { grid-column: 1 / -1; justify-content: flex-end; }
 }
 .toast { width: max-content; text-align: left; }
+
+.timer-key { margin: -6px 0 4px; font-size: 12px; }
+@media (hover: none), (max-width: 720px) { .timer-key { display: none; } }

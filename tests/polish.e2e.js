@@ -104,6 +104,28 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   assert((await state()).settings.breakMin === 10 && (await page.textContent('#timer-time')) === '10:00', '휴식 10분');
   await page.goto(base + '#account');
   assert((await page.inputValue('#set-focus')) === '50' && (await page.inputValue('#set-break')) === '10', '설정 화면 값과 같음');
+  assert((await page.getAttribute('#account-btn', 'aria-current')) === 'page' && (await page.getAttribute('.tab[data-view="timer"]', 'aria-selected')) === 'false', '지금 화면을 화면 읽기 프로그램에 알림');
+  // PC: 스페이스로 시작·일시정지
+  await page.goto(base + '#timer');
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  await page.keyboard.press('Space');
+  assert(await page.evaluate(() => window.__studypromotion.timer.running), '스페이스로 시작');
+  await page.keyboard.press('Space');
+  assert(!(await page.evaluate(() => window.__studypromotion.timer.running)), '스페이스로 일시정지');
+  await page.tap('#timer-reset');
+
+  // 하루 목표를 넘는 순간 한 번 축하
+  await page.evaluate(() => App.store.update((s) => { s.settings.dailyGoalMin = 60; }));
+  await page.evaluate(() => App.store.update((s) => s.sessions.push({ id: 'g1', subjectId: null, minutes: 40, endedAt: Date.now() })));
+  await page.waitForTimeout(2600);
+  assert(!(await page.textContent('#toast')).includes('목표'), '목표 전에는 축하 없음');
+  await page.evaluate(() => App.store.update((s) => s.sessions.push({ id: 'g2', subjectId: null, minutes: 30, endedAt: Date.now() })));
+  await page.waitForFunction(() => /오늘 목표 1시간 달성/.test(document.querySelector('#toast').textContent), null, { timeout: 4000 });
+  assert(true, '목표를 넘는 순간 축하 알림');
+  await page.evaluate(() => { document.querySelector('#toast').textContent = ''; App.store.update((s) => s.sessions.push({ id: 'g3', subjectId: null, minutes: 30, endedAt: Date.now() })); });
+  await page.waitForTimeout(2600);
+  assert(!(await page.textContent('#toast')).includes('목표'), '축하는 하루에 한 번만');
+  await page.evaluate(() => App.store.update((s) => { s.sessions = s.sessions.filter((x) => !/^g\d$/.test(x.id)); s.settings.dailyGoalMin = 120; }));
 
   // 3) 공부 달력과 기간별 과목 시간
   const now = Date.now();
