@@ -37,7 +37,7 @@
       <p class="tagline muted">한 칸씩 전진해서, 시험 날엔 퀸으로.</p>
       <div class="cards4">
         <div class="stat"><div class="stat-label">오늘 공부</div><div class="stat-value" id="h-today">0분</div>
-          <div class="bar"><div class="bar-fill" id="h-goalbar"></div></div><div class="stat-sub" id="h-goal"></div></div>
+          <div class="bar"><div class="bar-fill" id="h-goalbar"></div></div><div class="stat-sub" id="h-goal"></div><div class="stat-sub" id="h-month-pace" hidden></div></div>
         <div class="stat"><div class="stat-label">남은 할 일</div><div class="stat-value" id="h-tasks">0</div><div class="stat-sub" id="h-tasks-sub"></div></div>
         <div class="stat"><div class="stat-label">복습 대기 카드</div><div class="stat-value" id="h-due">0</div><div class="stat-sub"><a href="#review" data-go="review">복습하러 가기</a></div></div>
         <div class="stat"><div class="stat-label">연속 학습일</div><div class="stat-value" id="h-streak">0일</div><div class="stat-sub">하루에 조금이라도</div></div>
@@ -248,6 +248,11 @@
           <div class="mg-head"><span id="mg-label">이번 달 목표</span><button class="btn link" id="mg-edit" type="button">목표 설정</button></div>
           <div class="mg-track"><div class="mg-fill" id="mg-fill"></div></div>
           <div class="muted small" id="mg-text"></div>
+          <div class="mg-pace" id="mg-pace" hidden>
+            <div><div class="mg-pace-label">오늘 남은 양</div><div class="mg-pace-val" id="mg-today"></div><div class="mg-pace-sub" id="mg-today-sub"></div></div>
+            <div><div class="mg-pace-label">하루 필요 페이스</div><div class="mg-pace-val" id="mg-need"></div><div class="mg-pace-sub" id="mg-need-sub"></div></div>
+            <div><div class="mg-pace-label">하루 기본 페이스</div><div class="mg-pace-val" id="mg-base"></div><div class="mg-pace-sub" id="mg-base-sub"></div></div>
+          </div>
           <form class="mg-form" id="mg-form" hidden>
             <label class="field">월 목표(시간)<input type="number" id="mg-input" min="0" max="744" step="1" inputmode="numeric"></label>
             <button class="btn primary" type="submit">저장</button>

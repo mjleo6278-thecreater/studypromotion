@@ -97,14 +97,21 @@
   }
 
   // 월 목표 진행: goalMin 목표(분), minutes 이번 달 공부(분), now 기준 남은 날(오늘 포함)로 하루 필요량 계산
-  function monthGoal(goalMin, minutes, now) {
+  //  todayMin: 오늘 이미 한 양 (오늘 몫 계산에 사용)
+  function monthGoal(goalMin, minutes, now, todayMin) {
     if (!goalMin) return null;
     const d = new Date(now);
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     const daysLeft = lastDay - d.getDate() + 1;
     const remaining = Math.max(0, goalMin - minutes);
     const expected = goalMin * (d.getDate() / lastDay); // 오늘까지 이 정도는 했어야 계획대로
+    todayMin = todayMin || 0;
+    const before = Math.max(0, minutes - todayMin); // 어제까지 한 양
+    const todayQuota = Math.max(0, Math.ceil((goalMin - before) / daysLeft)); // 오늘 해야 할 양
     return {
+      basePerDay: Math.ceil(goalMin / lastDay),
+      todayQuota,
+      todayLeft: Math.max(0, todayQuota - todayMin),
       pct: Math.min(100, Math.round((minutes / goalMin) * 100)),
       remaining,
       daysLeft,

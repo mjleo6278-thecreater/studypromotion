@@ -39,6 +39,9 @@ const server = http.createServer((req, res) => {
   assert(/5% 달성/.test(await page.textContent('#mg-text')) && /30시간/.test(await page.textContent('#mg-label')), '월 목표 설정과 진행률');
   await page.reload();
   assert(/5% 달성/.test(await page.textContent('#mg-text')), '월 목표 저장 유지');
+  if (new Date().getDate() !== 1) assert(await page.isVisible('#mg-pace') && /분|시간/.test(await page.textContent('#mg-need')), '하루 페이스 표시');
+  await page.goto(base + '#home');
+  assert(/월 목표 페이스/.test(await page.textContent('#h-month-pace')), '홈에 오늘 페이스 표시');
 
   // 잠금 시작
   await page.goto(base + '#timer');

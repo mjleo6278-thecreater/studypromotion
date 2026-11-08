@@ -163,3 +163,11 @@ test('월 목표 진행률과 하루 필요량', () => {
   assert.strictEqual(done.done, true);
   assert.strictEqual(done.pct, 100);
 });
+
+test('월 목표 하루 페이스: 오늘 몫과 남은 양', () => {
+  const now = new Date(2026, 10, 11, 12).getTime(); // 11월 11일, 남은 20일(오늘 포함), 30일짜리 달
+  const g = Stats.monthGoal(60 * 60, 15 * 60 + 40, now, 40); // 어제까지 15시간, 오늘 40분
+  assert.strictEqual(g.basePerDay, 120); // 60시간 ÷ 30일
+  assert.strictEqual(g.todayQuota, 135); // (60-15)시간 ÷ 20일
+  assert.strictEqual(g.todayLeft, 95);
+});
