@@ -204,8 +204,13 @@
     busy = true;
     upload().catch((e) => toast(errorText(e))).finally(() => { busy = false; render(); });
   }
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') pushNow(); });
-  window.addEventListener('online', () => { render(); pushNow(); });
+  // 앱을 내려 두면 바로 올리고, 다시 열면 다른 기기 변경을 확인한다
+  let lastCheck = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') pushNow();
+    else if (user && Date.now() - lastCheck > 20000) { lastCheck = Date.now(); syncNow(false); }
+  });
+  window.addEventListener('online', () => { render(); if (user) syncNow(false); });
   window.addEventListener('offline', () => render());
 
   // 버튼

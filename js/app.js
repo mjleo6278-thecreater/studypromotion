@@ -753,9 +753,41 @@
   });
   window.addEventListener('appinstalled', () => { $('#install-btn').hidden = true; toast('스터디 프로모션를 설치했어요'); });
   if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch(() => { /* 임베드 등 등록 불가 환경 */ });
+    // 새 버전이 배포되면: 쓰는 중이 아니면 바로 새로고침, 쓰는 중이면 안내 띠
+    let swReg = null;
+    let hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    const busyNow = () => timer.running || !!(window.Lock && window.Lock.state) || !$('#ask').hidden ||
+      (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName));
+    const applyUpdate = () => {
+      if (reloading) return;
+      reloading = true;
+      try { sessionStorage.setItem('studypromotion.updated', '1'); } catch (e) { /* 무시 */ }
+      location.reload();
+    };
+    const onNewVersion = () => {
+      if (!busyNow()) return applyUpdate();
+      $('#update-bar').hidden = false;
+    };
+    $('#update-btn').addEventListener('click', applyUpdate);
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) { hadController = true; return; } // 처음 설치일 때는 새로고침 안 함
+      onNewVersion();
     });
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then((r) => { swReg = r; }).catch(() => { /* 임베드 등 등록 불가 환경 */ });
+    });
+    const checkUpdate = () => { try { if (swReg && navigator.onLine !== false) swReg.update(); } catch (e) { /* 무시 */ } };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkUpdate(); });
+    setInterval(checkUpdate, 15 * 60 * 1000);
+    // 안내 띠가 떠 있을 때 타이머 등이 끝나면 조용히 적용
+    setInterval(() => { if (!$('#update-bar').hidden && !busyNow() && document.visibilityState === 'hidden') applyUpdate(); }, 5000);
+    try {
+      if (sessionStorage.getItem('studypromotion.updated')) {
+        sessionStorage.removeItem('studypromotion.updated');
+        setTimeout(() => toast('새 버전으로 업데이트했어요'), 600);
+      }
+    } catch (e) { /* 무시 */ }
   }
   // 브라우저가 저장 공간을 정리할 때 데이터가 지워지지 않도록 요청
   try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) { /* 무시 */ }

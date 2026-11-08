@@ -1,5 +1,5 @@
 /* 스터디 프로모션 서비스 워커: 앱 파일을 저장해 두고 오프라인에서도 열리게 한다 */
-const CACHE = 'studypromotion-v17';
+const CACHE = 'studypromotion-v18';
 const ASSETS = [
   './',
   './index.html',
@@ -37,8 +37,12 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
+  // 브라우저 HTTP 캐시를 건너뛰고 서버에 새 버전이 있는지 매번 확인한다
+  const fresh = req.mode === 'navigate'
+    ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' })
+    : new Request(req, { cache: 'no-cache' });
   e.respondWith(
-    fetch(req)
+    fetch(fresh)
       .then((res) => {
         if (res && res.ok) {
           const copy = res.clone();
