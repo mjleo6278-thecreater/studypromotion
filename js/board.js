@@ -182,8 +182,9 @@
   }
 
   // 하위 항목 입력칸 (폼이라서 휴대폰 키보드의 Enter·이동 키로도 추가된다)
-  function addRow(parentId) {
-    return `<li class="badd-row"><form class="badd-form" data-add-form="${esc(parentId)}"><input class="badd-input" data-add-input="${esc(parentId)}" data-keep="sub:${esc(parentId)}" placeholder="항목 이름 입력 후 Enter" maxlength="200" autocomplete="off"><button class="btn sm" type="submit">추가</button></form></li>`;
+  function addRow(parentId, title) {
+    const ph = title ? `‘${clip(title)}’ 아래에 넣을 항목` : '항목 이름 입력 후 Enter';
+    return `<li class="badd-row"><form class="badd-form" data-add-form="${esc(parentId)}"><input class="badd-input" data-add-input="${esc(parentId)}" data-keep="sub:${esc(parentId)}" placeholder="${esc(ph)}" aria-label="${esc(ph)}" maxlength="200" autocomplete="off"><button class="btn sm" type="submit">추가</button></form></li>`;
   }
 
   // 목록 보기: 과목마다 늘 보이는 '공부할 내용 추가' 칸
@@ -198,7 +199,7 @@
     const sugg = subjectSuggestions(used).slice(0, 12);
     return `<div class="subj-picker${first ? ' first' : ''}" id="subj-picker">
       <h3>${first ? '어떤 과목을 준비하나요?' : '＋ 과목 추가'}</h3>
-      ${first ? '<p class="muted small">과목을 고른 다음, 과목마다 공부할 내용을 하나씩 적어 보세요. 단원 → 세부 내용처럼 나누고 싶으면 항목의 ⋯ 메뉴에서 <b>하위 항목 추가</b>를 누르면 돼요.</p>' : ''}
+      ${first ? '<p class="muted small">과목을 고른 다음, 과목마다 공부할 내용을 하나씩 적어 보세요. 국어 › 비문학 › 수특 1강 › 분석처럼 단계를 나누고 싶으면 항목 옆 <b>＋</b>를 눌러 그 아래에 넣으면 돼요.</p>' : ''}
       ${sugg.length ? `<div class="sas-chips">${sugg.map((n) => `<button type="button" class="chip sas-chip" data-subject-add="${esc(n)}">＋ ${esc(n)}</button>`).join('')}</div>` : ''}
       <form class="sas-form" data-subject-form><input class="sas-input" data-keep="subject" placeholder="과목 이름 직접 입력" maxlength="40" autocomplete="off" aria-label="과목 이름"><button class="btn" type="submit">추가</button></form>
     </div>`;
@@ -235,9 +236,10 @@
         <span class="btitle" data-rename="${esc(n.id)}">${esc(n.title)}</span>
         ${flagsHtml(n)}
         ${hasKids ? `<span class="bcount">${p.timeTotal ? `남은 ${fm(p.timeLeft)}` : `${p.done}/${p.total}`}</span>` : timeChip(n)}
+        <button class="bsub" data-add="${esc(n.id)}" aria-label="${esc(n.title)} 아래에 하위 항목 추가" title="하위 항목 추가">＋</button>
         <button class="bmenu" data-menu="${esc(n.id)}" aria-label="${esc(n.title)} 메뉴">⋯</button>
       </div>
-      ${childHtml || adding ? `<ul>${childHtml}${adding ? addRow(n.id) : ''}</ul>` : ''}
+      ${childHtml || adding ? `<ul>${childHtml}${adding ? addRow(n.id, n.title) : ''}</ul>` : ''}
     </li>`;
   }
 
@@ -277,7 +279,7 @@
         <button class="bmenu" data-menu="${esc(c.id)}" aria-label="${esc(c.title)} 메뉴">⋯</button>
       </div>
       <div class="bcard-prog"><div class="bbar"><div style="width:${p.pct}%"></div></div><span>${!kids.length ? (c.done ? '완료 ✓' : '아직 공부할 내용이 없어요') : p.timeTotal ? `${p.pct}% · 남은 ${fm(p.timeLeft)}` : `${p.done}/${p.total} · ${p.pct}%`}</span></div>
-      ${list || adding ? `<ul class="btree">${list}${adding ? addRow(c.id) : ''}</ul>` : ''}
+      ${list || adding ? `<ul class="btree">${list}${adding ? addRow(c.id, c.title) : ''}</ul>` : ''}
       ${onlyLeft && kids.length && !list && !adding && !folded ? '<p class="bcard-done muted">이 과목은 다 끝냈어요</p>' : ''}
       ${folded ? '' : listMode ? addFormHtml(c.id) : `<button class="badd" data-add="${esc(c.id)}">＋ 공부할 내용 추가</button>`}
       ${doneAll ? '<div class="bstamp" aria-hidden="true">♛ 승급</div>' : ''}
@@ -797,47 +799,92 @@
   }
 
   /* ---------- 메뉴 ---------- */
-  function closeMenu() { menu.hidden = true; menu.innerHTML = ''; }
+  // ⋯ 메뉴: 첫 화면에는 자주 쓰는 것만 두고, 표시(중요·어려움·다시 보기)와 옮기기는 눌러서 들어가는 하위 메뉴로
+  let menuAnchor = null;
+  function closeMenu() { menu.hidden = true; menu.innerHTML = ''; menuAnchor = null; }
+  function clip(t) { t = String(t || ''); return t.length > 12 ? t.slice(0, 11) + '…' : t; }
 
-  function openMenu(id, anchor) {
+  function mItem(act, label, o) {
+    o = o || {};
+    const cls = [o.cls, o.sub && 'pm-sub', o.check && o.on && 'pm-on'].filter(Boolean).join(' ');
+    return `<button type="button" role="${o.check ? 'menuitemcheckbox' : 'menuitem'}" data-act="${act}"${cls ? ` class="${cls}"` : ''}` +
+      `${o.check ? ` aria-checked="${o.on ? 'true' : 'false'}"` : ''}${o.disabled ? ' disabled' : ''}>` +
+      `<span class="pm-label">${esc(label)}</span>${o.hint ? `<span class="pm-hint">${esc(o.hint)}</span>` : ''}` +
+      `${o.sub ? '<span class="pm-arrow" aria-hidden="true">›</span>' : ''}${o.check ? `<span class="pm-check" aria-hidden="true">${o.on ? '✓' : ''}</span>` : ''}</button>`;
+  }
+  const mHead = (title) => `<button type="button" role="menuitem" class="pm-head" data-act="page:main" aria-label="${esc(title)} 닫고 뒤로"><span class="pm-back" aria-hidden="true">‹</span><span class="pm-label">${esc(title)}</span></button>`;
+  const colorItem = (n, label) => `<button type="button" role="menuitem" data-act="colors" class="pm-color-item"><i class="pm-swatch" style="background:${esc(n.color || '#888')}"></i><span class="pm-label">${esc(label)}</span></button>`;
+
+  // page: 'main' | 'flags' | 'move'
+  function openMenu(id, anchor, page) {
     const n = byId(id);
     if (!n) return;
+    page = page || 'main';
+    if (anchor) menuAnchor = anchor;
     const isCard = !n.parentId;
-    const items = [];
+    const index = Scope.indexByParent(st().topics);
+    const kidsOf = (x) => index.get(x) || [];
+    const hasKids = kidsOf(id).length > 0;
+    let html = '';
     if (n.kind === 'note') {
-      items.push(['edit-note', '메모 고치기']);
-      items.push(['colors', '']);
-      items.push(['delete', '메모 삭제', 'danger']);
+      html = mItem('edit-note', '메모 고치기') + colorItem(n, '메모 색 바꾸기') + mItem('delete', '메모 삭제', { cls: 'danger' });
+    } else if (page === 'flags') {
+      html = mHead('표시') + Object.keys(FLAG_INFO).map((k) => mItem('flag:' + k, `${FLAG_INFO[k].icon}  ${FLAG_INFO[k].label}`, { check: true, on: !!(n.flags && n.flags[k]) })).join('');
+    } else if (page === 'move') {
+      const sib = Scope.childrenOf(st().topics, n.parentId, examId).filter((x) => (x.kind === 'note') === (n.kind === 'note'));
+      const i = sib.findIndex((x) => x.id === id);
+      const prev = i > 0 ? sib[i - 1] : null;
+      const parent = n.parentId ? byId(n.parentId) : null;
+      html = mHead('옮기기') + mItem('up', '위로', { disabled: i <= 0 }) + mItem('down', '아래로', { disabled: i < 0 || i >= sib.length - 1 });
+      if (!isCard) {
+        html += mItem('indent', '한 단계 안으로', { hint: prev ? `‘${clip(prev.title)}’ 아래로` : '', disabled: !prev });
+        html += mItem('outdent', '한 단계 밖으로', { hint: parent && parent.parentId ? `‘${clip(parent.title)}’ 다음으로` : '', disabled: !(parent && parent.parentId) });
+        html += mItem('move-to', '다른 곳으로…');
+      }
     } else {
-      items.push(['add', isCard ? '공부할 내용 추가' : '하위 항목 추가']);
-      items.push(['rename', '이름 바꾸기']);
-      for (const k of Object.keys(FLAG_INFO)) items.push(['flag:' + k, `${FLAG_INFO[k].icon} ${FLAG_INFO[k].label} ${n.flags && n.flags[k] ? '표시 빼기' : '표시'}`]);
-      if (!(Scope.indexByParent(st().topics).get(id) || []).length) items.push(['time', '⏱ 소요시간·진행률']);
-      items.push(['check-all', '모두 체크']);
-      items.push(['uncheck-all', '모두 체크 해제']);
-      items.push(['focus', '◷ 이 범위로 타이머 시작']);
-      items.push(['to-task', '오늘 할 일로 보내기']);
-      if (isCard) { items.push(['collapse-all', '안쪽 모두 접기']); items.push(['expand-all', '안쪽 모두 펼치기']); }
-      if (!isCard || mode === 'list') { items.push(['up', '위로 옮기기']); items.push(['down', '아래로 옮기기']); }
-      if (isCard) items.push(['colors', '과목 색 바꾸기']);
-      items.push(['delete', isCard ? '과목 삭제' : '항목 삭제', 'danger']);
+      const p = Scope.progress(st().topics, id, index);
+      html += mItem('add', isCard ? '공부할 내용 추가' : '하위 항목 추가');
+      html += mItem('rename', '이름 바꾸기');
+      if (!hasKids) html += mItem('time', '소요시간·진행률');
+      const on = Object.keys(FLAG_INFO).filter((k) => n.flags && n.flags[k]).map((k) => FLAG_INFO[k].icon).join(' ');
+      html += mItem('page:flags', '표시', { sub: true, hint: on });
+      html += mItem('focus', '이 범위로 타이머 시작');
+      html += mItem('to-task', '오늘 할 일로 보내기');
+      if (p.state === 'some') html += mItem('uncheck-all', '체크 모두 해제');
+      if (isCard && hasKids) {
+        const anyOpen = Scope.subtreeIds(st().topics, id, index).some((x) => x !== id && kidsOf(x).length && !byId(x).collapsed);
+        html += mItem(anyOpen ? 'collapse-all' : 'expand-all', anyOpen ? '안쪽 모두 접기' : '안쪽 모두 펼치기');
+      }
+      if (!isCard || mode === 'list') html += mItem('page:move', '옮기기', { sub: true });
+      if (isCard) html += colorItem(n, '과목 색 바꾸기');
+      html += mItem('delete', isCard ? '과목 삭제' : '항목 삭제', { cls: 'danger' });
     }
-    menu.innerHTML = items.map(([act, label, cls]) => act === 'colors'
-      ? `<button role="menuitem" data-act="colors" class="pm-color-item"><i class="pm-swatch" style="background:${esc(n.color || '#888')}"></i>${esc(label)}</button>`
-      : `<button role="menuitem" data-act="${act}" class="${cls || ''}">${esc(label)}</button>`).join('');
+    menu.innerHTML = html;
     menu.dataset.id = id;
+    menu.dataset.page = page;
     menu.hidden = false;
-    const r = anchor.getBoundingClientRect();
-    const mw = menu.offsetWidth, mh = menu.offsetHeight;
-    let left = r.right - mw;
-    let top = r.bottom + 4;
-    if (left < 8) left = 8;
-    if (left + mw > innerWidth - 8) left = innerWidth - mw - 8;
-    if (top + mh > innerHeight - 8) top = Math.max(8, r.top - mh - 4);
-    menu.style.left = left + 'px';
-    menu.style.top = top + 'px';
-    const first = menu.querySelector('button');
+    placeMenu(id);
+    const first = menu.querySelector(page === 'main' ? 'button:not([disabled])' : 'button:not(.pm-head):not([disabled])') || menu.querySelector('button');
     if (first) first.focus({ preventScroll: true });
+  }
+
+  // 메뉴를 ⋯ 버튼 옆에 둔다 (항목이 움직였으면 새 자리의 ⋯ 버튼을 다시 찾는다)
+  function placeMenu(id) {
+    const a = menuAnchor && menuAnchor.isConnected ? menuAnchor : cardsEl.querySelector(`[data-menu="${CSS.escape(id)}"]`);
+    if (a) menuAnchor = a;
+    let left = parseFloat(menu.style.left) || 8, top = parseFloat(menu.style.top) || 8;
+    // 이전 자리에 붙은 채로 재면 오른쪽 공간만큼 좁아져 글자가 줄바꿈되므로, 왼쪽 끝에서 원래 너비를 잰다
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    if (a) {
+      const r = a.getBoundingClientRect();
+      left = r.right - mw;
+      top = r.bottom + 4;
+      if (top + mh > innerHeight - 8) top = r.top - mh - 4;
+    }
+    menu.style.left = Math.max(8, Math.min(left, innerWidth - mw - 8)) + 'px';
+    menu.style.top = Math.max(8, Math.min(top, innerHeight - mh - 8)) + 'px';
   }
 
   document.addEventListener('pointerdown', (e) => {
@@ -845,15 +892,49 @@
   }, true);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) closeMenu(); });
 
-  menu.addEventListener('click', async (e) => {
-    const b = e.target.closest('[data-act]');
-    if (!b) return;
-    const id = menu.dataset.id;
-    const act = b.dataset.act;
-    closeMenu();
-    if (id === '__board') return boardAction(act);
+  // 순서·단계 바꾸기 (하위 메뉴는 열어 둔 채로 여러 번 누를 수 있게)
+  function moveStep(id, act) {
     const n = byId(id);
     if (!n) return;
+    if (act === 'up' || act === 'down') {
+      mutate((s) => {
+        const sib = Scope.childrenOf(s.topics, n.parentId, examId).filter((x) => (x.kind === 'note') === (n.kind === 'note'));
+        sib.forEach((x, i) => { x.order = i; });
+        const i = sib.findIndex((x) => x.id === id);
+        const j = act === 'up' ? i - 1 : i + 1;
+        if (i < 0 || j < 0 || j >= sib.length) return;
+        sib[i].order = j;
+        sib[j].order = i;
+      });
+    } else if (act === 'indent' || act === 'outdent') {
+      mutate((s) => { (act === 'indent' ? Scope.indent : Scope.outdent)(s.topics, id); });
+    }
+    if (mode === 'board') settleAll = true;
+    const row = cardsEl.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if (row) ensureVisible(row);
+  }
+
+  menu.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b || b.disabled) return;
+    const id = menu.dataset.id;
+    const act = b.dataset.act;
+    if (id === '__board') { closeMenu(); return boardAction(act); }
+    if (act.startsWith('page:')) { openMenu(id, null, act.slice(5)); return; }
+    const n = byId(id);
+    if (!n) { closeMenu(); return; }
+    if (act.startsWith('flag:')) {
+      const k = act.slice(5);
+      mutate((s) => { const x = s.topics.find((t) => t.id === id); x.flags = Object.assign({}, x.flags); x.flags[k] = !x.flags[k]; });
+      openMenu(id, null, 'flags');
+      return;
+    }
+    if (act === 'up' || act === 'down' || act === 'indent' || act === 'outdent') {
+      moveStep(id, act);
+      openMenu(id, null, 'move');
+      return;
+    }
+    closeMenu();
     if (act === 'add') openAdd(id);
     else if (act === 'time') openTime(id);
     else if (act === 'rename') {
@@ -862,12 +943,8 @@
     } else if (act === 'edit-note') {
       const el = cardsEl.querySelector(`[data-note="${CSS.escape(id)}"]`);
       if (el) startNoteEdit(id, el);
-    } else if (act.startsWith('flag:')) {
-      const k = act.slice(5);
-      mutate((s) => { const x = s.topics.find((t) => t.id === id); x.flags = Object.assign({}, x.flags); x.flags[k] = !x.flags[k]; });
-    } else if (act === 'check-all' || act === 'uncheck-all') {
-      mutate((s) => Scope.setDone(s.topics, id, act === 'check-all'));
-      if (act === 'check-all') celebrate(id, true);
+    } else if (act === 'uncheck-all') {
+      mutate((s) => Scope.setDone(s.topics, id, false));
     } else if (act === 'focus') {
       let card = n;
       while (card.parentId) card = byId(card.parentId);
@@ -885,20 +962,10 @@
       mutate((s) => s.topics.forEach((t) => { if (ids.has(t.id) && t.id !== id) t.collapsed = act === 'collapse-all'; }), false);
     } else if (act === 'colors') {
       // 색 계열별 팔레트에서 고른다
-      const c = window.UI ? await UI.pickColor({ title: '과목 색', current: n.color }) : null;
+      const c = window.UI ? await UI.pickColor({ title: n.kind === 'note' ? '메모 색' : '과목 색', current: n.color }) : null;
       if (c) mutate((s) => { const t = s.topics.find((x) => x.id === id); if (t) t.color = c; });
-    } else if (act === 'color') {
-      mutate((s) => { s.topics.find((t) => t.id === id).color = b.dataset.val; });
-    } else if (act === 'up' || act === 'down') {
-      mutate((s) => {
-        const sib = Scope.childrenOf(s.topics, n.parentId, examId).filter((x) => (x.kind === 'note') === (n.kind === 'note'));
-        sib.forEach((x, i) => { x.order = i; });
-        const i = sib.findIndex((x) => x.id === id);
-        const j = act === 'up' ? i - 1 : i + 1;
-        if (j < 0 || j >= sib.length) return;
-        sib[i].order = j;
-        sib[j].order = i;
-      });
+    } else if (act === 'move-to') {
+      openMoveDialog(id);
     } else if (act === 'delete') {
       const count = Scope.subtreeIds(st().topics, id).length - 1;
       const what = n.kind === 'note' ? '메모' : n.parentId ? '항목' : '과목';
@@ -907,6 +974,47 @@
       toast(`${n.kind === 'note' ? '메모를' : `'${n.title}' ${what}을`} 삭제했어요 · ↶ 되돌리기로 복구할 수 있어요`);
     }
   });
+
+  /* ---------- 다른 곳으로 옮기기 (어느 과목·항목 아래로 갈지 고르기) ---------- */
+  let moveId = null, moveReturn = null;
+  function openMoveDialog(id) {
+    const n = byId(id);
+    if (!n) return;
+    moveId = id;
+    moveReturn = document.activeElement;
+    const targets = Scope.moveTargets(st().topics, id);
+    const colorOf = new Map(Scope.childrenOf(st().topics, null, examId).map((c) => [c.id, c.color]));
+    $('#move-sub').textContent = `‘${n.title}’${(Scope.indexByParent(st().topics).get(id) || []).length ? '과 그 안의 항목을' : '을'} 고른 곳 아래 맨 끝으로 옮겨요.`;
+    $('#move-list').innerHTML = targets.map((t) => `<li><button type="button" class="move-opt${t.depth ? '' : ' card'}" data-move-to="${esc(t.id)}" style="--d:${t.depth}"${t.current ? ' disabled aria-current="true"' : ''}>` +
+      `${t.depth ? '' : `<i class="dot" style="background:${esc(colorOf.get(t.id) || '#888')}"></i>`}<span>${esc(t.title)}</span>${t.current ? '<small>지금 위치</small>' : ''}</button></li>`).join('');
+    $('#move-dlg').hidden = false;
+    const first = $('#move-list button:not([disabled])');
+    if (first) first.focus({ preventScroll: true });
+  }
+  function closeMoveDialog() {
+    $('#move-dlg').hidden = true;
+    moveId = null;
+    if (moveReturn && moveReturn.isConnected) { try { moveReturn.focus({ preventScroll: true }); } catch (e) { /* 무시 */ } }
+    moveReturn = null;
+  }
+  $('#move-list').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-move-to]');
+    if (!b || b.disabled || !moveId) return;
+    const id = moveId, dest = b.dataset.moveTo;
+    const n = byId(id), d = byId(dest);
+    closeMoveDialog();
+    if (!n || !d) return;
+    let moved = false;
+    mutate((s) => { moved = Scope.moveTo(s.topics, id, dest); });
+    if (!moved) return;
+    if (mode === 'board') settleAll = true;
+    toast(`‘${clip(n.title)}’을 ‘${clip(d.title)}’ 아래로 옮겼어요`);
+    const row = cardsEl.querySelector(`[data-id="${CSS.escape(id)}"]`);
+    if (row) { if (mode === 'list') row.scrollIntoView({ block: 'center' }); else ensureVisible(row); }
+  });
+  $('#move-cancel').addEventListener('click', closeMoveDialog);
+  $('#move-dlg').addEventListener('click', (e) => { if (e.target.id === 'move-dlg') closeMoveDialog(); });
+  $('#move-dlg').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMoveDialog(); });
 
   /* ---------- 보드 메뉴(⋯) ---------- */
   $('#bb-more').addEventListener('click', (e) => {

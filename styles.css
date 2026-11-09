@@ -1321,3 +1321,32 @@ code, kbd { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Prete
 /* 숫자 칸의 위아래 화살표(브라우저 기본) 숨김: 빠른 선택 칩과 키보드로 고른다 */
 input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+/* ===================== 기능: 범위 ⋯ 메뉴(하위 메뉴)·항목 옆 ＋·다른 곳으로 옮기기 ===================== */
+.pop-menu button[role="menuitem"], .pop-menu button[role="menuitemcheckbox"] { display: flex; align-items: center; gap: 8px; width: 100%; }
+.pop-menu button[role="menuitemcheckbox"] { font: inherit; font-size: 14px; text-align: left; border: 0; background: none; color: var(--text); padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.pop-menu button[role="menuitemcheckbox"]:hover, .pop-menu button[role="menuitemcheckbox"]:focus-visible { background: var(--bg); outline: none; }
+.pop-menu { max-width: calc(100vw - 16px); }
+.pop-menu .pm-label { flex: 1 0 auto; white-space: nowrap; }
+.pop-menu .pm-hint { flex: 0 1 auto; min-width: 0; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; text-align: right; }
+.pop-menu .pm-arrow { flex: none; color: var(--muted); font-size: 17px; line-height: 1; }
+.pop-menu .pm-check { flex: none; width: 16px; text-align: center; color: var(--accent-text, var(--accent)); font-weight: 800; }
+.pop-menu button.pm-head { font-weight: 700; gap: 6px; border-bottom: 1px solid var(--line); border-radius: 8px 8px 0 0; margin-bottom: 4px; padding-left: 6px; }
+.pop-menu .pm-back { flex: none; color: var(--muted); font-size: 20px; line-height: .8; }
+.pop-menu button[disabled] { opacity: .38; cursor: default; }
+.pop-menu button[disabled]:hover { background: none; }
+.pop-menu .pm-color-item .pm-swatch { margin-right: 0; }
+.bsub { flex: none; border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 15px; font-weight: 600; line-height: 1; padding: 4px 6px; border-radius: 6px; opacity: .6; }
+.bsub:hover, .bsub:focus-visible { background: var(--line); opacity: 1; }
+.bitem.s-all > .brow .bsub { opacity: .35; }
+.move-box { width: min(420px, 100%); }
+.move-box h2 { margin: 0 0 4px; font-size: 18px; }
+.move-box > p { margin: 0 0 10px; }
+.move-list { list-style: none; margin: 0 0 14px; padding: 4px; max-height: min(52vh, 420px); overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+.move-opt { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit; font-size: 14px; color: var(--text); background: none; border: 0; border-radius: 8px; padding: 9px 10px 9px calc(10px + var(--d, 0) * 18px); cursor: pointer; }
+.move-opt.card { font-weight: 700; }
+.move-opt:hover, .move-opt:focus-visible { background: var(--bg); outline: none; }
+.move-opt[disabled] { cursor: default; color: var(--muted); }
+.move-opt[disabled]:hover { background: none; }
+.move-opt span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.move-opt small { flex: none; color: var(--accent-text, var(--accent)); font-size: 12px; font-weight: 600; }

@@ -488,7 +488,8 @@
             <li><b>목록 보기</b>: 과목 아래에 공부할 내용이 차례로 놓여요. 휴대폰에서 쓰기 편해요.</li>
             <li><b>보드 보기</b>: 넓은 화이트보드에 과목 카드를 펼쳐 두고, 끌어서 옮기거나 펜·형광펜으로 표시할 수 있어요. 두 손가락으로 확대·이동해요.</li>
             <li><b>체크</b>: 끝낸 항목을 체크해요. 단원을 체크하면 안에 든 항목이 모두 체크돼요. 과목을 다 끝내면 ‘♛ 승급’ 도장이 찍혀요.</li>
-            <li><b>⋯ 메뉴</b>: 하위 항목 추가(단원 → 세부 내용), 이름 바꾸기, ★ 중요·! 어려움·↻ 다시 보기 표시, 순서 바꾸기, 이 범위로 타이머 시작, 오늘 할 일로 보내기, 삭제.</li>
+            <li><b>단계 나누기</b>: 항목 옆 <b>＋</b>를 누르면 그 항목 바로 아래에 넣을 수 있어요. 국어 › 비문학 › 수특 주제통합 1강 › 분석처럼 몇 단계든 나눌 수 있어요.</li>
+            <li><b>⋯ 메뉴</b>: 하위 항목 추가, 이름 바꾸기, 소요시간·진행률, 이 범위로 타이머 시작, 오늘 할 일로 보내기, 삭제. <b>표시 ›</b> 안에서 ★ 중요·! 어려움·↻ 다시 보기를 켜고 끄고, <b>옮기기 ›</b> 안에서 위로·아래로, 한 단계 안으로·밖으로, 다른 곳으로 옮길 수 있어요.</li>
             <li><b>⏱ 소요시간·진행률</b>: 걸리는 시간과 얼마나 했는지(%)를 적어요. 반쯤 했다면 50%로 두면 돼요.</li>
             <li><b>페이스 띠</b>: 오늘 할 양, 밀린 양, 지금 필요한 하루 페이스를 알려 줘요. ‘자세히’를 누르면 전체 소요시간과 한 만큼이 나와요.</li>
             <li><b>목록 붙여넣기</b>: 이미 정리해 둔 범위가 있으면 한 번에 붙여넣을 수 있어요. ‘# 과목’, ‘- 단원’, 들여쓰기로 단계를 나눠요.</li>
@@ -695,6 +696,16 @@
 
   <!-- 화이트보드: 항목 메뉴 -->
   <div class="pop-menu" id="pop-menu" hidden role="menu"></div>
+
+  <!-- 범위: 다른 곳으로 옮기기 -->
+  <div class="ask-backdrop" id="move-dlg" hidden>
+    <div class="ask-box move-box" role="dialog" aria-modal="true" aria-labelledby="move-title">
+      <h2 id="move-title">어디로 옮길까요?</h2>
+      <p class="muted small" id="move-sub"></p>
+      <ul class="move-list" id="move-list"></ul>
+      <div class="ask-actions"><button class="btn" type="button" id="move-cancel">취소</button></div>
+    </div>
+  </div>
 
   <div class="ask-backdrop" id="ask" hidden>
     <div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-msg">

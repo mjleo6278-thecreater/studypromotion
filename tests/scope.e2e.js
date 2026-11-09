@@ -101,9 +101,63 @@ const server = http.createServer((req, res) => {
 
   // 과목 순서 바꾸기
   await card('물리학').locator('.bcard-head [data-menu]').tap();
+  await page.tap('#pop-menu [data-act="page:move"]');
   await page.tap('#pop-menu [data-act="up"]');
   const order = await page.$$eval('.list-mode .bcard:not(.note) .bcard-title', (els) => els.map((e) => e.textContent));
   assert(order.indexOf('물리학') < order.indexOf('수학'), '과목 위로 옮기기: ' + order.join(','));
+  assert(await page.isVisible('#pop-menu [data-act="up"]'), '옮기기 메뉴는 열린 채로 (여러 번 누르기)');
+  await page.keyboard.press('Escape');
+
+  // 가지치기: 국어 › 비문학 › 수특 주제통합 1강 › 분석 (항목 옆 ＋로 바로 아래에 넣기)
+  const korCard = card('국어');
+  await korCard.locator('.sadd-input').fill('비문학');
+  await korCard.locator('.sadd-input').press('Enter');
+  const item = (title) => page.locator(`.btitle:text-is("${title}")`).locator('xpath=ancestor::li[contains(concat(" ", @class, " "), " bitem ")][1]');
+  await item('비문학').locator(':scope > .brow [data-add]').tap();
+  assert((await page.getAttribute('.badd-input', 'placeholder')).includes('비문학'), '어디 아래에 넣는지 입력칸에 표시');
+  await page.keyboard.type('수특 주제통합 1강');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('수특 주제통합 2강');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await item('수특 주제통합 1강').locator(':scope > .brow [data-add]').tap();
+  await page.keyboard.type('분석');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  const path3 = async (title) => { const s = await state(); const by = new Map(s.topics.map((x) => [x.id, x])); let n = s.topics.find((x) => x.title === title); const names = []; while (n) { names.unshift(n.title); n = by.get(n.parentId); } return names.join(' › '); };
+  assert((await path3('분석')) === '국어 › 비문학 › 수특 주제통합 1강 › 분석', '네 단계 가지치기: ' + (await path3('분석')));
+  // 메뉴: 첫 화면은 짧게 (표시·옮기기는 하위 메뉴)
+  await item('수특 주제통합 2강').locator(':scope > .brow [data-menu]').tap();
+  const mainItems = await page.$$eval('#pop-menu > button', (els) => els.map((e) => e.dataset.act));
+  assert(mainItems.length <= 9 && mainItems.includes('page:flags') && mainItems.includes('page:move') && !mainItems.some((a) => a.startsWith('flag:')), '⋯ 메뉴 첫 화면 ' + mainItems.length + '줄');
+  // 한 단계 안으로 → 수특 1강 아래로, 밖으로 → 다시 비문학 아래로
+  await page.tap('#pop-menu [data-act="page:move"]');
+  assert((await page.textContent('#pop-menu [data-act="indent"]')).includes('수특 주제통합'), '안으로 옮길 곳 표시');
+  await page.tap('#pop-menu [data-act="indent"]');
+  assert((await path3('수특 주제통합 2강')) === '국어 › 비문학 › 수특 주제통합 1강 › 수특 주제통합 2강', '한 단계 안으로');
+  await page.tap('#pop-menu [data-act="outdent"]');
+  assert((await path3('수특 주제통합 2강')) === '국어 › 비문학 › 수특 주제통합 2강', '한 단계 밖으로');
+  await page.keyboard.press('Escape');
+  // 다른 곳으로: 수학 아래로
+  await item('수특 주제통합 2강').locator(':scope > .brow [data-menu]').tap();
+  await page.tap('#pop-menu [data-act="page:move"]');
+  await page.tap('#pop-menu [data-act="move-to"]');
+  assert(await page.isVisible('#move-dlg'), '어디로 옮길지 고르는 창');
+  assert(await page.isDisabled('#move-list [aria-current="true"]'), '지금 위치는 고를 수 없음');
+  assert(!(await page.isVisible('#move-list button:text-is("수특 주제통합 2강")')), '자기 자신은 목록에 없음');
+  await page.tap('#move-list button.card:has-text("수학")');
+  assert(!(await page.isVisible('#move-dlg')) && (await path3('수특 주제통합 2강')) === '수학 › 수특 주제통합 2강', '다른 과목 아래로 옮기기');
+  // 표시: 하위 메뉴 안에서 여러 개
+  await item('분석').locator(':scope > .brow [data-menu]').tap();
+  await page.tap('#pop-menu [data-act="page:flags"]');
+  await page.tap('#pop-menu [data-act="flag:star"]');
+  await page.tap('#pop-menu [data-act="flag:hard"]');
+  const fl = (await topic('분석')).flags;
+  assert(fl.star && fl.hard && !fl.review, '표시 안에서 중요·어려움 함께');
+  await page.tap('#pop-menu .pm-head');
+  assert((await page.textContent('#pop-menu [data-act="page:flags"]')).includes('★'), '뒤로 가면 첫 메뉴에 지금 표시가 보임');
+  await page.keyboard.press('Escape');
+  assert(await item('분석').locator(':scope > .brow .bflag').count() === 2, '항목 옆에 표시 2개');
 
   // 삭제 → 되돌리기
   await card('영어').locator('.bcard-head [data-menu]').tap();

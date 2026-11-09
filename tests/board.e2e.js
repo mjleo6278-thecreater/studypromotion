@@ -64,7 +64,7 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   assert(await page.isVisible('.btitle:text-is("다항식")'), '단원 펼치기');
 
   // 항목 추가 (Enter 연속 입력)
-  await mathCard.locator('[data-add]').click();
+  await mathCard.locator('.badd[data-add]').click();
   await page.keyboard.type('3단원 도형');
   await page.keyboard.press('Enter');
   await page.keyboard.type('4단원 함수');
@@ -80,8 +80,12 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
 
   // 메뉴: 중요 표시, 하위 항목 추가, 오늘 할 일로 보내기
   await row('복소수').locator(':scope > .brow [data-menu]').click();
+  assert(!(await page.isVisible('#pop-menu [data-act="flag:star"]')), '표시는 첫 메뉴에 바로 안 나옴');
+  await page.click('#pop-menu [data-act="page:flags"]');
   await page.click('#pop-menu [data-act="flag:star"]');
   assert((await topic('복소수')).flags.star === true, '중요 표시');
+  assert((await page.getAttribute('#pop-menu [data-act="flag:star"]', 'aria-checked')) === 'true', '표시 메뉴가 열린 채로 ✓');
+  await page.keyboard.press('Escape');
   assert((await page.textContent('#board-legend')).includes('중요 1'), '범례에 중요 개수');
   await row('복소수').locator(':scope > .brow [data-menu]').click();
   await page.click('#pop-menu [data-act="add"]');
