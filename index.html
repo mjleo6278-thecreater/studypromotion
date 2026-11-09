@@ -15,9 +15,34 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="fonts/pretendard/pretendard.css">
   <link rel="stylesheet" href="styles.css">
-  <script>try{var d=document.documentElement,t=localStorage.getItem('studypromotion.theme'),a=localStorage.getItem('studypromotion.accent');if(t==='light'||t==='dark')d.setAttribute('data-theme',t);if(a==='pink')d.setAttribute('data-accent',a)}catch(e){}</script>
+  <script>try{var d=document.documentElement,t=localStorage.getItem('studypromotion.theme'),a=localStorage.getItem('studypromotion.accent');if(t==='light'||t==='dark')d.setAttribute('data-theme',t);if(a==='pink')d.setAttribute('data-accent',a);if(localStorage.getItem('studypromotion.skin')==='pink'){d.setAttribute('data-skin','pink');var m=document.querySelector('meta[name=theme-color]');if(m)m.content='#ff5c9a'}}catch(e){}</script>
 </head>
 <body>
+  <!-- 시작 화면: 폰이 체스판을 한 칸씩 올라가 끝 칸에서 퀸으로 승급 -->
+  <div class="splash" id="splash" aria-hidden="true">
+    <svg class="sp-art" viewBox="30 14 60 172" width="84" height="241">
+      <g class="sp-board">
+        <rect x="40" y="20" width="40" height="40" class="sp-sq d"/>
+        <rect x="40" y="60" width="40" height="40" class="sp-sq"/>
+        <rect x="40" y="100" width="40" height="40" class="sp-sq d"/>
+        <rect x="40" y="140" width="40" height="40" class="sp-sq"/>
+        <rect x="40" y="20" width="40" height="40" class="sp-goal"/>
+      </g>
+      <circle class="sp-flash" cx="60" cy="40" r="22"/>
+      <g class="sp-pawn"><g class="sp-hop">
+        <circle cx="0" cy="-8" r="5.6"/>
+        <path d="M-5.4 -2.6h10.8l2.6 11.2h-16z"/>
+        <rect x="-10.5" y="8.4" width="21" height="4.8" rx="2"/>
+      </g></g>
+      <g class="sp-queen"><g class="sp-pop">
+        <path d="M-12 -9 -6.4 2.4 -3 -12 0 1 3 -12 6.4 2.4 12 -9 9.6 8H-9.6z"/>
+        <rect x="-11" y="9.6" width="22" height="4.6" rx="2"/>
+      </g></g>
+    </svg>
+    <div class="sp-name">스터디 프로모션</div>
+    <div class="sp-sub">한 칸씩, 퀸이 될 때까지</div>
+  </div>
+  <script>(function(){var s=document.getElementById('splash');if(!s)return;var force=/[?&]splash\b/.test(location.search);if(!force&&(navigator.webdriver||(function(){try{return sessionStorage.getItem('sp.shown')}catch(e){return 0}})())){s.remove();return}try{sessionStorage.setItem('sp.shown','1')}catch(e){}var rm=matchMedia('(prefers-reduced-motion: reduce)').matches;var t=rm?700:2300;function bye(){if(!s.parentNode)return;s.classList.add('bye');setTimeout(function(){s.remove()},400)}setTimeout(bye,t);s.addEventListener('click',bye)})();</script>
   <svg class="sprite" width="0" height="0" aria-hidden="true" focusable="false">
     <symbol id="i-home" viewBox="0 0 24 24"><path d="M3.6 10.8 12 4l8.4 6.8"/><path d="M5.9 9.2v10.2h12.2V9.2"/><path d="M10 19.4v-5.2h4v5.2"/></symbol>
     <symbol id="i-board" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2.6"/><path fill="currentColor" stroke="none" d="M12 4v8H4V6.6A2.6 2.6 0 0 1 6.6 4z"/><path fill="currentColor" stroke="none" d="M12 20v-8h8v5.4a2.6 2.6 0 0 1-2.6 2.6z"/></symbol>

@@ -1,0 +1,83 @@
+// 디자인 부품 브라우저 테스트: 선택창 시트, 색 팔레트, 전체 핑크 비밀 테마, 시작 화면
+const { chromium } = require('playwright');
+const path = require('path');
+const url = process.env.APP_URL || 'file://' + path.resolve(__dirname, '../index.html');
+
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 390, height: 800 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const assert = (c, msg) => { if (!c) throw new Error('실패: ' + msg); console.log('ok -', msg); };
+
+  // 테스트 브라우저에서는 시작 화면을 건너뛴다
+  await page.goto(url + '#board');
+  assert(!(await page.$('#splash')), '자동화 브라우저에서는 시작 화면 생략');
+
+  // 버튼·입력칸도 앱 글꼴
+  const fam = await page.$eval('.top-icon', (el) => getComputedStyle(el).fontFamily);
+  assert(fam.includes('Pretendard'), '버튼 글꼴도 Pretendard: ' + fam);
+
+  // 시험 선택창 → 앱 모양 시트
+  await page.getByText('예시 범위로 둘러보기').click();
+  await page.waitForTimeout(300);
+  const selBtn = page.locator('[data-for="bb-exam"]');
+  assert(await selBtn.isVisible(), '시험 선택이 앱 모양 버튼으로');
+  assert((await selBtn.textContent()).includes('예시'), '버튼에 지금 고른 시험 이름');
+  await selBtn.click();
+  assert(await page.isVisible('.ui-sheet .ui-opt.on'), '누르면 선택 시트');
+  assert((await page.locator('.ui-sheet .ui-opt').count()) >= 2, '시험 목록 + 새 시험');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  assert(!(await page.$('.ui-back')), 'Esc로 닫힘');
+
+  // 과목 색: ⋯ 메뉴 → 팔레트
+  await page.locator('.bcard-head .bmenu').first().click();
+  await page.click('.pm-color-item');
+  assert((await page.locator('.ui-sheet .ui-sw').count()) === 50, '색 계열 10줄 × 5색 팔레트');
+  const picked = '#2aa893';
+  await page.click(`.ui-sw[data-color="${picked}"]`);
+  await page.waitForTimeout(250);
+  const card = await page.evaluate(() => { const s = window.App.store.get(); return s.topics.find((t) => !t.parentId && t.kind !== 'note').color; });
+  assert(card === picked, '고른 색이 과목 카드에 반영');
+
+  // 계획: 과목 선택창, 과목 색 버튼
+  await page.goto(url + '#plan');
+  assert(await page.isVisible('#subject-form .color-btn'), '과목 추가에 색 버튼 (기본 색 입력창 대신)');
+  await page.click('#subject-form .color-btn');
+  await page.click('.ui-sw[data-color="#e36299"]');
+  await page.fill('#s-name', '미술');
+  await page.click('#subject-form button[type=submit]');
+  const art = await page.evaluate(() => window.App.store.get().subjects.find((s) => s.name === '미술'));
+  assert(art && art.color === '#e36299', '고른 색으로 과목 추가');
+  await page.click('[data-for="t-subject"]');
+  await page.locator('.ui-opt', { hasText: '미술' }).click();
+  assert((await page.$eval('#t-subject', (s) => s.options[s.selectedIndex].textContent)) === '미술', '시트에서 고르면 원래 select 값이 바뀜');
+  assert((await page.textContent('[data-for="t-subject"]')).includes('미술'), '버튼 글자도 바뀜');
+  await page.selectOption('#t-subject', { label: '과목 없음' });
+  assert((await page.textContent('[data-for="t-subject"]')).includes('과목 없음'), '코드로 값을 바꿔도 버튼이 따라옴');
+
+  // 비밀 단어로 전체 핑크 테마 켜고 끄기
+  await page.goto(url + '#about');
+  await page.fill('#egg-input', '전교회장');
+  await page.press('#egg-input', 'Enter');
+  assert((await page.evaluate(() => document.documentElement.dataset.skin)) === 'pink', '비밀 단어로 핑크 테마 켜짐');
+  await page.waitForTimeout(800);
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  assert(bg === 'rgb(255, 240, 245)', '배경까지 핑크: ' + bg);
+  assert((await page.textContent('#egg-out')).includes('핑크 테마가 켜졌어요'), '켜짐 안내');
+  await page.reload();
+  assert((await page.evaluate(() => document.documentElement.dataset.skin)) === 'pink', '다시 열어도 유지');
+  await page.fill('#egg-input', '전교 회장');
+  await page.press('#egg-input', 'Enter');
+  assert(!(await page.evaluate(() => document.documentElement.dataset.skin)), '한 번 더 넣으면 원래 테마');
+
+  // 시작 화면 (?splash로 강제)
+  await page.goto(url.replace(/index\.html$/, 'index.html?splash'));
+  assert(await page.isVisible('#splash'), '시작 화면 표시');
+  await page.waitForTimeout(2900);
+  assert(!(await page.$('#splash')), '애니메이션 뒤 사라짐');
+
+  assert(errors.length === 0, '페이지 오류 없음 ' + errors.join(' / '));
+  await browser.close();
+})().catch((e) => { console.error(e); process.exit(1); });

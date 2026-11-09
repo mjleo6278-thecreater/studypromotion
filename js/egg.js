@@ -29,6 +29,7 @@
     a: {
       items: [
         { ver: '2.6', title: '핑크 테마', text: '계정·설정 › 설정 › 테마 색에서 핑크를 고르면 버튼, 타이머, 진행 칸까지 앱 전체가 핑크로 바뀌어요.' },
+        { ver: '2.7', title: '전체 핑크 테마', text: '이 비밀 입력칸에 특별한 비밀 단어를 넣으면 포인트 색뿐 아니라 배경과 카드까지 앱 전체가 핑크로 바뀌어요. 한 번 더 넣으면 원래대로 돌아와요.' },
       ],
     },
     b: {
@@ -51,6 +52,27 @@
     bebyavobri: 'c', '1sw0f56sgyk': 'c',
   };
 
+  // 테마 비밀 단어: 넣을 때마다 앱 전체(배경까지) 핑크 테마를 켜고 끈다
+  const SKIN_KEYS = { '10zjsj579q2': 'pink' };
+  const SKIN_STORE = 'studypromotion.skin';
+  const skinOf = (word) => SKIN_KEYS[key(word)] || null;
+  function getSkin() { try { return localStorage.getItem(SKIN_STORE) || ''; } catch (e) { return ''; } }
+  function applySkin(skin) {
+    const d = document.documentElement;
+    if (skin) d.setAttribute('data-skin', skin); else d.removeAttribute('data-skin');
+    const m = document.querySelector('meta[name="theme-color"]');
+    if (m) m.setAttribute('content', skin === 'pink' ? '#ff5c9a' : '#0a0a0a');
+  }
+  function toggleSkin(skin) {
+    const next = getSkin() === skin ? '' : skin;
+    try { if (next) localStorage.setItem(SKIN_STORE, next); else localStorage.removeItem(SKIN_STORE); } catch (e) { /* 무시 */ }
+    const d = document.documentElement;
+    d.classList.add('skin-fade');
+    applySkin(next);
+    setTimeout(() => d.classList.remove('skin-fade'), 700);
+    return next;
+  }
+
   function find(word) {
     const n = norm(word);
     if (!n) return null;
@@ -58,14 +80,27 @@
     return id ? Object.assign({ id, name: n }, ENTRIES[id]) : null;
   }
 
-  const lib = { norm, hash, key, find, ENTRIES, KEYS };
+  const lib = { norm, hash, key, find, skinOf, ENTRIES, KEYS, SKIN_KEYS };
   if (typeof module !== 'undefined' && module.exports) { module.exports = lib; return; }
 
   const App = root.App;
   if (!App) return;
   const { $, esc, pawnTrack } = App;
 
+  function showSkin(on) {
+    const out = $('#egg-out');
+    out.hidden = false;
+    out.classList.remove('miss', 'hit');
+    void out.offsetWidth;
+    out.classList.add('hit');
+    out.innerHTML = on
+      ? '<div class="pawn-track egg-track" aria-hidden="true">' + pawnTrack(100) + '</div><h3>핑크 테마가 켜졌어요</h3><p class="muted small">배경부터 버튼, 타이머, 진행 칸까지 앱 전체가 핑크로 바뀌었어요. 같은 비밀 단어를 한 번 더 넣으면 원래 테마로 돌아가요.</p>'
+      : '<h3>원래 테마로 돌아왔어요</h3><p class="muted small">같은 비밀 단어를 다시 넣으면 핑크 테마가 다시 켜져요.</p>';
+  }
+
   function show(word) {
+    const skin = skinOf(word);
+    if (skin) { showSkin(!!toggleSkin(skin)); return true; }
     const out = $('#egg-out');
     const typed = String(word || '').trim().replace(/\s*님$/, '');
     const hit = find(word);
@@ -95,5 +130,6 @@
   });
   $('#egg-input').addEventListener('input', () => { if (!$('#egg-out').classList.contains('hit')) $('#egg-out').hidden = true; });
 
-  App.egg = { show, find, key, KEYS };
+  App.egg = { show, find, key, KEYS, toggleSkin, getSkin };
+  applySkin(getSkin());
 })(typeof window !== 'undefined' ? window : globalThis);

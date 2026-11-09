@@ -1159,3 +1159,98 @@ button, input, select, textarea, optgroup { font-family: inherit; }
 .list-mode .bitem .brow { min-height: 36px; }
 .list-mode .bchk { width: 20px; height: 20px; }
 .list-mode .bcard-head .bchk { width: 22px; height: 22px; }
+
+/* 시작 화면: 폰 → 퀸 승급 */
+.splash { position: fixed; inset: 0; z-index: 2000; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; transition: opacity .38s ease, visibility .38s; cursor: pointer; }
+.splash.bye { opacity: 0; visibility: hidden; pointer-events: none; }
+.sp-art { width: 84px; height: 241px; overflow: visible; margin-bottom: 14px; }
+.sp-sq { fill: #ececec; }
+.sp-sq.d { fill: #cfcfcf; }
+.sp-goal { fill: var(--accent); opacity: 0; animation: sp-goal .5s 1.3s ease-out forwards; }
+.sp-pawn { fill: var(--text); stroke: var(--bg); stroke-width: 1.2; transform: translate(60px, 160px); animation: sp-climb 1.1s .2s cubic-bezier(.5, 0, .3, 1) forwards; }
+.sp-hop { animation: sp-pawn-out .18s 1.3s ease-in forwards; }
+.sp-queen { fill: var(--text); stroke: var(--bg); stroke-width: 1.2; transform: translate(60px, 40px); }
+.sp-pop { transform: scale(0); animation: sp-pop .5s 1.38s cubic-bezier(.3, 1.6, .5, 1) forwards; }
+.sp-flash { fill: none; stroke: var(--accent); stroke-width: 3; opacity: 0; transform-origin: 60px 40px; animation: sp-flash .6s 1.32s ease-out forwards; }
+.sp-name { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); opacity: 0; transform: translateY(6px); animation: sp-up .45s 1.45s ease-out forwards; }
+.sp-sub { font-size: 13px; color: var(--muted); opacity: 0; transform: translateY(6px); animation: sp-up .45s 1.6s ease-out forwards; }
+@keyframes sp-climb {
+  0% { transform: translate(60px, 160px); }
+  10% { transform: translate(60px, 150px); }
+  26%, 34% { transform: translate(60px, 120px); }
+  42% { transform: translate(60px, 110px); }
+  58%, 66% { transform: translate(60px, 80px); }
+  74% { transform: translate(60px, 70px); }
+  90%, 100% { transform: translate(60px, 40px); }
+}
+@keyframes sp-pawn-out { to { transform: scale(0); opacity: 0; } }
+@keyframes sp-pop { from { transform: scale(0) rotate(-12deg); } to { transform: scale(1); } }
+@keyframes sp-flash { 0% { opacity: .9; transform: scale(.4); } 100% { opacity: 0; transform: scale(1.9); } }
+@keyframes sp-goal { from { opacity: 0; } to { opacity: .22; } }
+@keyframes sp-up { to { opacity: 1; transform: none; } }
+.sp-queen { fill: var(--accent); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .sp-sq { fill: #262626; }
+  :root:not([data-theme="light"]) .sp-sq.d { fill: #1a1a1a; }
+}
+:root[data-theme="dark"] .sp-sq { fill: #262626; }
+:root[data-theme="dark"] .sp-sq.d { fill: #1a1a1a; }
+@media (prefers-reduced-motion: reduce) {
+  .sp-pawn, .sp-hop, .sp-flash { display: none; }
+  .sp-pop, .sp-name, .sp-sub, .sp-goal { animation-duration: .01s; animation-delay: 0s; }
+}
+
+/* 비밀 테마: 전체 핑크 (이스터에그 비밀 단어로 켜고 끔) — 배경·카드·선·글자·버튼까지 핑크 계열 */
+:root.skin-fade, :root.skin-fade body, :root.skin-fade .panel, :root.skin-fade .topbar, :root.skin-fade .tabs { transition: background-color .5s, color .5s, border-color .5s; }
+:root[data-skin="pink"] {
+  --bg: #fff0f5; --surface: #fffafc; --text: #3d1228; --muted: #a2607e; --line: #f8d3e1;
+  --ink: #e8467f; --ink-text: #ffffff;
+  --accent: #ff5c9a; --accent-soft: #ffe1ed; --accent-text: #d6246a;
+  --ok: #ff5c9a; --done: #ff5c9a; --done-soft: #ffe1ed; --danger: #d6336c;
+  --board: #fff5f9; --dot: #f4c3d6; --card: #fffafc;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="pink"]:not([data-theme="light"]) {
+    --bg: #1c0b14; --surface: #2a111f; --text: #ffe9f2; --muted: #d08eac; --line: #4a1d34;
+    --ink: #ff7eb0; --ink-text: #1c0b14;
+    --accent: #ff6fa8; --accent-soft: #4d1a33; --accent-text: #ff8fbd;
+    --ok: #ff6fa8; --done: #ff6fa8; --done-soft: #4d1a33; --danger: #ff8a9a;
+    --board: #200d17; --dot: #4f2139; --card: #2a111f;
+  }
+}
+:root[data-skin="pink"][data-theme="dark"] {
+  --bg: #1c0b14; --surface: #2a111f; --text: #ffe9f2; --muted: #d08eac; --line: #4a1d34;
+  --ink: #ff7eb0; --ink-text: #1c0b14;
+  --accent: #ff6fa8; --accent-soft: #4d1a33; --accent-text: #ff8fbd;
+  --ok: #ff6fa8; --done: #ff6fa8; --done-soft: #4d1a33; --danger: #ff8a9a;
+  --board: #200d17; --dot: #4f2139; --card: #2a111f;
+}
+:root[data-skin="pink"] .brand-mark { background: var(--ink) !important; box-shadow: none !important; }
+:root[data-skin="pink"] .btn.primary:hover { background: var(--accent); border-color: var(--accent); }
+:root[data-skin="pink"] .pt-sq { background: #ffe3ee; }
+:root[data-skin="pink"] .pt-sq.dark { background: #f9c6da; }
+:root[data-skin="pink"] .pt-sq.passed { background: #ffb3d1; }
+:root[data-skin="pink"] .pt-sq.dark.passed { background: #ff8fbd; }
+:root[data-skin="pink"] .pt-piece { fill: #3d1228; stroke: #fff; }
+:root[data-skin="pink"] .board-viewport { --sq: rgba(255, 92, 154, .05); }
+:root[data-skin="pink"] .lock-screen { background: #2a0a1a; }
+:root[data-skin="pink"] .lock-screen .lock-sub { color: #ff8fbd; }
+:root[data-skin="pink"] .sp-sq { fill: #ffe3ee; }
+:root[data-skin="pink"] .sp-sq.d { fill: #f9c6da; }
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="pink"]:not([data-theme="light"]) .pt-sq { background: #3a1528; }
+  :root[data-skin="pink"]:not([data-theme="light"]) .pt-sq.dark { background: #2c0f1f; }
+  :root[data-skin="pink"]:not([data-theme="light"]) .pt-sq.passed { background: #7a2650; }
+  :root[data-skin="pink"]:not([data-theme="light"]) .pt-sq.dark.passed { background: #5e1d3e; }
+  :root[data-skin="pink"]:not([data-theme="light"]) .pt-piece { fill: #ffe9f2; stroke: #1c0b14; }
+  :root[data-skin="pink"]:not([data-theme="light"]) .sp-sq { fill: #3a1528; }
+  :root[data-skin="pink"]:not([data-theme="light"]) .sp-sq.d { fill: #2c0f1f; }
+}
+:root[data-skin="pink"][data-theme="dark"] .pt-sq { background: #3a1528; }
+:root[data-skin="pink"][data-theme="dark"] .pt-sq.dark { background: #2c0f1f; }
+:root[data-skin="pink"][data-theme="dark"] .pt-sq.passed { background: #7a2650; }
+:root[data-skin="pink"][data-theme="dark"] .pt-sq.dark.passed { background: #5e1d3e; }
+:root[data-skin="pink"][data-theme="dark"] .pt-piece { fill: #ffe9f2; stroke: #1c0b14; }
+:root[data-skin="pink"][data-theme="dark"] .sp-sq { fill: #3a1528; }
+:root[data-skin="pink"][data-theme="dark"] .sp-sq.d { fill: #2c0f1f; }
+:root[data-skin="pink"] .pt-piece.queen { fill: var(--accent); }
