@@ -76,13 +76,16 @@
   /* ---------- 기록 ---------- */
   // startAt~end를 기록한다. 자정을 넘기면 날마다 나눠서 (하루 공부 시간이 맞게). 1분이 안 되는 조각은 버림. 기록한 초를 돌려줌
   function recordRange(startAt, end, subjectId) {
-    const parts = [];
+    let parts = [];
     for (let a = startAt; a < end;) {
       const b = Math.min(end, nextDay(a));
       const sec = Math.round((b - a) / 1000);
       if (sec >= 60) parts.push({ a, b, sec, last: b === end });
       a = b;
     }
+    // 자정 앞뒤로 조각이 다 1분이 안 되지만 합치면 1분이 넘으면(예: 23:59:30~00:00:40) 끝난 날로 한 번에
+    const total = Math.round((end - startAt) / 1000);
+    if (!parts.length && total >= 60) parts = [{ a: startAt, b: end, sec: total, last: true }];
     if (!parts.length) return 0;
     const sid = subjectId && subjectOf(subjectId) ? subjectId : null;
     store.update((st) => {

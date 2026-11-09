@@ -175,6 +175,16 @@ const SW = 'studypromotion.stopwatch';
   rec = (await swSessions()).filter((s) => s.subjectId === kor.id);
   const y = rec.find((s) => dayKey(s.endedAt) === dayKey(split - 1)), t = rec.find((s) => dayKey(s.endedAt) === dayKey(split));
   assert(rec.length === 2 && y && y.minutes === 30 && t && t.minutes === 40, '자정 전 30분은 어제, 뒤 40분은 오늘로 (' + rec.map((s) => dayKey(s.endedAt) + ' ' + s.minutes).join(', ') + ')');
+  // 자정 앞뒤 조각이 둘 다 1분이 안 되면(23:59:30~00:00:40) 합쳐서 끝난 날로
+  await page.evaluate(([k, id, midnight]) => {
+    const real = Date.now() - window.__shift;
+    window.__shift = midnight + 40e3 - real;
+    localStorage.setItem(k, JSON.stringify({ running: true, startAt: midnight - 30e3, subjectId: id, last: id }));
+    window.dispatchEvent(new StorageEvent('storage', { key: k }));
+  }, [SW, eng.id, split]);
+  await page.tap('#sw-main');
+  const tiny = (await swSessions()).find((s) => s.id === 'sw-' + (split - 30e3));
+  assert(tiny && tiny.sec >= 70 && tiny.sec < 75 && tiny.minutes === 1 && dayKey(tiny.endedAt) === dayKey(split), '자정 앞뒤 짧은 조각은 합쳐서 오늘로 (' + JSON.stringify(tiny) + ')');
   await page.evaluate(() => { window.__shift = window.__saved; });
 
   /* ---------- 3) 집중 타이머와 함께 쓰기 (같은 시간을 두 번 기록하지 않게) ---------- */
