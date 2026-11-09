@@ -1,4 +1,4 @@
-// 타이머 시간 직접 정하기, 스톱워치(열품타처럼 과목별로 공부 시간 재기) 테스트
+// 타이머 시간 직접 정하기, 스톱워치(열품타처럼 과목별로 공부 시간 재기), 홈의 재는 중 표시, 잠금 시간 직접 정하기 테스트
 const { chromium } = require('playwright');
 const http = require('http');
 const fs = require('fs');
@@ -76,6 +76,20 @@ const SW = 'studypromotion.stopwatch';
   assert(await page.isVisible('#len-input') && /1분 이상/.test(await toastText()), '0분은 안 받고 칸이 그대로');
   await page.press('#len-input', 'Escape');
   assert(!(await page.isVisible('#len-input')) && (await state()).settings.focusMin === 180, 'Esc로 닫으면 그대로');
+  // 적다가 바로 ‘시작’을 눌러도 적은 시간으로 시작 (전에는 예전 시간으로 시작했음)
+  const dotOn = () => page.$eval('.tab[data-view="timer"]', (el) => el.classList.contains('timing'));
+  assert(!(await dotOn()), '아무것도 안 돌 때는 하단 타이머 탭에 점 없음');
+  await page.tap('#len-chips [data-len-edit]');
+  await page.fill('#len-input', '65');
+  await page.tap('#timer-start');
+  assert((await state()).settings.focusMin === 65 && (await page.textContent('#timer-start')) === '일시정지' && /^6[45]:\d\d$/.test(await page.textContent('#timer-time')), '분을 적다가 바로 시작을 눌러도 적은 65분으로 시작 (' + (await page.textContent('#timer-time')) + ')');
+  assert(await dotOn() && /집중 타이머 도는 중/.test(await page.getAttribute('.tab[data-view="timer"]', 'aria-label')), '집중 타이머가 돌면 하단 타이머 탭에 점');
+  await page.evaluate(() => App.go('home'));
+  assert(await dotOn() && await page.isHidden('#h-sw-live'), '다른 화면에서도 점이 보임 (홈의 스톱워치 표시는 없음)');
+  await page.evaluate(() => App.go('timer'));
+  await page.tap('#timer-start');
+  assert(!(await dotOn()) && (await page.getAttribute('.tab[data-view="timer"]', 'aria-label')) === null, '일시정지하면 점이 사라짐');
+  await page.tap('#timer-reset');
   // 칸 밖을 누르면 적은 값으로
   await page.tap('#len-chips [data-len-edit]');
   await page.fill('#len-input', '70');
@@ -116,7 +130,7 @@ const SW = 'studypromotion.stopwatch';
   let st = await swState();
   assert(st.running && st.subjectId === math.id, '과목을 누르면 그 과목으로 시작');
   assert(await page.isVisible('#sw-now') && (await page.textContent('#sw-now-name')) === '수학', '지금 재는 과목 표시');
-  assert(await page.$eval('.tab[data-view="timer"]', (el) => el.classList.contains('sw-on')), '하단 타이머 탭에 재는 중 점');
+  assert(await page.$eval('.tab[data-view="timer"]', (el) => el.classList.contains('timing')), '하단 타이머 탭에 재는 중 점');
   assert(/멈추고 기록/.test(await page.textContent('#sw-main')), '큰 버튼이 멈추기로');
   await backdate(30 * 60 + 5);
   await page.waitForTimeout(400);
@@ -125,6 +139,29 @@ const SW = 'studypromotion.stopwatch';
   assert(/^\d\d:\d\d:\d\d · 수학$/.test(await page.title()), '창 제목에 시간 · 과목');
   await page.reload();
   assert((await swState()).running && /^00:30:0\d$/.test(await page.textContent('#sw-now-time')), '앱을 닫았다 열어도 이어서 잼');
+
+  // 홈 ‘오늘 공부’: 기록된 50분 + 재는 중인 30분, 무엇을 재는 중인지 (누르면 스톱워치로)
+  await page.evaluate(() => App.go('home'));
+  await page.waitForTimeout(300);
+  assert(await page.isVisible('#h-sw-live') && (await page.textContent('#h-sw-live .lv-name')) === '수학' && /^30:0\d$/.test(await page.textContent('#h-sw-live b')), '홈에 재는 중인 과목과 시간 (' + (await page.textContent('#h-sw-live')) + ')');
+  assert(/수학 재는 중/.test(await page.getAttribute('#h-sw-live', 'aria-label')), '화면 읽기 프로그램에는 ‘수학 재는 중’');
+  // 과목 이름이 길어도 카드가 넓어져 옆 카드를 밀어내지 않고, 이름만 줄여 보임
+  await page.evaluate((id) => App.store.update((s) => { s.subjects.find((x) => x.id === id).name = '수학 (확률과 통계·미적분 심화 대비 특강)'; }), math.id);
+  assert(await page.evaluate(() => {
+    const c = [...document.querySelectorAll('.cards4 .stat')].map((x) => Math.round(x.getBoundingClientRect().width));
+    const n = document.querySelector('#h-sw-live .lv-name');
+    return c.every((w) => w === c[0]) && n.scrollWidth > n.clientWidth && document.documentElement.scrollWidth <= innerWidth;
+  }), '과목 이름이 길어도 홈 카드 폭은 그대로, 이름만 줄임');
+  await page.evaluate((id) => App.store.update((s) => { s.subjects.find((x) => x.id === id).name = '수학'; }), math.id);
+  assert((await page.textContent('#h-today')) === '1시간 20분', '홈 오늘 공부 = 기록 50분 + 재는 중 30분 (' + (await page.textContent('#h-today')) + ')');
+  assert(await dotOn() && /스톱워치 재는 중/.test(await page.getAttribute('.tab[data-view="timer"]', 'aria-label')), '홈에서도 하단 타이머 탭에 점');
+  await page.evaluate(() => { window.__shift += 60e3; }); // 1분이 지나면
+  await page.waitForTimeout(400);
+  assert((await page.textContent('#h-today')) === '1시간 21분' && /^31:0\d$/.test(await page.textContent('#h-sw-live b')), '1분이 지나면 홈 숫자도 바로 바뀜 (' + (await page.textContent('#h-today')) + ')');
+  await page.evaluate(() => { window.__shift -= 60e3; });
+  await page.waitForTimeout(300);
+  await page.tap('#h-sw-live');
+  assert((await page.evaluate(() => App.view)) === 'timer' && await page.isVisible('#timer-pane-sw'), '홈의 재는 중 표시를 누르면 스톱워치로');
 
   // 재는 중에 영어를 누르면: 수학을 기록하고 영어로
   await page.tap(`#sw-list [data-sw="${eng.id}"]`);
@@ -137,7 +174,10 @@ const SW = 'studypromotion.stopwatch';
   await page.tap('#sw-main');
   assert(!(await swState()).running && (await swSessions()).length === 1 && /1분이 안 돼서/.test(await toastText()), '1분 안 되는 건 기록하지 않음');
   assert(/영어 시작/.test(await page.textContent('#sw-main')), '다음엔 마지막 과목으로 시작');
-  assert(!(await page.$eval('.tab[data-view="timer"]', (el) => el.classList.contains('sw-on'))), '멈추면 점이 사라짐');
+  assert(!(await page.$eval('.tab[data-view="timer"]', (el) => el.classList.contains('timing'))), '멈추면 점이 사라짐');
+  await page.evaluate(() => App.go('home'));
+  assert(await page.isHidden('#h-sw-live') && (await page.textContent('#h-today')) === '1시간 20분', '멈추면 홈의 재는 중 표시는 사라지고, 잰 30분은 기록으로 남아 합계 그대로');
+  await page.evaluate(() => App.go('timer'));
 
   // 스페이스 키 (PC)
   await page.evaluate(() => document.activeElement && document.activeElement.blur());
@@ -251,6 +291,36 @@ const SW = 'studypromotion.stopwatch';
   assert(s6 && (await page.evaluate(() => App.timerBusy())) === null && await page.isVisible('#lock-screen'), '집중 6분을 기록하고 잠금, 타이머는 처음으로');
   await endLock();
   assert(await page.isHidden('#lock-screen'), '잠금 끝 (두 번째)');
+
+  // 잠금 시간 ‘직접’: 타이머처럼 칩을 누르면 분을 적는 칸
+  await page.tap('#lock-chips [data-lock-edit]');
+  assert(await page.evaluate(() => document.activeElement && document.activeElement.id === 'lock-input') && (await page.inputValue('#lock-input')) === '30', '잠금 ‘직접’을 누르면 분을 적는 칸 (지금 고른 30분이 들어 있음)');
+  await page.fill('#lock-input', '45');
+  await page.press('#lock-input', 'Enter');
+  assert((await page.getAttribute('#lock-chips [data-lock="45"]', 'aria-pressed')) === 'true' && (await page.textContent('#lock-chips [data-lock="45"]')) === '45분' && !(await page.isVisible('#lock-input')), '45분 칩이 골라진 상태로');
+  await page.tap('#lock-chips [data-lock-edit]');
+  await page.fill('#lock-input', '900');
+  await page.press('#lock-input', 'Enter');
+  assert(/10시간까지/.test(await toastText()) && (await page.getAttribute('#lock-chips [data-lock="600"]', 'aria-pressed')) === 'true', '잠금은 10시간까지 (넘으면 맞추고 알려 줌)');
+  await page.tap('#lock-chips [data-lock-edit]');
+  await page.fill('#lock-input', '0');
+  await page.press('#lock-input', 'Enter');
+  assert(await page.isVisible('#lock-input') && /1분 이상/.test(await toastText()), '0분은 안 받고 칸이 그대로');
+  await page.press('#lock-input', 'Escape');
+  assert(!(await page.isVisible('#lock-input')) && await page.evaluate(() => document.activeElement && document.activeElement.hasAttribute('data-lock-edit')), 'Esc로 닫으면 ‘직접’ 칩으로');
+  await page.tap('#lock-chips [data-lock="90"]');
+  assert((await page.getAttribute('#lock-chips [data-lock="90"]', 'aria-pressed')) === 'true' && !(await page.$('#lock-chips [data-lock="600"]')), '다른 칩을 고르면 직접 정한 칩은 빠짐');
+  // 적다가 바로 ‘잠금 시작’을 눌러도 적은 시간으로
+  await page.tap('#lock-chips [data-lock-edit]');
+  await page.fill('#lock-input', '25');
+  await page.tap('#lock-start');
+  assert(/^25분 동안 잠글까요\?/.test(await page.textContent('#ask-msg')), '분을 적다가 바로 잠금 시작을 눌러도 적은 25분으로 (' + (await page.textContent('#ask-msg')).split('\n')[0] + ')');
+  await page.tap('#ask-ok');
+  await page.waitForTimeout(100);
+  const lk = await page.evaluate(() => JSON.parse(localStorage.getItem('studypromotion.lock')));
+  assert(lk && lk.minutes === 25 && Math.abs(lk.endAt - lk.startAt - 25 * 60000) < 1000 && /25분 잠금/.test(await page.textContent('#lock-sub')), '물어본 시간 그대로 25분 잠금');
+  await endLock();
+  assert(await page.isHidden('#lock-screen'), '잠금 끝 (세 번째)');
 
   // 범위·홈에서 ▶로 오면 집중 타이머 탭
   await page.tap('[data-ttab="sw"]');

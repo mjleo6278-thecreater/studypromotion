@@ -90,7 +90,8 @@
       </div>
       <div class="cards4">
         <div class="stat"><div class="stat-label">오늘 공부</div><div class="stat-value" id="h-today">0분</div>
-          <div class="bar"><div class="bar-fill" id="h-goalbar"></div></div><div class="stat-sub" id="h-goal"></div><div class="stat-sub" id="h-month-pace" hidden></div></div>
+          <div class="bar"><div class="bar-fill" id="h-goalbar"></div></div><div class="stat-sub" id="h-goal"></div><div class="stat-sub" id="h-month-pace" hidden></div>
+          <button class="stat-live" id="h-sw-live" type="button" hidden></button></div>
         <div class="stat"><div class="stat-label">남은 할 일</div><div class="stat-value" id="h-tasks">0</div><div class="stat-sub" id="h-tasks-sub"></div></div>
         <div class="stat"><div class="stat-label">복습 대기 카드</div><div class="stat-value" id="h-due">0</div><div class="stat-sub"><a href="#review" data-go="review">복습하러 가기</a></div></div>
         <div class="stat"><div class="stat-label">연속 학습일</div><div class="stat-value" id="h-streak">0일</div><div class="stat-sub">하루에 조금이라도</div></div>
@@ -246,12 +247,12 @@
         <div class="lock-setup">
           <h3>🔒 폰 잠금 모드</h3>
           <p class="muted small">정한 시간 동안 이 화면만 보이게 잠가요. 앱을 닫았다 다시 열어도 시간이 끝날 때까지 잠금 화면이 이어지고, 다른 앱으로 나간 횟수가 기록돼요.</p>
-          <div class="lock-chips" id="lock-chips">
+          <div class="lock-chips" id="lock-chips" role="group" aria-label="잠글 시간 고르기">
             <button class="chip" data-lock="30" type="button">30분</button>
             <button class="chip active" data-lock="60" type="button">1시간</button>
             <button class="chip" data-lock="90" type="button">1시간 30분</button>
             <button class="chip" data-lock="120" type="button">2시간</button>
-            <label class="muted small">직접 <input type="number" id="lock-custom" min="1" max="600" placeholder="분"></label>
+            <button class="chip len-edit" data-lock-edit type="button" aria-label="잠글 시간 직접 정하기">직접</button>
           </div>
           <button class="btn primary" id="lock-start" type="button">잠금 시작</button>
         </div>
@@ -525,11 +526,11 @@
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-timer"/></svg>타이머·스톱워치와 폰 잠금 모드</summary>
           <ul>
             <li><b>집중 타이머</b>: 집중(기본 25분)과 휴식(기본 5분)을 번갈아 해요. 시작 전에 25·50·90분(휴식은 5·10·15분)을 바로 고르거나, <b>직접</b>을 눌러 원하는 분을 적을 수 있어요(집중은 180분, 휴식은 60분까지). 시간이 끝나면 소리와 알림으로 알려 주고, 집중한 시간은 과목별로 기록돼요.</li>
-            <li><b>스톱워치</b>: 타이머 화면 위에서 ‘스톱워치’를 고르면 과목을 눌러 공부 시간을 재요. 오늘 공부한 시간과 과목별 시간이 1초마다 쌓이고, 재는 중에 다른 과목을 누르면 지금까지를 기록하고 바로 바꿔요. 멈추면 공부 기록과 통계에 들어가요(1분이 안 되면 빼요). 앱을 닫아도 계속 재고, 자정을 넘기면 날마다 나눠서 기록해요. 같은 시간이 두 번 쌓이지 않게 집중 타이머·잠금 모드와는 하나만 켤 수 있어요.</li>
+            <li><b>스톱워치</b>: 타이머 화면 위에서 ‘스톱워치’를 고르면 과목을 눌러 공부 시간을 재요. 오늘 공부한 시간과 과목별 시간이 1초마다 쌓이고, 재는 중에 다른 과목을 누르면 지금까지를 기록하고 바로 바꿔요. 멈추면 공부 기록과 통계에 들어가요(1분이 안 되면 빼요). 재는 중에는 홈 ‘오늘 공부’에도 바로 더해지고, 아래 타이머 탭에 점이 떠요. 앱을 닫아도 계속 재고, 자정을 넘기면 날마다 나눠서 기록해요. 같은 시간이 두 번 쌓이지 않게 집중 타이머·잠금 모드와는 하나만 켤 수 있어요.</li>
             <li>범위의 ⋯ 메뉴나 홈의 ▶에서 시작하면 무엇을 공부했는지도 함께 남고, 집중이 끝나면 그 범위를 끝냈는지 물어본 뒤 체크해 줘요.</li>
             <li>앱을 닫거나 다른 앱에 다녀와도 타이머는 계속 돌아요. 다시 열면 남은 시간부터 이어지고, 닫혀 있는 동안 끝났다면 그 시간까지 기록해요. 타이머가 도는 동안은 화면이 꺼지지 않아요(계정·설정에서 끌 수 있어요).</li>
             <li>학원·독서실·인강처럼 타이머 없이 공부했다면 <b>＋ 타이머 없이 공부한 시간 기록하기</b>로 날짜와 시간을 직접 남겨요.</li>
-            <li><b>폰 잠금 모드</b>: 정한 시간 동안 잠금 화면만 보여요. 다른 앱으로 나간 시간은 공부 시간에서 빠지고, 그만두려면 3초 동안 길게 눌러야 해요.</li>
+            <li><b>폰 잠금 모드</b>: 30분~2시간 중에 고르거나 ‘직접’을 눌러 10시간까지 원하는 시간을 적고, 그 시간 동안 잠금 화면만 보여요. 다른 앱으로 나간 시간은 공부 시간에서 빠지고, 그만두려면 3초 동안 길게 눌러야 해요.</li>
           </ul>
         </details>
         <details>
@@ -576,6 +577,8 @@
       <div class="panel">
         <h2>업데이트 소식</h2>
         <ul class="news" id="about-news">
+          <li><b>홈에서도 재는 중</b>: 스톱워치로 재는 시간이 홈 ‘오늘 공부’에 바로 더해지고, 누르면 스톱워치로 가요. 집중 타이머나 스톱워치가 도는 동안에는 아래 타이머 탭에 점이 떠요</li>
+          <li><b>잠금 시간 직접 정하기</b>: 폰 잠금 모드도 ‘직접’을 눌러 원하는 시간을 적을 수 있어요 (10시간까지)</li>
           <li><b>스톱워치</b>: 타이머 화면에서 ‘스톱워치’를 고르면 과목을 눌러 공부 시간을 재요. 오늘 공부한 시간과 과목별 시간이 바로바로 쌓여요</li>
           <li><b>타이머 시간 직접 정하기</b>: 25·50·90분 말고도 ‘직접’을 눌러 원하는 시간을 적을 수 있어요</li>
           <li><b>범위 단계 나누기</b>: 항목 옆 ＋로 바로 아래에 넣어 국어 › 비문학 › 수특 1강 › 분석처럼 나누고, ⋯ › 옮기기에서 한 단계 안으로·밖으로·다른 곳으로 옮겨요</li>

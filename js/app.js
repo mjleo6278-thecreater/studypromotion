@@ -327,17 +327,24 @@
     go('board');
   });
 
-  function renderHome() {
+  // 홈 ‘오늘 공부’: 기록된 시간 + 지금 재고 있는 스톱워치 시간 (스톱워치가 1분마다 다시 부른다)
+  function renderHomeToday() {
     const st = store.get();
-    const mins = Stats.minutesOn(st.sessions, now());
+    const live = window.Stopwatch ? window.Stopwatch.todayMinutes() : 0;
+    const mins = Stats.minutesOn(st.sessions, now()) + live;
     const goal = st.settings.dailyGoalMin;
     const pct = goal ? Math.min(100, Math.round((mins / goal) * 100)) : 0;
     $('#h-today').textContent = Stats.formatMinutes(mins);
     $('#h-goalbar').style.width = pct + '%';
     $('#h-goal').textContent = `목표 ${Stats.formatMinutes(goal)} 중 ${pct}%`;
-    const mg = Stats.monthGoal(st.settings.monthlyGoalMin || 0, Stats.lastNMonths(st.sessions, now(), 1)[0].minutes, now(), mins);
+    const mg = Stats.monthGoal(st.settings.monthlyGoalMin || 0, Stats.lastNMonths(st.sessions, now(), 1)[0].minutes + live, now(), mins);
     $('#h-month-pace').hidden = !mg;
     if (mg) $('#h-month-pace').textContent = mg.done ? '이번 달 목표 달성 🎉' : mg.todayLeft ? `월 목표 페이스: 오늘 ${Stats.formatMinutes(mg.todayLeft)} 더` : '월 목표 페이스: 오늘 몫 완료 ✓';
+  }
+
+  function renderHome() {
+    const st = store.get();
+    renderHomeToday();
     const open = st.tasks.filter((t) => !t.done);
     const tk = todayKey();
     const todayList = sortTasks(st.tasks.filter((t) => (!t.done && t.due && t.due <= tk) || (t.done && t.doneAt && Stats.dayKey(t.doneAt) === tk)));
@@ -731,8 +738,28 @@
     renderLenChips();
     if (focusChip) { const b = $('#len-chips [data-len-edit]'); if (b) b.focus(); }
   }
+  // 적는 칸이 열려 있으면 적어 둔 분을 반영하고 닫는다 (숫자를 바꿨을 때만)
+  function commitLenEdit() {
+    if (!lenEditing) return;
+    const inp = $('#len-input');
+    const v = inp ? Math.round(Number(inp.value)) : NaN;
+    if (v >= 1 && v !== store.get().settings[timer.mode === 'focus' ? 'focusMin' : 'breakMin']) setLen(v);
+    else closeLenEdit(false);
+  }
+
+  // 하단 타이머 탭의 점: 집중·휴식 타이머나 스톱워치가 도는 중이면 (다른 화면에 있어도 알 수 있게)
+  function timerDot() {
+    const t = $('.tab[data-view="timer"]');
+    if (!t) return;
+    const sw = !!(window.Stopwatch && window.Stopwatch.running());
+    const on = timer.running || sw;
+    t.classList.toggle('timing', on);
+    if (on) t.setAttribute('aria-label', sw ? '타이머 (스톱워치 재는 중)' : `타이머 (${timer.mode === 'focus' ? '집중' : '휴식'} 타이머 도는 중)`);
+    else t.removeAttribute('aria-label');
+  }
 
   function renderTimer() {
+    timerDot();
     $('.timer-panel').classList.toggle('break', timer.mode === 'break');
     $$('.mode-switch [data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === timer.mode));
     $('#timer-mode').textContent = timer.mode === 'focus' ? '집중' : '휴식';
@@ -749,7 +776,11 @@
     renderTimerFace();
   }
 
-  $('#timer-start').addEventListener('click', () => (timer.running ? pauseTimer() : startTimer()));
+  $('#timer-start').addEventListener('click', () => {
+    if (timer.running) return pauseTimer();
+    commitLenEdit(); // 분을 적다가 바로 ‘시작’을 눌러도 적은 시간으로
+    startTimer();
+  });
   $('#timer-reset').addEventListener('click', () => { timer.startedAt = 0; setMode(timer.mode); });
   $('#timer-skip').addEventListener('click', () => finishPhase(false));
   $('#timer-subject').addEventListener('change', (e) => { timer.subjectId = e.target.value; saveTimer(); });
@@ -771,10 +802,7 @@
     if (!lenEditing) return;
     setTimeout(() => {
       if (!lenEditing || $('#len-chips').contains(document.activeElement)) return;
-      const inp = $('#len-input');
-      const v = inp ? Math.round(Number(inp.value)) : NaN;
-      if (v >= 1 && v !== store.get().settings[timer.mode === 'focus' ? 'focusMin' : 'breakMin']) setLen(v);
-      else closeLenEdit(false);
+      commitLenEdit();
     }, 200); // 다른 칩을 누른 거면 그 클릭이 먼저 처리되게 조금 기다림
   });
   // 집중/휴식 전환 (로그인 버튼 같은 다른 data-mode 버튼은 건드리지 않게 범위를 좁힘)
@@ -1413,7 +1441,7 @@
 
   /* ---------- 렌더 ---------- */
   function render() {
-    if (currentView === 'home') renderHome();
+    if (currentView === 'home') { renderHome(); if (window.Stopwatch) window.Stopwatch.render(); }
     else if (currentView === 'plan') renderPlan();
     else if (currentView === 'timer') { renderTimer(); if (window.Stopwatch) window.Stopwatch.render(); }
     else if (currentView === 'review') {
@@ -1585,7 +1613,7 @@
     toast('테마 색: ' + ACCENTS[accent]);
   });
 
-  window.App = { store, focusOn, pawnTrack, $, $$, esc, toast, ask, uid, go, now, render, openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, version: APP_VERSION, get view() { return currentView; } };
+  window.App = { store, focusOn, pawnTrack, $, $$, esc, toast, ask, uid, go, now, render, openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   go(location.hash.slice(1) || 'home');

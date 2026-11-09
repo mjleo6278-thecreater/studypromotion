@@ -35,6 +35,8 @@
 
   /* ---------- 시간 계산 ---------- */
   const pad = (n) => String(n).padStart(2, '0');
+  // 홈의 좁은 칸용 짧은 시계: 25:12, 1:02:05
+  const shortClock = (sec) => { sec = Math.max(0, Math.floor(sec)); const h = Math.floor(sec / 3600); return (h ? h + ':' : '') + pad(Math.floor((sec % 3600) / 60)) + ':' + pad(sec % 60); };
   function clock(sec) {
     sec = Math.max(0, Math.floor(sec));
     return pad(Math.floor(sec / 3600)) + ':' + pad(Math.floor((sec % 3600) / 60)) + ':' + pad(sec % 60);
@@ -175,6 +177,7 @@
     if (!(App.timerRunning && App.timerRunning())) document.title = '스터디 프로모션';
     navDot();
   }
+  let homeMin = -1;
   function onTick() {
     if (!sw.running) return;
     const t = now();
@@ -182,7 +185,14 @@
     if (s === lastShown) return;
     lastShown = s;
     if (!(App.timerRunning && App.timerRunning())) document.title = `${clock(s)} · ${nameOf(sw.subjectId)}`;
-    if (App.view === 'timer' && tab === 'sw' && !document.hidden) paint(t);
+    if (document.hidden) return;
+    if (App.view === 'timer' && tab === 'sw') paint(t);
+    else if (App.view === 'home') {
+      const el = $('#h-sw-live b');
+      if (el) el.textContent = shortClock(s);
+      const m = Math.floor(runTodaySec(t) / 60);
+      if (m !== homeMin) { homeMin = m; if (App.renderHomeToday) App.renderHomeToday(); } // ‘오늘 공부’ 분은 1분마다
+    }
   }
 
   // 공부하는 동안 화면이 꺼지지 않게 (설정에서 끌 수 있음)
@@ -194,11 +204,18 @@
   function releaseAwake() { try { if (wake) wake.release(); } catch (e) { /* 무시 */ } wake = null; }
 
   /* ---------- 그리기 ---------- */
-  function navDot() {
-    const t = $('.tab[data-view="timer"]');
-    if (!t) return;
-    t.classList.toggle('sw-on', sw.running);
-    if (sw.running) t.setAttribute('aria-label', '타이머 (스톱워치 재는 중)'); else t.removeAttribute('aria-label');
+  function navDot() { if (App.timerDot) App.timerDot(); }
+
+  // 홈 ‘오늘 공부’ 칸 아래: 재는 중이면 과목과 이번 시간 (누르면 스톱워치로)
+  function renderHomeLive() {
+    const el = $('#h-sw-live');
+    if (!el) return;
+    el.hidden = !sw.running;
+    if (!sw.running) { el.innerHTML = ''; return; }
+    const s = subjectOf(sw.subjectId);
+    el.innerHTML = `<i class="dot${s ? '' : ' none'}"${s ? ` style="background:${esc(s.color)}"` : ''}></i><span class="lv-txt"><span class="lv-name">${esc(nameOf(sw.subjectId))}</span><span class="lv-state">재는 중</span></span><b>${shortClock(runSec(now()))}</b>`;
+    el.setAttribute('aria-label', `스톱워치: ${nameOf(sw.subjectId)} 재는 중, 눌러서 스톱워치 열기`);
+    el.title = `${nameOf(sw.subjectId)} 재는 중 · 눌러서 스톱워치 열기`;
   }
 
   function renderTabs() {
@@ -222,6 +239,7 @@
   function render() {
     renderTabs();
     navDot();
+    if (App.view === 'home') { renderHomeLive(); homeMin = -1; if (App.renderHomeToday) App.renderHomeToday(); }
     if (App.view !== 'timer' || tab !== 'sw') return;
     countBase();
     const list = subjects();
@@ -271,6 +289,8 @@
     $(`[data-ttab="${tab}"]`).focus();
   });
   $('#sw-main').addEventListener('click', () => toggle());
+  const homeLive = $('#h-sw-live');
+  if (homeLive) homeLive.addEventListener('click', () => { showTab('sw'); App.go('timer'); });
   $('#sw-list').addEventListener('click', (e) => {
     const b = e.target.closest('[data-sw]');
     if (b) start(b.dataset.sw);
@@ -291,7 +311,10 @@
     render();
   });
 
-  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: () => tab, showTab, render };
+  // 오늘(자정 이후) 재고 있는 시간(분). 홈 ‘오늘 공부’에 더한다
+  const todayMinutes = () => sw.running ? Math.floor(runTodaySec(now()) / 60) : 0;
+
+  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: () => tab, showTab, render, todayMinutes };
   if (sw.running) begin();
   render();
 })();

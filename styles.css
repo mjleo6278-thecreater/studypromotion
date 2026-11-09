@@ -522,7 +522,6 @@ body.board-mode main { margin: 0; width: 100%; }
 .lock-setup { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
 .lock-setup h3 { font-size: 15px; margin: 0 0 4px; }
 .lock-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; align-items: center; }
-.lock-chips input { width: 76px; }
 .lock-screen { position: fixed; inset: 0; z-index: 1000; background: #000; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px 16px calc(24px + env(safe-area-inset-bottom)); text-align: center; touch-action: none; user-select: none; -webkit-user-select: none; }
 .lock-screen[hidden] { display: none; }
 .lock-icon { width: 64px; height: 64px; opacity: .9; }
@@ -1387,7 +1386,7 @@ input[type="search"]::-webkit-search-cancel-button {
 
 /* ===================== 기능: 타이머 시간 직접 정하기 ===================== */
 .len-chips { flex-wrap: wrap; align-items: center; row-gap: 6px; }
-.len-chips .len-edit { border-style: dashed; }
+.chip.len-edit { border-style: dashed; }
 .len-custom { display: inline-flex; align-items: center; gap: 3px; margin: -2px 0; border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 2px 1px 8px; background: var(--surface); }
 .len-custom input { width: 2.7em; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 16px; font-weight: 700; line-height: 1.2; text-align: center; color: var(--text); padding: 1px 0; font-variant-numeric: tabular-nums; }
 .len-custom input:focus { outline: none; }
@@ -1436,8 +1435,22 @@ input[type="search"]::-webkit-search-cancel-button {
 .sw-list-head, .sw-list, .sw-empty, .sw-hint { width: 100%; max-width: 560px; align-self: center; } /* PC에서 너무 넓게 퍼지지 않게 */
 .sw-panel .log-link { margin-top: 12px; }
 .tab .ico { position: relative; }
-.tab.sw-on .ico::after { content: ''; position: absolute; top: -1px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface); }
+.tab.timing .ico::after { content: ''; position: absolute; top: -1px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface); }
 @media (prefers-reduced-motion: no-preference) {
   .sw-row.on .dot, .sw-now .dot { animation: sw-pulse 1.6s ease-in-out infinite; }
 }
 @keyframes sw-pulse { 50% { opacity: .3; } }
+
+/* ===================== 기능: 홈에 재는 중인 스톱워치, 잠금 시간 직접 입력 ===================== */
+/* width 0 + min-width 100%: 긴 과목 이름이 카드를 넓혀 옆 카드를 밀어내지 않게 (카드 폭에 맞춰 이름을 줄임) */
+.stat-live { display: flex; align-items: center; gap: 4px; box-sizing: border-box; width: 0; min-width: 100%; margin-top: 8px; padding: 6px 8px; border: 0; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text, var(--accent)); font: inherit; font-size: 12px; font-weight: 600; text-align: left; cursor: pointer; }
+.stat-live[hidden] { display: none; }
+/* 과목 이름과 ‘재는 중’: 한 줄에 다 들어가면 둘 다, 모자라면 ‘재는 중’은 다음 줄로 넘겨 가리고(과목 이름 우선), 이름도 길면 … 으로 줄임 */
+.stat-live .lv-txt { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-content: flex-start; column-gap: 4px; height: 18px; line-height: 18px; overflow: hidden; }
+.stat-live .lv-name { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-live .lv-state { flex: none; white-space: nowrap; }
+.stat-live b { flex: none; margin-left: auto; padding-left: 2px; font-variant-numeric: tabular-nums; }
+.stat-live .dot { width: 8px; height: 8px; margin: 0; flex: none; }
+.stat-live .dot.none { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
+.stat-live:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: no-preference) { .stat-live .dot { animation: sw-pulse 1.6s ease-in-out infinite; } }
