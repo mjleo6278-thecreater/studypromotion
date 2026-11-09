@@ -167,6 +167,7 @@
     Object.defineProperty(sel, 'selectedIndex', { configurable: true, get() { return protoIdx.get.call(this); }, set(v) { protoIdx.set.call(this, v); refresh(this); } });
     new MutationObserver(() => refresh(sel)).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'hidden', 'selected'] });
     sel.addEventListener('change', () => refresh(sel));
+    sel.addEventListener('focus', () => btn.focus()); // 코드가 숨긴 select에 초점을 주면 버튼으로
     btn.addEventListener('click', () => openSelect(sel));
     btn.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); openSelect(sel); }
@@ -356,6 +357,7 @@
     new MutationObserver(() => paintDate(input)).observe(input, { attributes: true, attributeFilter: ['disabled', 'hidden', 'min', 'max'] });
     input.addEventListener('input', () => paintDate(input));
     input.addEventListener('change', () => paintDate(input));
+    input.addEventListener('focus', () => btn.focus());
     btn.addEventListener('click', () => openDate(input));
     const lab = input.closest('label');
     if (lab) lab.addEventListener('click', (e) => { if (e.target === lab) { e.preventDefault(); btn.focus(); } });

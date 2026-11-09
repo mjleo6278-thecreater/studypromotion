@@ -1350,3 +1350,22 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .move-opt[disabled]:hover { background: none; }
 .move-opt span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .move-opt small { flex: none; color: var(--accent-text, var(--accent)); font-size: 12px; font-weight: 600; }
+
+/* 넓은 화면: 기준 버튼 없이 여는 시트(과목 색 등)는 가운데 창으로 */
+@media (min-width: 721px) {
+  .ui-back:not(.pop) { align-items: center; padding: 16px; }
+  .ui-back:not(.pop) .ui-sheet { border-radius: 18px; max-width: 460px; transform: translateY(12px) scale(.98); opacity: 0; transition: transform .2s ease, opacity .2s ease; padding-bottom: 0; }
+  .ui-back:not(.pop).in .ui-sheet { transform: none; opacity: 1; }
+  .ui-back:not(.pop).out .ui-sheet { transform: translateY(12px) scale(.98); opacity: 0; }
+  .ui-back:not(.pop) .ui-grip { display: none; }
+  .ui-back:not(.pop) .ui-sheet-head { padding-top: 16px; }
+}
+/* 다크 모드: 창 테두리를 살짝 보이게 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ui-sheet, :root:not([data-theme="light"]) .ask-box { box-shadow: 0 0 0 1px var(--line), 0 12px 40px rgba(0, 0, 0, .5); }
+}
+:root[data-theme="dark"] .ui-sheet, :root[data-theme="dark"] .ask-box { box-shadow: 0 0 0 1px var(--line), 0 12px 40px rgba(0, 0, 0, .5); }
+/* 비밀 핑크 테마가 켜져 있으면 테마 색 고르기는 잠시 쉰다 (핑크가 모든 색을 덮으므로) */
+:root[data-skin="pink"] .accent-field { flex-wrap: wrap; }
+:root[data-skin="pink"] .accent-picks { opacity: .4; pointer-events: none; }
+:root[data-skin="pink"] .accent-field::after { content: '지금은 비밀 테마(전체 핑크)가 켜져 있어요. 비밀 단어를 한 번 더 넣으면 원래대로 돌아와요.'; flex-basis: 100%; font-size: 12px; color: var(--muted); margin-top: 6px; word-break: keep-all; }
