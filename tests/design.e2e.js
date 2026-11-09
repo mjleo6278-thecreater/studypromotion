@@ -57,6 +57,25 @@ const url = process.env.APP_URL || 'file://' + path.resolve(__dirname, '../index
   await page.selectOption('#t-subject', { label: '과목 없음' });
   assert((await page.textContent('[data-for="t-subject"]')).includes('과목 없음'), '코드로 값을 바꿔도 버튼이 따라옴');
 
+  // 날짜: 앱 모양 달력 시트
+  assert(await page.isVisible('[data-for="t-due"]'), '마감일이 달력 버튼으로');
+  await page.click('[data-for="t-due"]');
+  assert(await page.isVisible('.ui-date .ui-day.today'), '달력 시트에 오늘 표시');
+  await page.click('.ui-cal-nav[data-nav="1"]');
+  await page.locator('.ui-date .ui-day', { hasText: /^15$/ }).click();
+  const due = await page.$eval('#t-due', (i) => i.value);
+  const d = new Date(); const nm = new Date(d.getFullYear(), d.getMonth() + 1, 15);
+  const want = `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, '0')}-15`;
+  assert(due === want, '다음 달 15일을 고르면 input 값이 바뀜: ' + due);
+  assert((await page.textContent('[data-for="t-due"]')).includes(`${nm.getMonth() + 1}월 15일`), '버튼에 고른 날짜');
+  await page.fill('#t-due', '');
+  assert((await page.textContent('[data-for="t-due"]')).includes('마감일'), '값을 지우면 안내 글자');
+  await page.click('[data-for="t-due"]');
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  const tmr = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+  assert((await page.$eval('#t-due', (i) => i.value)) === `${tmr.getFullYear()}-${String(tmr.getMonth() + 1).padStart(2, '0')}-${String(tmr.getDate()).padStart(2, '0')}`, '키보드(→, Enter)로 내일 고르기');
+
   // 비밀 단어로 전체 핑크 테마 켜고 끄기
   await page.goto(url + '#about');
   await page.fill('#egg-input', '전교회장');

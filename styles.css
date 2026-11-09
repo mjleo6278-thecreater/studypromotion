@@ -1254,3 +1254,70 @@ button, input, select, textarea, optgroup { font-family: inherit; }
 :root[data-skin="pink"][data-theme="dark"] .sp-sq { fill: #3a1528; }
 :root[data-skin="pink"][data-theme="dark"] .sp-sq.d { fill: #2c0f1f; }
 :root[data-skin="pink"] .pt-piece.queen { fill: var(--accent); }
+
+/* 날짜 고르기: 달력 시트 */
+.date-btn .sel-label.ph { color: var(--muted); }
+.ui-back.pop .ui-date { min-width: 300px !important; }
+.ui-cal-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 8px; }
+.ui-cal-head b { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ui-cal-nav { width: 38px; height: 38px; border-radius: 50%; border: 0; background: none; color: var(--text); font-size: 22px; line-height: 1; cursor: pointer; }
+.ui-cal-nav:hover, .ui-cal-nav:focus-visible { background: var(--bg); outline: none; }
+.ui-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; padding: 0 2px; }
+.ui-cal-wd { text-align: center; font-size: 12px; color: var(--muted); padding: 4px 0 6px; font-weight: 600; }
+.ui-cal-wd.sun, .ui-day.sun { color: var(--danger); }
+.ui-day {
+  aspect-ratio: 1; max-height: 46px; width: 100%; border: 0; border-radius: 50%; background: none; color: var(--text);
+  font: inherit; font-size: 15px; font-variant-numeric: tabular-nums; cursor: pointer; display: grid; place-items: center; position: relative; padding: 0;
+}
+.ui-back.pop .ui-day { font-size: 14px; max-height: 38px; }
+.ui-day:hover { background: var(--bg); }
+.ui-day:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ui-day.today { font-weight: 800; color: var(--accent-text, var(--accent)); }
+.ui-day.today::after { content: ''; position: absolute; bottom: 14%; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--accent); }
+.ui-day.on, .ui-day.on:hover { background: var(--ink); color: var(--ink-text); font-weight: 700; }
+.ui-day.on::after { background: var(--ink-text); }
+.ui-day:disabled { opacity: .3; cursor: default; background: none; }
+.ui-cal-foot { display: flex; justify-content: space-between; gap: 8px; padding: 12px 4px 2px; }
+.ui-cal-foot .btn { padding: 7px 14px; font-size: 14px; }
+.ui-cal-foot [data-clear] { color: var(--muted); }
+
+/* 체크 상자: 브라우저 기본 모양 대신 둥근 네모 */
+input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; flex: none; margin: 0; padding: 0;
+  width: 20px; height: 20px; min-width: 0; border: 2px solid var(--muted); border-radius: 6px;
+  background: var(--surface) center / 14px 14px no-repeat; cursor: pointer; vertical-align: -4px;
+  transition: background-color .12s, border-color .12s;
+}
+input[type="checkbox"]:checked {
+  background-color: var(--accent); border-color: var(--accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+input[type="checkbox"]:focus { outline: none; }
+input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chip input[type="checkbox"], .bl-toggle input[type="checkbox"], .sl-left input[type="checkbox"] { width: 16px; height: 16px; border-radius: 5px; border-width: 1.5px; background-size: 12px 12px; }
+.chip:has(input:checked) { border-color: var(--text); color: var(--text); }
+/* 설정의 켜기/끄기는 스위치로 */
+.check-field input[type="checkbox"] { width: 42px; height: 26px; border: 0; border-radius: 999px; background: var(--line); background-image: none; position: relative; }
+.check-field input[type="checkbox"]::before { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .18s ease; }
+.check-field input[type="checkbox"]:checked { background: var(--accent); background-image: none; }
+.check-field input[type="checkbox"]:checked::before { transform: translateX(16px); }
+
+/* 슬라이더 */
+input[type="range"] { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
+input[type="range"]:focus { outline: none; }
+input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--accent) var(--pct, 0%), var(--line) var(--pct, 0%)); }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; margin-top: -8px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); box-shadow: 0 1px 4px rgba(0, 0, 0, .18); }
+input[type="range"]:focus-visible::-webkit-slider-thumb { outline: 2px solid var(--accent); outline-offset: 2px; }
+input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: var(--line); }
+input[type="range"]::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--accent); }
+input[type="range"]::-moz-range-thumb { width: 18px; height: 18px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent); }
+
+/* 다크 모드에서는 스크롤바·자동완성 같은 브라우저 부품도 어둡게 */
+:root { color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
+:root[data-theme="dark"] { color-scheme: dark; }
+/* 코드 표시 안의 한글도 앱 글꼴로 */
+code, kbd { font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Pretendard Variable", "Pretendard", monospace; }
+/* 숫자 칸의 위아래 화살표(브라우저 기본) 숨김: 빠른 선택 칩과 키보드로 고른다 */
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
