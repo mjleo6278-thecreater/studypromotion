@@ -198,3 +198,42 @@ test('오늘 할 범위 추천: 과목을 번갈아, 오늘 할 양을 채울 �
   nodes.forEach((n) => { n.done = true; n.pct = 100; });
   assert.deepStrictEqual(Scope.suggestToday(nodes, 'e1', 60, 5), []);
 });
+
+test('단계 바꾸기: 안으로·밖으로·다른 곳으로 (국어 › 비문학 › 수특 1강 › 분석)', () => {
+  const nodes = [];
+  Scope.addOutline(nodes, 'e9', Scope.parseOutline('# 국어\n- 비문학\n- 수특 1강\n- 분석\n- 수특 2강\n# 수학\n- 다항식'), uid);
+  const by = (t) => nodes.find((n) => n.title === t);
+  const kidsOf = (t) => Scope.childrenOf(nodes, by(t).id, 'e9').map((n) => n.title);
+  // 과목 자체나 맨 위 항목은 안으로 못 넣음
+  assert.strictEqual(Scope.indent(nodes, by('국어').id), false);
+  assert.strictEqual(Scope.indent(nodes, by('비문학').id), false);
+  // 수특 1강 → 비문학 아래, 분석 → 수특 1강 아래 (안으로 두 번)
+  assert.strictEqual(Scope.indent(nodes, by('수특 1강').id), true);
+  assert.deepStrictEqual(kidsOf('국어'), ['비문학', '분석', '수특 2강']);
+  assert.deepStrictEqual(kidsOf('비문학'), ['수특 1강']);
+  Scope.indent(nodes, by('분석').id); // 바로 위 = 비문학 → 비문학 아래 끝
+  assert.deepStrictEqual(kidsOf('비문학'), ['수특 1강', '분석']);
+  Scope.indent(nodes, by('분석').id); // 바로 위 = 수특 1강
+  assert.deepStrictEqual(kidsOf('수특 1강'), ['분석']);
+  assert.strictEqual(Scope.depthOf(nodes, by('분석').id), 3);
+  // 밖으로: 분석은 수특 1강 바로 다음으로
+  assert.strictEqual(Scope.outdent(nodes, by('분석').id), true);
+  assert.deepStrictEqual(kidsOf('비문학'), ['수특 1강', '분석']);
+  // 과목 바로 아래 항목은 밖으로 못 뺌
+  assert.strictEqual(Scope.outdent(nodes, by('수특 2강').id), false);
+  // 다른 곳으로: 수특 2강 → 비문학 아래 끝, 자기 하위로는 못 옮김
+  assert.strictEqual(Scope.moveTo(nodes, by('수특 2강').id, by('비문학').id), true);
+  assert.deepStrictEqual(kidsOf('비문학'), ['수특 1강', '분석', '수특 2강']);
+  assert.deepStrictEqual(kidsOf('국어'), ['비문학']);
+  assert.strictEqual(Scope.moveTo(nodes, by('비문학').id, by('수특 1강').id), false);
+  assert.strictEqual(Scope.moveTo(nodes, by('비문학').id, by('국어').id), false); // 이미 그곳
+  // 다른 과목으로도
+  assert.strictEqual(Scope.moveTo(nodes, by('분석').id, by('수학').id), true);
+  assert.deepStrictEqual(kidsOf('수학'), ['다항식', '분석']);
+  // 순서 값이 겹치지 않게 다시 매김
+  const orders = Scope.childrenOf(nodes, by('비문학').id, 'e9').map((n) => n.order);
+  assert.deepStrictEqual(orders, [0, 1]);
+  // 옮길 수 있는 곳: 자기 자신과 하위는 빼고 트리 순서로, 지금 있는 곳 표시
+  const targets = Scope.moveTargets(nodes, by('비문학').id);
+  assert.deepStrictEqual(targets.map((x) => [x.title, x.depth, x.current]), [['국어', 0, true], ['수학', 0, false], ['다항식', 1, false], ['분석', 1, false]]);
+});

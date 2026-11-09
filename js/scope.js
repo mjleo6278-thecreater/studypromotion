@@ -211,6 +211,75 @@
     return sib.length ? Math.max(...sib.map((s) => s.order || 0)) + 1 : 0;
   }
 
+  /* ---------- 단계 바꾸기 (가지치기): nodes를 직접 고치고, 바뀌었으면 true ---------- */
+  function siblingsOf(nodes, n) {
+    return childrenOf(nodes, n.parentId, n.examId).filter((x) => x.kind !== 'note');
+  }
+  function renumber(list) { list.forEach((x, i) => { x.order = i; }); }
+
+  // 한 단계 안으로: 바로 위 항목의 마지막 하위 항목이 된다 (과목 자체는 못 옮김)
+  function indent(nodes, id) {
+    const n = nodes.find((x) => x.id === id);
+    if (!n || !n.parentId || n.kind === 'note') return false;
+    const sib = siblingsOf(nodes, n);
+    const i = sib.findIndex((x) => x.id === id);
+    if (i <= 0) return false;
+    const prev = sib[i - 1];
+    const order = nextOrder(nodes, prev.id, n.examId);
+    n.parentId = prev.id;
+    n.order = order;
+    prev.collapsed = false;
+    renumber(sib.filter((x) => x !== n));
+    return true;
+  }
+
+  // 한 단계 밖으로: 지금 상위 항목 바로 다음 자리로 (과목 바로 아래 항목은 과목이 될 수 없어 못 함)
+  function outdent(nodes, id) {
+    const n = nodes.find((x) => x.id === id);
+    if (!n || !n.parentId) return false;
+    const parent = nodes.find((x) => x.id === n.parentId);
+    if (!parent || !parent.parentId) return false;
+    const rest = siblingsOf(nodes, n).filter((x) => x !== n);
+    const outer = siblingsOf(nodes, parent);
+    n.parentId = parent.parentId;
+    outer.splice(outer.indexOf(parent) + 1, 0, n);
+    renumber(outer);
+    renumber(rest);
+    return true;
+  }
+
+  // 다른 항목(또는 과목) 아래 맨 끝으로 옮긴다. 자기 자신이나 자기 하위로는 못 옮김
+  function moveTo(nodes, id, parentId) {
+    const n = nodes.find((x) => x.id === id);
+    const dest = nodes.find((x) => x.id === parentId);
+    if (!n || !dest || !n.parentId || n.kind === 'note' || dest.kind === 'note' || dest.examId !== n.examId) return false;
+    if (n.parentId === parentId || subtreeIds(nodes, id).includes(parentId)) return false;
+    const rest = siblingsOf(nodes, n).filter((x) => x !== n);
+    const order = nextOrder(nodes, parentId, n.examId);
+    n.parentId = parentId;
+    n.order = order;
+    dest.collapsed = false;
+    renumber(rest);
+    return true;
+  }
+
+  // 옮길 수 있는 곳 (트리 순서, 자기 자신과 하위·메모는 빼고). current = 지금 들어 있는 곳
+  function moveTargets(nodes, id) {
+    const n = nodes.find((x) => x.id === id);
+    if (!n) return [];
+    const index = indexByParent(nodes);
+    const banned = new Set(subtreeIds(nodes, id, index));
+    const out = [];
+    (function walk(list, depth) {
+      for (const c of list) {
+        if (c.kind === 'note' || banned.has(c.id)) continue;
+        out.push({ id: c.id, title: c.title, depth, current: c.id === n.parentId });
+        walk(kids(index, c.id), depth + 1);
+      }
+    })(kids(index, 'root:' + n.examId), 0);
+    return out;
+  }
+
   /**
    * 들여쓰기 목록을 트리로 바꾼다.
    * 지원: 스페이스/탭 들여쓰기, "- ", "* ", "• ", "1. ", "1) ", "# 제목"(#의 개수 = 단계)
@@ -435,6 +504,7 @@
     CARD_W, GAP, COLORS, SAMPLE,
     childrenOf, indexByParent, subtreeIds, leavesUnder, progress, examProgress,
     setDone, setLeafProgress, leafPct, summarize, timePlan, touchPlan, suggestToday, toggle, removeSubtree, depthOf, nextOrder,
+    indent, outdent, moveTo, moveTargets,
     parseOutline, countOutline, addOutline, autoLayout, estimateHeight, bounds,
     daysUntil, ddayLabel, toOutline, pace, pawnRank,
   };
