@@ -39,7 +39,7 @@
   }
 
   function subjectOptions(selected, includeNone) {
-    const opts = store.get().subjects.map((s) => `<option value="${esc(s.id)}"${s.id === selected ? ' selected' : ''}>${esc(s.name)}</option>`);
+    const opts = store.get().subjects.map((s) => `<option value="${esc(s.id)}" data-color="${esc(s.color || '')}"${s.id === selected ? ' selected' : ''}>${esc(s.name)}</option>`);
     if (includeNone) opts.unshift(`<option value=""${!selected ? ' selected' : ''}>과목 없음</option>`);
     return opts.join('');
   }

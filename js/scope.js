@@ -7,7 +7,7 @@
 (function (root) {
   const CARD_W = 300;
   const GAP = 40;
-  const COLORS = ['#e86a5c', '#4a7fd4', '#3fa774', '#c98a1a', '#8a6fd1', '#d0638f', '#2a9fb0', '#7d8a2e'];
+  const COLORS = ['#e05a4f', '#3d96e0', '#45a865', '#e3ae24', '#9468d9', '#e36299', '#2aa893', '#ef7d3c']; // 새 과목에 차례로 주는 색 (UI 팔레트의 중간 톤)
 
   function childrenOf(nodes, parentId, examId) {
     return nodes

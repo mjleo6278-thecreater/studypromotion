@@ -819,11 +819,11 @@
       items.push(['to-task', '오늘 할 일로 보내기']);
       if (isCard) { items.push(['collapse-all', '안쪽 모두 접기']); items.push(['expand-all', '안쪽 모두 펼치기']); }
       if (!isCard || mode === 'list') { items.push(['up', '위로 옮기기']); items.push(['down', '아래로 옮기기']); }
-      if (isCard) items.push(['colors', '']);
+      if (isCard) items.push(['colors', '과목 색 바꾸기']);
       items.push(['delete', isCard ? '과목 삭제' : '항목 삭제', 'danger']);
     }
     menu.innerHTML = items.map(([act, label, cls]) => act === 'colors'
-      ? `<div class="pm-colors">${Scope.COLORS.map((c) => `<button data-act="color" data-val="${c}" style="--c:${c}" aria-label="색 ${c}"></button>`).join('')}</div>`
+      ? `<button role="menuitem" data-act="colors" class="pm-color-item"><i class="pm-swatch" style="background:${esc(n.color || '#888')}"></i>${esc(label)}</button>`
       : `<button role="menuitem" data-act="${act}" class="${cls || ''}">${esc(label)}</button>`).join('');
     menu.dataset.id = id;
     menu.hidden = false;
@@ -883,6 +883,10 @@
     } else if (act === 'collapse-all' || act === 'expand-all') {
       const ids = new Set(Scope.subtreeIds(st().topics, id));
       mutate((s) => s.topics.forEach((t) => { if (ids.has(t.id) && t.id !== id) t.collapsed = act === 'collapse-all'; }), false);
+    } else if (act === 'colors') {
+      // 색 계열별 팔레트에서 고른다
+      const c = window.UI ? await UI.pickColor({ title: '과목 색', current: n.color }) : null;
+      if (c) mutate((s) => { const t = s.topics.find((x) => x.id === id); if (t) t.color = c; });
     } else if (act === 'color') {
       mutate((s) => { s.topics.find((t) => t.id === id).color = b.dataset.val; });
     } else if (act === 'up' || act === 'down') {
