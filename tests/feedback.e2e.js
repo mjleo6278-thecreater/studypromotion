@@ -81,7 +81,8 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   egg = await page.$eval('#egg-out', (o) => o.textContent);
   assert(egg.includes('만든 사람') && egg.includes('기록 지키기'), '만든 사람 이스터에그');
   assert(await page.$$eval('#egg-out .pt-sq', (s) => s.length) === 8, '퀸으로 승급한 체스 칸');
-  assert(await page.$eval('#app-version', (v) => v.textContent.includes('2.6')), '버전 2.6');
+  const ver = await page.evaluate(() => App.version);
+  assert(/^\d+\.\d+$/.test(ver) && await page.$eval('#app-version', (v, ver) => v.textContent.includes(ver), ver), '버전 ' + ver);
 
   // 4) 업데이트 때 자동 백업 → 기록이 사라져도 되돌리기
   await page.evaluate(() => {
@@ -96,8 +97,8 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   await page.waitForFunction(() => App.backup && App.backup.list().then((l) => l.some((s) => s.reason === 'update')).catch(() => false), null, { timeout: 5000 }).catch(() => {});
   let list = await page.evaluate(() => App.backup.list().then((l) => l.map((s) => ({ reason: s.reason, note: s.note, has: s.text.includes('keep1') }))));
   const upd = list.find((s) => s.reason === 'update');
-  assert(upd && upd.note === '2.5 → 2.6' && upd.has, '앱이 업데이트되면 업데이트 전 기록을 자동 백업 (' + JSON.stringify(list) + ')');
-  assert(await page.evaluate(() => localStorage.getItem('studypromotion.appVersion')) === '2.6', '지금 버전을 기억');
+  assert(upd && upd.note === '2.5 → ' + ver && upd.has, '앱이 업데이트되면 업데이트 전 기록을 자동 백업 (' + JSON.stringify(list) + ')');
+  assert(await page.evaluate(() => localStorage.getItem('studypromotion.appVersion')) === ver, '지금 버전을 기억');
   assert(await page.evaluate(() => JSON.parse(localStorage.getItem('studypromotion.v1')).futureThing.length === 1), '모르는 항목도 그대로 저장돼 있음');
   // 기록이 사라진 상황
   await page.evaluate(() => App.store.update((s) => { s.tasks = []; s.sessions = []; }));

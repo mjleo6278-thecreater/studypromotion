@@ -1380,3 +1380,60 @@ input[type="search"]::-webkit-search-cancel-button {
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 4l8 8M12 4l-8 8' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 4l8 8M12 4l-8 8' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
+
+/* ===================== 기능: 타이머 시간 직접 정하기 ===================== */
+.len-chips { flex-wrap: wrap; align-items: center; row-gap: 6px; }
+.len-chips .len-edit { border-style: dashed; }
+.len-custom { display: inline-flex; align-items: center; gap: 3px; margin: -2px 0; border: 1.5px solid var(--accent); border-radius: 999px; padding: 1px 2px 1px 8px; background: var(--surface); }
+.len-custom input { width: 2.7em; border: 0; border-radius: 6px; background: none; font: inherit; font-size: 16px; font-weight: 700; line-height: 1.2; text-align: center; color: var(--text); padding: 1px 0; font-variant-numeric: tabular-nums; }
+.len-custom input:focus { outline: none; }
+.len-custom span { font-size: 12px; color: var(--muted); margin-right: 2px; }
+.len-custom button { border: 0; border-radius: 999px; background: var(--ink); color: var(--ink-text); font: inherit; font-size: 12px; font-weight: 700; padding: 4px 10px; cursor: pointer; }
+
+/* ===================== 기능: 스톱워치 (집중 타이머 | 스톱워치 탭) ===================== */
+.timer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.timer-head h1 { margin: 0; }
+.timer-tabs .seg-btn { font-size: 14px; padding: 6px 13px; }
+.sw-panel { display: flex; flex-direction: column; align-items: center; padding: 22px 16px 18px; }
+.sw-panel[hidden] { display: none; }
+.sw-date { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; }
+.sw-total { margin: 6px 0 2px; font-size: 54px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.sw-panel.on .sw-total { color: var(--accent-text, var(--accent)); }
+.sw-total-label { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+.sw-now { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; margin: -4px 0 16px; padding: 6px 14px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text, var(--accent)); font-size: 14px; font-weight: 600; }
+.sw-now[hidden] { display: none; }
+.sw-now .dot { width: 9px; height: 9px; margin: 0; flex: none; }
+.sw-now .dot.none { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
+.sw-now-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-now-sep { font-weight: 500; opacity: .75; margin-left: 2px; }
+.sw-now b { font-variant-numeric: tabular-nums; }
+.sw-main { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: min(240px, 100%); max-width: 100%; }
+.sw-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sw-ico { width: 18px; height: 18px; flex: none; fill: currentColor; }
+.sw-panel .timer-key { margin: 10px 0 0; }
+.sw-list-head { align-self: stretch; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin: 24px 0 6px; }
+.sw-list-head h3 { margin: 0; font-size: 15px; }
+.sw-list { align-self: stretch; list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.sw-list li { border-bottom: 1px solid var(--line); }
+.sw-pick { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 54px; padding: 8px 6px 8px 8px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.sw-pick:hover { background: var(--bg); }
+.sw-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.sw-pick .dot { width: 10px; height: 10px; margin: 0; flex: none; }
+.sw-row.none .dot { background: none; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.sw-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; }
+.sw-row.none .sw-name { color: var(--muted); font-weight: 500; }
+.sw-time { flex: none; color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; }
+.sw-play { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); color: var(--text); }
+.sw-play .sw-ico { width: 14px; height: 14px; }
+.sw-row.on .sw-pick { background: var(--accent-soft); }
+.sw-row.on .sw-time { color: var(--accent-text, var(--accent)); font-weight: 700; }
+.sw-row.on .sw-play { border-color: var(--ink); background: var(--ink); color: var(--ink-text); }
+.sw-empty, .sw-hint { align-self: stretch; margin: 10px 0 0; }
+.sw-list-head, .sw-list, .sw-empty, .sw-hint { width: 100%; max-width: 560px; align-self: center; } /* PC에서 너무 넓게 퍼지지 않게 */
+.sw-panel .log-link { margin-top: 12px; }
+.tab .ico { position: relative; }
+.tab.sw-on .ico::after { content: ''; position: absolute; top: -1px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface); }
+@media (prefers-reduced-motion: no-preference) {
+  .sw-row.on .dot, .sw-now .dot { animation: sw-pulse 1.6s ease-in-out infinite; }
+}
+@keyframes sw-pulse { 50% { opacity: .3; } }

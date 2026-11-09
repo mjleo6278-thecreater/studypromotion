@@ -209,8 +209,14 @@
 
     <!-- 타이머 -->
     <section id="view-timer" class="view">
-      <h1>집중 타이머</h1>
-      <div class="panel timer-panel">
+      <div class="timer-head">
+        <h1>타이머</h1>
+        <div class="seg timer-tabs" role="tablist" aria-label="타이머 종류">
+          <button class="seg-btn active" type="button" role="tab" id="ttab-focus" data-ttab="focus" aria-controls="timer-pane-focus" aria-selected="true">집중 타이머</button>
+          <button class="seg-btn" type="button" role="tab" id="ttab-sw" data-ttab="sw" aria-controls="timer-pane-sw" aria-selected="false" tabindex="-1">스톱워치</button>
+        </div>
+      </div>
+      <div class="panel timer-panel" id="timer-pane-focus" role="tabpanel" aria-labelledby="ttab-focus">
         <div class="mode-switch">
           <button class="chip" data-mode="focus">집중</button>
           <button class="chip" data-mode="break">휴식</button>
@@ -247,6 +253,19 @@
           </div>
           <button class="btn primary" id="lock-start" type="button">잠금 시작</button>
         </div>
+      </div>
+      <div class="panel sw-panel" id="timer-pane-sw" role="tabpanel" aria-labelledby="ttab-sw" hidden>
+        <p class="sw-date" id="sw-date"></p>
+        <div class="sw-total" id="sw-total">00:00:00</div>
+        <p class="sw-total-label">오늘 공부한 시간</p>
+        <p class="sw-now" id="sw-now" hidden><i class="dot" id="sw-now-dot"></i><span class="sw-now-name" id="sw-now-name"></span><span class="sw-now-sep">이번</span><b id="sw-now-time">00:00:00</b></p>
+        <button class="btn primary big sw-main" id="sw-main" type="button" aria-pressed="false">시작</button>
+        <p class="muted small timer-key">PC에서는 스페이스 키로 시작·멈춤을 할 수 있어요.</p>
+        <div class="sw-list-head"><h3>과목별 오늘</h3><span class="muted small">눌러서 시작·멈춤</span></div>
+        <ul class="sw-list" id="sw-list"></ul>
+        <p class="muted small sw-empty" id="sw-empty" hidden>과목을 만들면 과목별로 시간이 따로 쌓여요. <button class="btn link inline" type="button" data-view="plan">과목 만들기</button></p>
+        <p class="muted small sw-hint">공부하는 중에 다른 과목을 누르면 지금까지를 기록하고 바로 그 과목으로 바꿔요. 멈추면 공부 기록과 통계에 들어가요.</p>
+        <button class="btn link log-link" type="button" data-log-open>＋ 스톱워치 없이 공부한 시간 기록하기</button>
       </div>
     </section>
 
@@ -404,7 +423,7 @@
         </div>
         <form class="settings" id="settings-form">
           <label class="field">하루 목표(분)<input type="number" id="set-goal" min="10" step="10" inputmode="numeric"></label>
-          <label class="field">집중 시간(분)<input type="number" id="set-focus" min="1" max="120" inputmode="numeric"></label>
+          <label class="field">집중 시간(분)<input type="number" id="set-focus" min="1" max="180" inputmode="numeric"></label>
           <label class="field">휴식 시간(분)<input type="number" id="set-break" min="1" max="60" inputmode="numeric"></label>
           <label class="check-field"><input type="checkbox" id="set-awake"> 타이머가 도는 동안 화면 켜 두기 <small class="muted">(꺼지면 끝나는 소리가 늦을 수 있어요)</small></label>
           <button class="btn" type="submit">저장</button>
@@ -501,9 +520,10 @@
           <p>할 일을 적고 과목, 마감일, 예상 시간을 정해요. 끝내면 체크하고, ‘오늘까지’를 누르면 오늘 할 일만 모아 봐요. ✎로 고칠 수 있고, 실수로 지웠다면 아래 알림의 <b>되돌리기</b>를 눌러요. 과목 목록도 여기서 관리해요.</p>
         </details>
         <details>
-          <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-timer"/></svg>타이머와 폰 잠금 모드</summary>
+          <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-timer"/></svg>타이머·스톱워치와 폰 잠금 모드</summary>
           <ul>
-            <li>집중(기본 25분)과 휴식(기본 5분)을 번갈아 해요. 시작 전에 25·50·90분(휴식은 5·10·15분)을 바로 고를 수 있어요. 시간이 끝나면 소리와 알림으로 알려 주고, 집중한 시간은 과목별로 기록돼요.</li>
+            <li><b>집중 타이머</b>: 집중(기본 25분)과 휴식(기본 5분)을 번갈아 해요. 시작 전에 25·50·90분(휴식은 5·10·15분)을 바로 고르거나, <b>직접</b>을 눌러 원하는 분을 적을 수 있어요(집중은 180분, 휴식은 60분까지). 시간이 끝나면 소리와 알림으로 알려 주고, 집중한 시간은 과목별로 기록돼요.</li>
+            <li><b>스톱워치</b>: 타이머 화면 위에서 ‘스톱워치’를 고르면 과목을 눌러 공부 시간을 재요. 오늘 공부한 시간과 과목별 시간이 1초마다 쌓이고, 재는 중에 다른 과목을 누르면 지금까지를 기록하고 바로 바꿔요. 멈추면 공부 기록과 통계에 들어가요(1분이 안 되면 빼요). 앱을 닫아도 계속 재고, 자정을 넘기면 날마다 나눠서 기록해요. 같은 시간이 두 번 쌓이지 않게 집중 타이머·잠금 모드와는 하나만 켤 수 있어요.</li>
             <li>범위의 ⋯ 메뉴나 홈의 ▶에서 시작하면 무엇을 공부했는지도 함께 남고, 집중이 끝나면 그 범위를 끝냈는지 물어본 뒤 체크해 줘요.</li>
             <li>앱을 닫거나 다른 앱에 다녀와도 타이머는 계속 돌아요. 다시 열면 남은 시간부터 이어지고, 닫혀 있는 동안 끝났다면 그 시간까지 기록해요. 타이머가 도는 동안은 화면이 꺼지지 않아요(계정·설정에서 끌 수 있어요).</li>
             <li>학원·독서실·인강처럼 타이머 없이 공부했다면 <b>＋ 타이머 없이 공부한 시간 기록하기</b>로 날짜와 시간을 직접 남겨요.</li>
@@ -554,6 +574,10 @@
       <div class="panel">
         <h2>업데이트 소식</h2>
         <ul class="news" id="about-news">
+          <li><b>스톱워치</b>: 타이머 화면에서 ‘스톱워치’를 고르면 과목을 눌러 공부 시간을 재요. 오늘 공부한 시간과 과목별 시간이 바로바로 쌓여요</li>
+          <li><b>타이머 시간 직접 정하기</b>: 25·50·90분 말고도 ‘직접’을 눌러 원하는 시간을 적을 수 있어요</li>
+          <li><b>범위 단계 나누기</b>: 항목 옆 ＋로 바로 아래에 넣어 국어 › 비문학 › 수특 1강 › 분석처럼 나누고, ⋯ › 옮기기에서 한 단계 안으로·밖으로·다른 곳으로 옮겨요</li>
+          <li><b>더 간단한 ⋯ 메뉴</b>: 중요·어려움·다시 보기는 ‘표시’ 안에, 순서·단계 바꾸기는 ‘옮기기’ 안에 모았어요</li>
           <li><b>기록 지키기</b>: 앱이 업데이트될 때, 기록을 통째로 바꾸기 전, 그리고 하루에 한 번 기록을 자동 백업해요. 계정·설정 › 백업 › 자동 백업에서 골라 되돌릴 수 있고, 저장에 실패하면 바로 알려 줘요</li>
           <li><b>핑크 테마</b>: 계정·설정에서 테마 색을 청록과 핑크 중에 고를 수 있어요</li>
           <li><b>홈으로 바로</b>: 왼쪽 위 ‘스터디 프로모션’을 누르면 어디서든 홈으로 돌아와요</li>
@@ -727,6 +751,7 @@
   <script src="js/egg.js"></script>
   <script src="js/board.js"></script>
   <script src="js/lock.js"></script>
+  <script src="js/stopwatch.js"></script>
   <script src="js/cloud.js"></script>
 </body>
 </html>

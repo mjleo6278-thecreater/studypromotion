@@ -484,6 +484,7 @@
 
   function setMode(mode) {
     stopTick();
+    lenEditing = false;
     timer.mode = mode;
     timer.running = false;
     timer.total = timer.remaining = modeSeconds(mode);
@@ -504,6 +505,14 @@
 
   function startTimer() {
     if (timer.running) return;
+    if (timer.mode === 'focus' && window.Stopwatch && window.Stopwatch.running()) {
+      ask('스톱워치가 공부 시간을 재고 있어요.\n스톱워치를 멈추고 기록한 뒤 집중 타이머를 시작할까요?', { ok: '멈추고 시작' }).then(async (yes) => {
+        if (!yes) return;
+        await window.Stopwatch.stop();
+        if (!window.Stopwatch.running()) startTimer();
+      });
+      return;
+    }
     timer.running = true;
     timer.endAt = now() + timer.remaining * 1000;
     if (!timer.startedAt) timer.startedAt = now();
@@ -559,6 +568,23 @@
     } else if (completed && !opts.quiet) { beep(); notify('휴식 끝! 다시 집중해 볼까요?'); }
     timer.startedAt = 0;
     setMode(timer.mode === 'focus' ? 'break' : 'focus');
+  }
+
+  // 집중 타이머가 돌거나 멈춰 있는 중이면 'focus'/'break', 아니면 null (스톱워치와 동시에 재지 않게)
+  function timerBusy() { return timer.running || timer.remaining < timer.total ? timer.mode : null; }
+  function stopTimerForStopwatch() {
+    const mode = timerBusy();
+    if (!mode) return;
+    if (timer.running) timer.remaining = Math.max(0, Math.ceil((timer.endAt - now()) / 1000));
+    stopTick();
+    timer.running = false;
+    if (mode === 'focus') {
+      const min = Math.floor((timer.total - timer.remaining) / 60);
+      recordFocus(min, now());
+      if (min >= 1) toast(`집중 타이머의 ${Stats.formatMinutes(min)}을 기록했어요`);
+    }
+    timer.startedAt = 0;
+    setMode('focus');
   }
 
   // 범위에서 시작한 집중이 끝나면: 그 범위를 끝냈는지 물어보고 체크
@@ -662,7 +688,48 @@
     $('#timer-time').textContent = fmtClock(timer.remaining);
     const frac = timer.total ? timer.remaining / timer.total : 1;
     $('#ring-fg').style.strokeDashoffset = CIRC * (1 - frac);
-    document.title = timer.running ? `${fmtClock(timer.remaining)} · ${timer.mode === 'focus' ? '집중' : '휴식'}` : '스터디 프로모션';
+    if (timer.running) document.title = `${fmtClock(timer.remaining)} · ${timer.mode === 'focus' ? '집중' : '휴식'}`;
+    else if (!(window.Stopwatch && window.Stopwatch.running())) document.title = '스터디 프로모션';
+  }
+
+  // 시작 전에는 집중·휴식 시간을 바로 고를 수 있게 (설정의 집중·휴식 시간과 같은 값). ‘직접’을 누르면 분을 적는 칸
+  const LEN_MAX = { focus: 180, break: 60 };
+  let lenEditing = false, lenDrawn = '';
+  function renderLenChips() {
+    const box = $('#len-chips');
+    const fresh = !timer.running && timer.remaining === timer.total;
+    if (!fresh) lenEditing = false;
+    const cur = store.get().settings[timer.mode === 'focus' ? 'focusMin' : 'breakMin'];
+    box.classList.toggle('off', !fresh);
+    const sig = [timer.mode, cur, fresh, lenEditing].join('|');
+    if (sig === lenDrawn && box.firstChild) return; // 적는 중인 칸이 다시 그려져 지워지지 않게
+    lenDrawn = sig;
+    const ti = fresh ? '' : ' tabindex="-1"';
+    const opts = (timer.mode === 'focus' ? [25, 50, 90] : [5, 10, 15]).filter((m) => m !== cur).concat(cur).sort((a, b) => a - b);
+    const what = timer.mode === 'focus' ? '집중' : '휴식';
+    box.innerHTML = opts.map((m) => `<button type="button" class="chip${m === cur ? ' active' : ''}" data-len="${m}" aria-pressed="${m === cur}"${ti}>${m}분</button>`).join('')
+      + (lenEditing
+        ? `<form class="len-custom" id="len-form" novalidate><input type="number" id="len-input" inputmode="numeric" min="1" max="${LEN_MAX[timer.mode]}" step="1" value="${cur}" aria-label="${what} 시간(분), 1~${LEN_MAX[timer.mode]}"><span aria-hidden="true">분</span><button type="submit">확인</button></form>`
+        : `<button type="button" class="chip len-edit" data-len-edit aria-label="${what} 시간 직접 정하기"${ti}>직접</button>`);
+    if (lenEditing) { const inp = $('#len-input'); inp.focus({ preventScroll: true }); inp.select(); }
+  }
+  // 분을 정해 타이머에 바로 반영 (1분 미만·숫자가 아니면 false)
+  function setLen(v) {
+    const max = LEN_MAX[timer.mode];
+    let m = Math.round(Number(v));
+    if (!(m >= 1)) return false;
+    if (m > max) { m = max; toast(`${timer.mode === 'focus' ? '집중' : '휴식'} 시간은 ${max}분까지 정할 수 있어요`); }
+    lenEditing = false;
+    store.update((st) => { st.settings[timer.mode === 'focus' ? 'focusMin' : 'breakMin'] = m; });
+    timer.startedAt = 0;
+    setMode(timer.mode);
+    return true;
+  }
+  function closeLenEdit(focusChip) {
+    if (!lenEditing) return;
+    lenEditing = false;
+    renderLenChips();
+    if (focusChip) { const b = $('#len-chips [data-len-edit]'); if (b) b.focus(); }
   }
 
   function renderTimer() {
@@ -670,13 +737,7 @@
     $$('.mode-switch [data-mode]').forEach((b) => b.classList.toggle('active', b.dataset.mode === timer.mode));
     $('#timer-mode').textContent = timer.mode === 'focus' ? '집중' : '휴식';
     $('#timer-start').textContent = timer.running ? '일시정지' : (timer.remaining < timer.total ? '계속' : '시작');
-    // 시작 전에는 집중·휴식 시간을 바로 고를 수 있게 (설정의 집중·휴식 시간과 같은 값)
-    const fresh = !timer.running && timer.remaining === timer.total;
-    const lenKey = timer.mode === 'focus' ? 'focusMin' : 'breakMin';
-    const cur = store.get().settings[lenKey];
-    const opts = (timer.mode === 'focus' ? [25, 50, 90] : [5, 10, 15]).filter((m) => m !== cur).concat(cur).sort((a, b) => a - b);
-    $('#len-chips').classList.toggle('off', !fresh);
-    $('#len-chips').innerHTML = opts.map((m) => `<button type="button" class="chip${m === cur ? ' active' : ''}" data-len="${m}" aria-pressed="${m === cur}"${fresh ? '' : ' tabindex="-1"'}>${m}분</button>`).join('');
+    renderLenChips();
     if (timer.subjectId && !subjectById(timer.subjectId)) timer.subjectId = '';
     $('#timer-subject').innerHTML = subjectOptions(timer.subjectId, true);
     $('#timer-topic').hidden = !timer.label;
@@ -693,12 +754,28 @@
   $('#timer-skip').addEventListener('click', () => finishPhase(false));
   $('#timer-subject').addEventListener('change', (e) => { timer.subjectId = e.target.value; saveTimer(); });
   $('#len-chips').addEventListener('click', (e) => {
+    if (timer.running || timer.remaining !== timer.total) return;
+    if (e.target.closest('[data-len-edit]')) { lenEditing = true; renderLenChips(); return; }
     const b = e.target.closest('[data-len]');
-    if (!b || timer.running || timer.remaining !== timer.total) return;
-    const m = Math.min(timer.mode === 'focus' ? 120 : 60, Math.max(1, +b.dataset.len));
-    store.update((st) => { st.settings[timer.mode === 'focus' ? 'focusMin' : 'breakMin'] = m; });
-    timer.startedAt = 0;
-    setMode(timer.mode);
+    if (b) setLen(b.dataset.len);
+  });
+  $('#len-chips').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!setLen($('#len-input').value)) { toast('1분 이상으로 적어 주세요'); $('#len-input').focus(); }
+  });
+  $('#len-chips').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && lenEditing) { e.stopPropagation(); closeLenEdit(true); }
+  });
+  // 칸 밖을 누르면: 숫자를 바꿨으면 그 시간으로, 아니면 그냥 닫기
+  $('#len-chips').addEventListener('focusout', () => {
+    if (!lenEditing) return;
+    setTimeout(() => {
+      if (!lenEditing || $('#len-chips').contains(document.activeElement)) return;
+      const inp = $('#len-input');
+      const v = inp ? Math.round(Number(inp.value)) : NaN;
+      if (v >= 1 && v !== store.get().settings[timer.mode === 'focus' ? 'focusMin' : 'breakMin']) setLen(v);
+      else closeLenEdit(false);
+    }, 200); // 다른 칩을 누른 거면 그 클릭이 먼저 처리되게 조금 기다림
   });
   // 집중/휴식 전환 (로그인 버튼 같은 다른 data-mode 버튼은 건드리지 않게 범위를 좁힘)
   $$('.mode-switch [data-mode]').forEach((b) => b.addEventListener('click', async () => {
@@ -938,7 +1015,8 @@
     if (e.target.closest && e.target.closest('input, textarea, select, button, [contenteditable]')) return;
     if (!$('#ask').hidden || !$('#log-dlg').hidden || (window.Lock && window.Lock.state)) return;
     e.preventDefault();
-    if (timer.running) pauseTimer(); else startTimer();
+    if (window.Stopwatch && window.Stopwatch.tab() === 'sw') window.Stopwatch.toggle();
+    else if (timer.running) pauseTimer(); else startTimer();
   });
 
   document.addEventListener('keydown', (e) => {
@@ -1019,7 +1097,7 @@
       const sub = subjectById(s.subjectId);
       const d = new Date(s.endedAt);
       const label = s.manual && s.label === '직접 기록' ? '' : s.label;
-      return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.manual ? ' <span class="sl-tag">직접</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>
+      return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.manual ? ' <span class="sl-tag">직접</span>' : s.kind === 'stopwatch' ? ' <span class="sl-tag">스톱워치</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>
         <span class="muted sl-when">${d.getMonth() + 1}/${d.getDate()}${s.manual ? '' : ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`} · ${Stats.formatMinutes(s.minutes)}</span>
         <button class="icon-btn" data-del-session="${esc(s.id)}" aria-label="이 기록 삭제" title="기록 삭제">✕</button></li>`;
     }).join('') + (more > 0 ? `<li class="sl-more"><button class="btn link" type="button" data-more-sessions>이전 기록 더 보기 (${more}개)</button></li>` : '')
@@ -1247,7 +1325,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.6';
+  const APP_VERSION = '2.7';
   const APP_DATE = '2026년 11월 9일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
@@ -1290,8 +1368,8 @@
     const clamp = (v, lo, hi, d) => { v = parseInt(v, 10); return isNaN(v) ? d : Math.min(hi, Math.max(lo, v)); };
     store.update((st) => {
       st.settings.dailyGoalMin = clamp($('#set-goal').value, 10, 1440, 120);
-      st.settings.focusMin = clamp($('#set-focus').value, 1, 120, 25);
-      st.settings.breakMin = clamp($('#set-break').value, 1, 60, 5);
+      st.settings.focusMin = clamp($('#set-focus').value, 1, LEN_MAX.focus, 25);
+      st.settings.breakMin = clamp($('#set-break').value, 1, LEN_MAX.break, 5);
       st.settings.keepAwake = $('#set-awake').checked;
     });
     if (!store.get().settings.keepAwake) releaseAwake(); else if (timer.running) keepAwake();
@@ -1337,7 +1415,7 @@
   function render() {
     if (currentView === 'home') renderHome();
     else if (currentView === 'plan') renderPlan();
-    else if (currentView === 'timer') renderTimer();
+    else if (currentView === 'timer') { renderTimer(); if (window.Stopwatch) window.Stopwatch.render(); }
     else if (currentView === 'review') {
       if (!$('#deck-detail').hidden) renderDeckDetail();
       else if ($('#study').hidden) renderDecks();
@@ -1435,6 +1513,7 @@
   // 화이트보드 항목에서 바로 타이머 시작
   // 집중 중에 다른 범위로 바꾸면, 그때까지 한 시간은 버리지 않고 기록할지 물어본다
   async function focusOn(opts) {
+    if (window.Stopwatch) window.Stopwatch.showTab('focus');
     if (timer.mode === 'focus' && timer.label === (opts.label || null) && timer.topicId === (opts.topicId || null) && (timer.running || timer.remaining < timer.total)) return go('timer'); // 같은 범위면 이어서
     const left = timer.running ? Math.max(0, Math.ceil((timer.endAt - now()) / 1000)) : timer.remaining;
     const doneMin = timer.mode === 'focus' ? Math.floor((timer.total - left) / 60) : 0;
@@ -1506,7 +1585,7 @@
     toast('테마 색: ' + ACCENTS[accent]);
   });
 
-  window.App = { store, focusOn, pawnTrack, $, $$, esc, toast, ask, uid, go, now, render, version: APP_VERSION, get view() { return currentView; } };
+  window.App = { store, focusOn, pawnTrack, $, $$, esc, toast, ask, uid, go, now, render, openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   go(location.hash.slice(1) || 'home');
