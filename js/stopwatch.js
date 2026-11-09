@@ -75,7 +75,7 @@
 
   /* ---------- 기록 ---------- */
   // startAt~end를 기록한다. 자정을 넘기면 날마다 나눠서 (하루 공부 시간이 맞게). 1분이 안 되는 조각은 버림. 기록한 초를 돌려줌
-  function save_sessions(startAt, end, subjectId) {
+  function recordRange(startAt, end, subjectId) {
     const parts = [];
     for (let a = startAt; a < end;) {
       const b = Math.min(end, nextDay(a));
@@ -108,7 +108,7 @@
         return -1;
       }
     }
-    return save_sessions(startAt, end, sid);
+    return recordRange(startAt, end, sid);
   }
 
   /* ---------- 시작·멈춤·과목 바꾸기 ---------- */
@@ -151,7 +151,7 @@
     save();
     begin();
     render();
-    toast(sec > 0 ? `${nameOf(old)} ${Stats.formatMinutes(sec / 60)} 기록 · ${nameOf(id)} 시작` : `${nameOf(id)}(으)로 바꿨어요`);
+    if (sec >= 0) toast(sec > 0 ? `${nameOf(old)} ${Stats.formatMinutes(sec / 60)} 기록 · ${nameOf(id)} 시작` : `${nameOf(id)}(으)로 바꿨어요`); // -1이면 ‘기록하지 않았어요’ 알림을 그대로
   }
 
   function toggle() { return sw.running ? stop() : start(nextSubject()); }

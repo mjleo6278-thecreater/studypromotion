@@ -1339,6 +1339,10 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 .bsub { flex: none; border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 15px; font-weight: 600; line-height: 1; padding: 4px 6px; border-radius: 6px; opacity: .6; }
 .bsub:hover, .bsub:focus-visible { background: var(--line); opacity: 1; }
 .bitem.s-all > .brow .bsub { opacity: .35; }
+/* 휴대폰: 항목 옆 ＋·⋯는 손가락으로 누르기 쉽게 (서로 붙어 있어 잘못 누르지 않도록) */
+@media (pointer: coarse) {
+  .list-mode .brow .bsub, .list-mode .brow .bmenu, .list-mode .bcard-head .bmenu { min-width: 34px; min-height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+}
 .move-box { width: min(420px, 100%); }
 .move-box h2 { margin: 0 0 4px; font-size: 18px; }
 .move-box > p { margin: 0 0 10px; }

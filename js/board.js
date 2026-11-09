@@ -801,7 +801,7 @@
   /* ---------- 메뉴 ---------- */
   // ⋯ 메뉴: 첫 화면에는 자주 쓰는 것만 두고, 표시(중요·어려움·다시 보기)와 옮기기는 눌러서 들어가는 하위 메뉴로
   let menuAnchor = null;
-  function closeMenu() { menu.hidden = true; menu.innerHTML = ''; menuAnchor = null; }
+  function closeMenu() { menu.hidden = true; menu.innerHTML = ''; menu.dataset.page = ''; menuAnchor = null; }
   function clip(t) { t = String(t || ''); return t.length > 12 ? t.slice(0, 11) + '…' : t; }
 
   function mItem(act, label, o) {
@@ -859,12 +859,14 @@
       if (isCard) html += colorItem(n, '과목 색 바꾸기');
       html += mItem('delete', isCard ? '과목 삭제' : '항목 삭제', { cls: 'danger' });
     }
+    const from = menu.dataset.id === id ? menu.dataset.page : ''; // 하위 메뉴에서 돌아오면 그 줄에 초점
     menu.innerHTML = html;
     menu.dataset.id = id;
     menu.dataset.page = page;
     menu.hidden = false;
     placeMenu(id);
-    const first = menu.querySelector(page === 'main' ? 'button:not([disabled])' : 'button:not(.pm-head):not([disabled])') || menu.querySelector('button');
+    const back = page === 'main' && from && from !== 'main' ? menu.querySelector(`[data-act="page:${from}"]`) : null;
+    const first = back || menu.querySelector(page === 'main' ? 'button:not([disabled])' : 'button:not(.pm-head):not([disabled])') || menu.querySelector('button');
     if (first) first.focus({ preventScroll: true });
   }
 
@@ -891,6 +893,22 @@
     if (!menu.hidden && !menu.contains(e.target) && !e.target.closest('[data-menu]') && !e.target.closest('#bb-more')) closeMenu();
   }, true);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) closeMenu(); });
+  // 키보드: ↑↓로 줄 이동, →로 하위 메뉴 열기, ←로 하위 메뉴에서 나오기
+  menu.addEventListener('keydown', (e) => {
+    const items = [...menu.querySelectorAll('button:not([disabled])')];
+    const cur = document.activeElement;
+    const i = items.indexOf(cur);
+    let next = null;
+    if (e.key === 'ArrowDown') next = items[(i + 1) % items.length];
+    else if (e.key === 'ArrowUp') next = items[(i - 1 + items.length) % items.length];
+    else if (e.key === 'Home') next = items[0];
+    else if (e.key === 'End') next = items[items.length - 1];
+    else if (e.key === 'ArrowRight' && cur && /^page:(?!main)/.test(cur.dataset.act || '')) { e.preventDefault(); cur.click(); return; }
+    else if (e.key === 'ArrowLeft' && menu.dataset.page && menu.dataset.page !== 'main') { e.preventDefault(); openMenu(menu.dataset.id, null, 'main'); return; }
+    else return;
+    e.preventDefault();
+    if (next) next.focus();
+  });
 
   // 순서·단계 바꾸기 (하위 메뉴는 열어 둔 채로 여러 번 누를 수 있게)
   function moveStep(id, act) {
@@ -1032,10 +1050,13 @@
       mode === 'board' ? ['clear-ink', '펜 자국 모두 지우기'] : null,
     ].filter(Boolean).map(([a, l]) => `<button role="menuitem" data-act="${a}">${l}</button>`).join('');
     menu.dataset.id = '__board';
+    menu.dataset.page = '';
     menu.hidden = false;
     const r = e.currentTarget.getBoundingClientRect();
     menu.style.left = Math.max(8, Math.min(innerWidth - menu.offsetWidth - 8, r.right - menu.offsetWidth)) + 'px';
     menu.style.top = r.bottom + 4 + 'px';
+    const first = menu.querySelector('button');
+    if (first) first.focus({ preventScroll: true });
   });
 
   async function boardAction(act) {

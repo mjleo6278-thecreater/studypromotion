@@ -158,6 +158,20 @@ const server = http.createServer((req, res) => {
   assert((await page.textContent('#pop-menu [data-act="page:flags"]')).includes('★'), '뒤로 가면 첫 메뉴에 지금 표시가 보임');
   await page.keyboard.press('Escape');
   assert(await item('분석').locator(':scope > .brow .bflag').count() === 2, '항목 옆에 표시 2개');
+  // 키보드로: ↓로 줄 이동, →로 하위 메뉴, ←로 돌아오면 그 줄에 초점
+  await item('분석').locator(':scope > .brow [data-menu]').focus();
+  await page.keyboard.press('Enter');
+  const actOf = () => page.evaluate(() => document.activeElement && document.activeElement.dataset.act);
+  const firstAct = await actOf();
+  await page.keyboard.press('ArrowDown');
+  assert(firstAct && (await actOf()) && (await actOf()) !== firstAct, '↓로 다음 줄 (' + firstAct + ' → ' + (await actOf()) + ')');
+  await page.focus('#pop-menu [data-act="page:flags"]');
+  await page.keyboard.press('ArrowRight');
+  assert(await page.isVisible('#pop-menu [data-act="flag:star"]'), '→로 표시 하위 메뉴');
+  await page.keyboard.press('ArrowLeft');
+  assert((await actOf()) === 'page:flags', '←로 돌아오면 ‘표시’ 줄에 초점');
+  await page.keyboard.press('Escape');
+  assert(!(await page.isVisible('#pop-menu')), 'Esc로 닫기');
 
   // 삭제 → 되돌리기
   await card('영어').locator('.bcard-head [data-menu]').tap();

@@ -213,14 +213,34 @@ const SW = 'studypromotion.stopwatch';
   await page.waitForTimeout(100);
   assert(!(await swState()).running && (await swSessions()).some((s) => s.subjectId === math.id && s.minutes === 5) && await page.isVisible('#lock-screen'), '스톱워치 5분 기록 후 잠금');
   // 30분이 지난 것처럼 (다른 창에서 잠금이 끝난 것과 같은 길로)
-  await page.evaluate(() => {
-    const l = JSON.parse(localStorage.getItem('studypromotion.lock'));
-    l.startAt = Date.now() - 30 * 60000; l.endAt = Date.now() - 1000;
-    localStorage.setItem('studypromotion.lock', JSON.stringify(l));
-    window.dispatchEvent(new StorageEvent('storage', { key: 'studypromotion.lock', newValue: JSON.stringify(l) }));
-  });
-  await page.waitForTimeout(100);
+  const endLock = async () => {
+    await page.evaluate(() => {
+      const l = JSON.parse(localStorage.getItem('studypromotion.lock'));
+      l.startAt = Date.now() - 30 * 60000; l.endAt = Date.now() - 1000;
+      localStorage.setItem('studypromotion.lock', JSON.stringify(l));
+      window.dispatchEvent(new StorageEvent('storage', { key: 'studypromotion.lock', newValue: JSON.stringify(l) }));
+    });
+    await page.waitForTimeout(100);
+  };
+  await endLock();
   assert(await page.isHidden('#lock-screen'), '잠금 끝');
+  // 집중 타이머가 도는 중에 잠가도: 집중은 지금까지를 기록하고 멈춤 (잠금 시간과 겹쳐 두 번 쌓이지 않게)
+  await page.tap('#timer-start');
+  await page.evaluate(() => {
+    const t = JSON.parse(localStorage.getItem('studypromotion.timer'));
+    t.endAt = Date.now() + (t.total - 6 * 60) * 1000;
+    localStorage.setItem('studypromotion.timer', JSON.stringify(t));
+    window.dispatchEvent(new StorageEvent('storage', { key: 'studypromotion.timer', newValue: JSON.stringify(t) }));
+  });
+  const n0 = (await state()).sessions.length;
+  await page.click('#lock-start');
+  assert(/집중 타이머는 멈추고/.test(await page.textContent('#ask-msg')), '잠금 시작 전에 집중 타이머를 멈춘다고 알림');
+  await page.click('#ask-ok');
+  await page.waitForTimeout(100);
+  const s6 = (await state()).sessions.slice(n0).find((x) => !x.kind && !x.lock && x.minutes === 6);
+  assert(s6 && (await page.evaluate(() => App.timerBusy())) === null && await page.isVisible('#lock-screen'), '집중 6분을 기록하고 잠금, 타이머는 처음으로');
+  await endLock();
+  assert(await page.isHidden('#lock-screen'), '잠금 끝 (두 번째)');
 
   // 범위·홈에서 ▶로 오면 집중 타이머 탭
   await page.tap('[data-ttab="sw"]');

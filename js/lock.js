@@ -50,9 +50,13 @@
   $('#lock-start').addEventListener('click', async () => {
     const sel = $('#timer-subject');
     const subName = sel && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : '';
+    // 잠금 시간과 스톱워치·집중 타이머가 같은 시간을 두 번 기록하지 않게, 돌던 것은 멈추고 지금까지를 기록
     const swOn = !!(window.Stopwatch && window.Stopwatch.running());
-    if (!(await ask(`${Stats.formatMinutes(chosen)} 동안 잠글까요?${subName ? `\n과목: ${subName}` : ''}${swOn ? '\n재고 있던 스톱워치는 멈추고 지금까지를 기록해요.' : ''}\n\n중간에 그만두려면 3초 길게 눌러야 해요.`))) return;
-    if (swOn) await window.Stopwatch.stop(); // 잠금 시간과 스톱워치가 같은 시간을 두 번 기록하지 않게
+    const tm = App.timerBusy ? App.timerBusy() : null;
+    const note = (swOn ? '\n재고 있던 스톱워치는 멈추고 지금까지를 기록해요.' : '') + (tm === 'focus' ? '\n진행 중인 집중 타이머는 멈추고 지금까지를 기록해요.' : '');
+    if (!(await ask(`${Stats.formatMinutes(chosen)} 동안 잠글까요?${subName ? `\n과목: ${subName}` : ''}${note}\n\n중간에 그만두려면 3초 길게 눌러야 해요.`))) return;
+    if (swOn) await window.Stopwatch.stop();
+    if (App.timerBusy && App.timerBusy()) App.stopTimer();
     const t = Date.now();
     lock = { startAt: t, endAt: t + chosen * 60000, minutes: chosen, subjectId: (sel && sel.value) || null, subjectName: subName, leaves: 0, awayMs: 0, hiddenAt: null };
     write();
