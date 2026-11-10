@@ -47,15 +47,39 @@
   try { modePref = localStorage.getItem(MODE_KEY); } catch (e) { /* 무시 */ }
   let mode = modePref === 'list' || modePref === 'board' ? modePref : (window.innerWidth < 720 ? 'list' : 'board');
 
-  // 한글 입력 중(조합 중)에 Enter가 눌려도 글자가 빠지지 않도록
+  // 한글 입력 중(조합 중)에 Enter가 눌려도 글자가 빠지지 않도록: 조합이 끝난 뒤에 처리
   let composing = false;
   document.addEventListener('compositionstart', () => { composing = true; });
   document.addEventListener('compositionend', () => { composing = false; });
   function afterComposition(fn) {
     if (!composing) return fn();
-    const once = () => { document.removeEventListener('compositionend', once); setTimeout(fn, 0); };
-    document.addEventListener('compositionend', once);
+    let done = false;
+    const run = () => {
+      if (done) return;
+      done = true;
+      composing = false;
+      document.removeEventListener('compositionend', run);
+      setTimeout(fn, 0);
+    };
+    document.addEventListener('compositionend', run);
+    setTimeout(run, 500); // 조합이 끝났다는 알림이 끝내 안 와도 0.5초 뒤엔 처리 (추가가 멈춰 있지 않게)
   }
+  // ‘추가’ 버튼을 손가락·마우스로 누른 경우: 휴대폰은 버튼을 눌러도 입력칸에 커서가 남아(키보드를 닫지 않으려고)
+  // 마지막 글자의 조합이 저절로 끝나지 않는다. 그래서 다른 곳을 눌러야 추가되던 문제가 있었다.
+  // 입력칸을 잠깐 떠났다 돌아와 조합을 끝내고 바로 추가한다. (Enter로 제출한 건 지금처럼 조합이 끝나길 기다림)
+  function finishComposing(input) {
+    if (!composing || !input || document.activeElement !== input) return;
+    input.blur();
+    input.focus({ preventScroll: true });
+    composing = false;
+  }
+  // 버튼을 실제로 눌러 제출한 폼 (Enter로 제출하면 브라우저가 대신 누르는 클릭이라 detail이 0)
+  let tappedForm = null;
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('button');
+    tappedForm = b && b.form && e.detail > 0 ? b.form : null;
+  }, true);
+  const tapped = (form) => { const t = tappedForm === form; tappedForm = null; return t; };
 
   // 과목 추천 (내 과목 → 자주 보는 과목 순)
   const COMMON_SUBJECTS = ['국어', '수학', '영어', '한국사', '통합사회', '통합과학', '사회', '과학', '역사', '도덕', '정보', '기술·가정', '한문', '제2외국어'];
@@ -560,8 +584,11 @@
   cardsEl.addEventListener('submit', (e) => {
     e.preventDefault();
     const f = e.target;
+    if (tapped(f)) finishComposing(f.querySelector('input'));
     afterComposition(() => {
-      const input = f.querySelector('input');
+      let input = f.querySelector('input');
+      // 조합이 끝나길 기다리는 사이 화면이 다시 그려졌으면 지금 보이는 입력칸으로 (적던 글자는 그 칸으로 옮겨져 있다)
+      if (input && !input.isConnected && input.dataset.keep) input = cardsEl.querySelector(`[data-keep="${CSS.escape(input.dataset.keep)}"]`) || input;
       if (!input) return;
       const text = input.value.trim();
       if (f.matches('[data-subject-form]')) {
@@ -1128,6 +1155,7 @@
   });
   $('#subj-form').addEventListener('submit', (e) => {
     e.preventDefault();
+    if (tapped(e.target)) finishComposing($('#subj-name'));
     afterComposition(() => {
       const name = $('#subj-name').value.trim();
       if (!name) return $('#subj-name').focus();
@@ -1250,7 +1278,7 @@
       input.value = '';
       api.draw();
     };
-    addBtn.addEventListener('click', () => afterComposition(addCustom));
+    addBtn.addEventListener('click', (e) => { if (e.detail > 0) finishComposing(input); afterComposition(addCustom); });
     // 시험 만들기 폼이 제출되지 않게: Enter는 과목 추가로
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); afterComposition(addCustom); } });
     api.draw();

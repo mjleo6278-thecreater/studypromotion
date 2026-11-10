@@ -225,6 +225,35 @@ const server = http.createServer((req, res) => {
   assert((await page.evaluate(() => Board.mode)) === 'board', '보기 방식 기억');
   await page.tap('[data-scope-mode=list]');
 
+  // 한글 마지막 글자가 아직 조합 중일 때 ‘추가’를 눌러도 바로 추가 (전에는 다른 곳을 눌러야 추가됐음)
+  const cdp = await ctx.newCDPSession(page);
+  const compose = (text) => cdp.send('Input.imeSetComposition', { text, selectionStart: text.length, selectionEnd: text.length });
+  const mathId = (await topic('수학')).id;
+  await card('수학').locator('.sadd-input').focus();
+  await page.keyboard.type('5단원 행');
+  await compose('렬');
+  await card('수학').locator('.sadd button').tap();
+  const m5 = await topic('5단원 행렬');
+  assert(m5 && m5.parentId === mathId && (await card('수학').locator('.sadd-input').inputValue()) === '', '글자를 조합하는 중에 추가를 눌러도 마지막 글자까지 바로 추가');
+  assert((await active()) === 'add:' + mathId, '추가한 뒤에도 같은 입력칸에 커서 (키보드 그대로)');
+  await page.keyboard.type('6단원 함');
+  await compose('수');
+  await card('수학').locator('.sadd button').tap();
+  assert(((await topic('6단원 함수')) || {}).parentId === mathId, '이어서 다음 것도 바로');
+  // 하위 항목 칸도
+  await page.locator('.bitem', { hasText: '5단원 행렬' }).locator('.bsub').tap();
+  await page.keyboard.type('행렬 개념 정');
+  await compose('리');
+  await page.locator('.badd-form button').first().tap();
+  assert(((await topic('행렬 개념 정리')) || {}).parentId === m5.id, '하위 항목도 조합 중에 추가를 누르면 바로');
+  // Enter로 제출했는데 조합이 끝났다는 알림이 끝내 안 와도 멈춰 있지 않음
+  await card('수학').locator('.sadd-input').focus();
+  await page.keyboard.type('7단원 수');
+  await compose('열');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(700);
+  assert(((await topic('7단원 수열')) || {}).parentId === mathId && (await card('수학').locator('.sadd-input').inputValue()) === '', 'Enter 뒤 조합 끝 알림이 없어도 곧 추가 (기다리는 사이 화면이 다시 그려져도 칸이 비워짐)');
+
   // 로그인 버튼이 타이머 모드를 바꾸던 문제
   await page.goto(base + '#timer');
   const before = await page.evaluate(() => window.__studypromotion.timer.mode);
