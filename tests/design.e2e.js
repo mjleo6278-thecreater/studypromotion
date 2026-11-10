@@ -97,6 +97,30 @@ const url = process.env.APP_URL || 'file://' + path.resolve(__dirname, '../index
   await page.waitForTimeout(2900);
   assert(!(await page.$('#splash')), '애니메이션 뒤 사라짐');
 
+  // 시작 화면 폰 움직임: 시간을 멈춰 가며 60fps 프레임마다 위치를 잰다
+  // 한 칸에 한 번의 매끄러운 이동(빨라졌다 느려지기만, 중간에 멈칫 없음) × 3칸, 한 프레임에 크게 튀지 않기
+  await page.goto(url.replace(/index\.html$/, 'index.html?splash'));
+  const climb = await page.evaluate(() => {
+    const anims = document.getAnimations();
+    anims.forEach((a) => a.pause());
+    const pawn = document.querySelector('.sp-pawn');
+    const ys = [];
+    for (let t = 0; t <= 1400; t += 1000 / 60) {
+      anims.forEach((a) => { a.currentTime = t; });
+      ys.push(new DOMMatrix(getComputedStyle(pawn).transform).f);
+    }
+    const v = ys.slice(1).map((y, i) => ys[i] - y); // 위로 간 거리(보드 단위, 한 칸 = 40)
+    const humps = [];
+    let cur = null;
+    v.forEach((x) => { if (x > 0.02) { (cur = cur || []).push(x); } else if (cur) { humps.push(cur); cur = null; } });
+    if (cur) humps.push(cur);
+    const smooth = humps.every((h) => { const p = h.indexOf(Math.max(...h)); return h.every((x, i) => i === 0 || (i <= p ? x >= h[i - 1] - 0.02 : x <= h[i - 1] + 0.02)); });
+    return { total: ys[0] - ys[ys.length - 1], humps: humps.length, smooth, max: Math.max(...v) };
+  });
+  assert(Math.round(climb.total) === 120, '폰이 끝 칸까지 3칸 이동');
+  assert(climb.humps === 3 && climb.smooth, '한 칸씩 매끄럽게 (이동 ' + climb.humps + '번, 중간 멈칫 없음 ' + climb.smooth + ')');
+  assert(climb.max < 4.5, '한 프레임에 크게 튀지 않음 (최대 ' + climb.max.toFixed(2) + ' / 칸 40)');
+
   assert(errors.length === 0, '페이지 오류 없음 ' + errors.join(' / '));
   await browser.close();
 })().catch((e) => { console.error(e); process.exit(1); });
