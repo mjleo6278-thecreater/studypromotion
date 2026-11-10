@@ -6,14 +6,15 @@ const path = require('path');
 const root = path.resolve(__dirname, '..');
 const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
-const server = http.createServer((req, res) => {
+let slow = 0; // 느린 인터넷 흉내(ms)
+const server = http.createServer((req, res) => setTimeout(() => {
   let p = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   if (p.endsWith('/')) p += 'index.html';
   const file = path.join(root, p);
   if (!file.startsWith(root) || !fs.existsSync(file)) { res.writeHead(404); return res.end(); }
   res.writeHead(200, { 'Content-Type': types[path.extname(file)] || 'application/octet-stream' });
   fs.createReadStream(file).pipe(res);
-});
+}, slow));
 
 (async () => {
   await new Promise((r) => server.listen(0, r));
@@ -40,6 +41,14 @@ const server = http.createServer((req, res) => {
   await page.reload();
   assert((await page.locator('.bcard').count()) === 5, '오프라인에서도 앱과 데이터가 열림');
   await ctx.setOffline(false);
+  // 인터넷이 느려도 저장본으로 바로 열린다 (폰의 시작 화면이 길게 남지 않게)
+  slow = 4000;
+  const t0 = Date.now();
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.topbar');
+  const took = Date.now() - t0;
+  slow = 0;
+  assert(took < 2000, `느린 인터넷(4초)에서도 앱이 바로 열림 (${took}ms)`);
   assert(errors.length === 0, '오류 없음 ' + errors.join(' | '));
   await browser.close();
   server.close();

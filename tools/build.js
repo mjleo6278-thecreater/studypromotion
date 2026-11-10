@@ -36,4 +36,16 @@ for (const f of files) {
   fs.mkdirSync(path.dirname(to), { recursive: true });
   fs.copyFileSync(path.join(root, f), to);
 }
+// 서비스 워커는 저장본을 먼저 쓰므로, 파일이 하나라도 바뀌면 CACHE 이름도 꼭 바뀌어야 새 버전이 전달된다.
+// 버전 올리기를 깜빡해도 되도록 배포본 CACHE 이름 끝에 앱 파일 내용의 해시를 붙인다.
+{
+  const crypto = require('crypto');
+  const h = crypto.createHash('sha256');
+  for (const f of files.filter((x) => x !== 'sw.js').sort()) h.update(f).update(fs.readFileSync(path.join(root, f)));
+  const swPath = path.join(dist, 'web', 'sw.js');
+  const sw = fs.readFileSync(swPath, 'utf8');
+  const stamped = sw.replace(/(const CACHE = 'studypromotion-v\d+)'/, `$1-${h.digest('hex').slice(0, 8)}'`);
+  if (stamped === sw) throw new Error('sw.js에서 CACHE 이름을 찾지 못했습니다');
+  fs.writeFileSync(swPath, stamped);
+}
 console.log(`dist/studypromotion.html (${Math.round(html.length / 1024)}KB), dist/web/ (${files.length}개 파일)`);

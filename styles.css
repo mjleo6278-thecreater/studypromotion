@@ -1162,7 +1162,7 @@ button, input, select, textarea, optgroup { font-family: inherit; }
 /* 시작 화면: 폰 → 퀸 승급 */
 .splash { position: fixed; inset: 0; z-index: 2000; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; transition: opacity .38s ease, visibility .38s; cursor: pointer; }
 .splash.bye { opacity: 0; visibility: hidden; pointer-events: none; }
-.sp-art { width: 84px; height: 241px; overflow: visible; margin-bottom: 14px; }
+.sp-art { width: clamp(96px, 14vmin, 120px); height: auto; aspect-ratio: 84 / 241; overflow: visible; margin-bottom: clamp(16px, 3vmin, 26px); }
 .sp-sq { fill: #ececec; }
 .sp-sq.d { fill: #cfcfcf; }
 .sp-goal { fill: var(--accent); opacity: 0; animation: sp-goal .5s 1.3s ease-out forwards; }
@@ -1171,8 +1171,8 @@ button, input, select, textarea, optgroup { font-family: inherit; }
 .sp-queen { fill: var(--text); stroke: var(--bg); stroke-width: .8; paint-order: stroke; transform: translate(60px, 40px); }
 .sp-pop { transform: scale(0); animation: sp-pop .5s 1.38s cubic-bezier(.3, 1.6, .5, 1) forwards; }
 .sp-flash { fill: none; stroke: var(--accent); stroke-width: 3; opacity: 0; transform-origin: 60px 40px; animation: sp-flash .6s 1.32s ease-out forwards; }
-.sp-name { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; color: var(--text); opacity: 0; transform: translateY(6px); animation: sp-up .45s 1.45s ease-out forwards; }
-.sp-sub { font-size: 13px; color: var(--muted); opacity: 0; transform: translateY(6px); animation: sp-up .45s 1.6s ease-out forwards; }
+.sp-name { font-size: clamp(32px, 8.5vmin, 48px); line-height: 1.15; font-weight: 800; letter-spacing: -0.035em; color: var(--text); opacity: 0; transform: translateY(6px); animation: sp-up .45s 1.45s ease-out forwards; }
+.sp-sub { font-size: clamp(14px, 2.4vmin, 18px); margin-top: 2px; color: var(--muted); opacity: 0; transform: translateY(6px); animation: sp-up .45s 1.6s ease-out forwards; }
 @keyframes sp-climb {
   0% { transform: translate(60px, 160px); }
   10% { transform: translate(60px, 150px); }
