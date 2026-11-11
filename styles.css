@@ -1539,3 +1539,7 @@ input[type="search"]::-webkit-search-cancel-button {
 /* ===== 개선안(미리 보기): 하루 시작 시각 설정 칸 ===== */
 .settings .field.full { grid-column: 1 / -1; }
 .settings .field.full small { font-size: 12px; line-height: 1.5; }
+
+/* ===== 개선안(미리 보기): 최근 7일을 그 전 7일과 비교한 한 줄 ===== */
+.week-compare { margin: 10px 0 0; text-align: right; }
+.week-compare.up { color: var(--accent-text, var(--accent)); }

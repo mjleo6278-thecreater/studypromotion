@@ -372,6 +372,7 @@
       <div class="panel">
         <div class="panel-head"><h2>최근 7일 공부 시간</h2><span class="muted" id="week-total"></span></div>
         <div class="week-chart" id="week-chart"></div>
+        <p class="week-compare muted small" id="week-compare" hidden></p>
       </div>
       <div class="panel cal-panel">
         <div class="panel-head"><h2>공부 달력</h2>
@@ -455,6 +456,7 @@
             </select>
             <small class="muted">이 시각 전의 새벽 공부는 전날 공부로 쳐요. 밤늦게 공부해도 오늘 목표와 연속 학습일이 끊기지 않아요.</small>
           </label>
+          <label class="check-field"><input type="checkbox" id="set-autobreak"> 집중이 끝나면 휴식 바로 시작 <small class="muted">(휴식이 끝난 뒤 집중은 직접 시작해요)</small></label>
           <label class="check-field"><input type="checkbox" id="set-awake"> 타이머가 도는 동안 화면 켜 두기 <small class="muted">(꺼지면 끝나는 소리가 늦을 수 있어요)</small></label>
           <button class="btn" type="submit">저장</button>
         </form>

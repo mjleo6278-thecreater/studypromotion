@@ -644,7 +644,11 @@
       } else if (elapsedMin >= 1) toast(`${Stats.formatMinutes(elapsedMin)} 기록했어요`);
     } else if (completed && !opts.quiet) { beep(); notify('휴식 끝! 다시 집중해 볼까요?'); }
     timer.startedAt = 0;
-    setMode(timer.mode === 'focus' ? 'break' : 'focus');
+    const wasFocus = timer.mode === 'focus';
+    setMode(wasFocus ? 'break' : 'focus');
+    // 설정을 켜 두면 집중을 끝까지 마쳤을 때 휴식 타이머가 바로 돈다 (앱이 닫혀 있는 동안 끝났거나 건너뛴 경우는 그대로 멈춰 둠).
+    // 휴식이 끝난 뒤의 집중은 자동으로 시작하지 않는다: 자리에 없는데 공부 시간이 쌓이면 안 되니까.
+    if (wasFocus && completed && !opts.quiet && store.get().settings.autoBreak) startTimer();
   }
 
   // 집중 타이머가 돌거나 멈춰 있는 중이면 'focus'/'break', 아니면 null (스톱워치와 동시에 재지 않게)
@@ -1152,7 +1156,13 @@
     const days = Stats.lastNDays(st.sessions, now(), 7);
     const max = Math.max(60, ...days.map((d) => d.minutes));
     const total = days.reduce((a, d) => a + d.minutes, 0);
+    // 그 전 7일과 비교 (전에도 기록이 있을 때만)
+    const prev7 = Stats.lastNDays(st.sessions, Stats.addDays(now(), -7), 7).reduce((a, d) => a + d.minutes, 0);
+    const wDiff = total - prev7;
     $('#week-total').textContent = `합계 ${Stats.formatMinutes(total)} · 하루 평균 ${Stats.formatMinutes(total / 7)}`;
+    $('#week-compare').hidden = !prev7;
+    $('#week-compare').textContent = !prev7 ? '' : wDiff === 0 ? '그 전 7일과 같아요' : `그 전 7일보다 ${Stats.formatMinutes(Math.abs(wDiff))} ${wDiff > 0 ? '더 했어요' : '덜 했어요'}`;
+    $('#week-compare').classList.toggle('up', wDiff > 0);
     $('#week-chart').innerHTML = days.map((d, i) => `<div class="wc-col${i === 6 ? ' today' : ''}">
       <div class="wc-val">${d.minutes ? Stats.formatMinutes(d.minutes) : ''}</div>
       <div class="wc-bar${d.minutes ? '' : ' zero'}" style="height:${Math.round((d.minutes / max) * 130)}px" title="${d.key} ${Stats.formatMinutes(d.minutes)}"></div>
@@ -1444,6 +1454,7 @@
       $('#set-break').value = set.breakMin;
       $('#set-awake').checked = set.keepAwake !== false;
       $('#set-daystart').value = String(Math.max(0, Math.min(6, +set.dayStartHour || 0)));
+      $('#set-autobreak').checked = !!set.autoBreak;
     }
   }
 
@@ -1495,6 +1506,7 @@
       st.settings.breakMin = clamp($('#set-break').value, 1, LEN_MAX.break, 5);
       st.settings.keepAwake = $('#set-awake').checked;
       st.settings.dayStartHour = clamp($('#set-daystart').value, 0, 6, 0);
+      st.settings.autoBreak = $('#set-autobreak').checked;
     });
     if (!store.get().settings.keepAwake) releaseAwake(); else if (timer.running) keepAwake();
     if (!timerBusy()) setMode(timer.mode); // 하던 타이머(일시정지 포함)는 그대로 두고, 새 시간은 다음 타이머부터

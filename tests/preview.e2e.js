@@ -264,6 +264,58 @@ const server = http.createServer((req, res) => {
   assert(rec.length === 2 && rec.some((x) => x.minutes === 40 && x.day === '2026-11-10') && rec.some((x) => x.minutes === 30 && x.day === '2026-11-11'), '스톱워치: 새벽 4시를 넘기면 40분은 10일, 30분은 11일로 나눔 (' + JSON.stringify(rec) + ')');
   await page.context().close();
 
+  /* ===== 5) 집중이 끝나면 휴식 바로 시작 (설정) ===== */
+  page = await open();
+  await page.goto(base + '#timer');
+  await page.evaluate(() => localStorage.setItem('studypromotion.welcomeClosed', '1'));
+  const tm = () => page.evaluate(() => { const x = window.__studypromotion.timer; return { running: x.running, mode: x.mode, remaining: x.remaining, total: x.total }; });
+  const finishFocus = async () => {
+    await page.tap('#timer-start');
+    await page.evaluate(() => { const x = window.__studypromotion.timer; x.endAt = Date.now() - 10; });
+    await page.waitForFunction(() => window.__studypromotion.timer.mode === 'break');
+  };
+  await finishFocus();
+  let m5 = await tm();
+  assert(m5.mode === 'break' && !m5.running, '기본: 집중이 끝나면 휴식으로 바뀌고 멈춰 있음 (지금과 같음)');
+  await page.tap('.mode-switch [data-mode="focus"]');
+  await page.goto(base + '#account');
+  assert(!(await page.isChecked('#set-autobreak')), '휴식 바로 시작은 기본으로 꺼져 있음');
+  await page.evaluate(() => document.querySelector('#set-autobreak').click());
+  await page.tap('#settings-form button[type="submit"]');
+  assert((await stateOf(page)).settings.autoBreak === true, '설정 저장');
+  await page.goto(base + '#timer');
+  await finishFocus();
+  m5 = await tm();
+  assert(m5.mode === 'break' && m5.running && m5.remaining > m5.total - 5, '켜 두면 집중이 끝나자마자 휴식 타이머가 돎');
+  assert((await stateOf(page)).sessions.length === 2, '집중 기록은 그대로 남음');
+  // 휴식이 끝나면 집중은 자동으로 시작하지 않음
+  await page.evaluate(() => { const x = window.__studypromotion.timer; x.endAt = Date.now() - 10; });
+  await page.waitForFunction(() => window.__studypromotion.timer.mode === 'focus');
+  assert(!(await tm()).running, '휴식이 끝난 뒤 집중은 직접 시작 (자리에 없는데 공부 시간이 쌓이지 않게)');
+  // 건너뛰면 자동 시작하지 않음
+  await page.tap('#timer-start');
+  await page.tap('#timer-skip');
+  m5 = await tm();
+  assert(m5.mode === 'break' && !m5.running, '건너뛰기로 넘어간 휴식은 자동으로 시작하지 않음');
+  await page.context().close();
+
+  /* ===== 6) 최근 7일을 그 전 7일과 비교 ===== */
+  page = await open();
+  await page.goto(base + '#stats');
+  assert(await page.isHidden('#week-compare'), '그 전 7일 기록이 없으면 비교 줄이 안 보임');
+  await page.evaluate(() => App.store.update((st) => {
+    const t = Date.now();
+    st.sessions = [
+      { id: 'w1', subjectId: null, minutes: 120, endedAt: t - 1 * 864e5, label: null },
+      { id: 'w2', subjectId: null, minutes: 60, endedAt: t - 3 * 864e5, label: null },
+      { id: 'p1', subjectId: null, minutes: 100, endedAt: t - 9 * 864e5, label: null },
+    ];
+  }));
+  assert((await page.textContent('#week-compare')).trim() === '그 전 7일보다 1시간 20분 더 했어요' && await page.isVisible('#week-compare'), '최근 7일이 그 전 7일보다 얼마나 많은지 한 줄로: ' + (await page.textContent('#week-compare')).trim());
+  await page.evaluate(() => App.store.update((st) => { st.sessions.find((x) => x.id === 'p1').minutes = 400; }));
+  assert((await page.textContent('#week-compare')).trim() === '그 전 7일보다 3시간 40분 덜 했어요', '적으면 덜 했다고: ' + (await page.textContent('#week-compare')).trim());
+  await page.context().close();
+
   assert(errors.length === 0, '콘솔 오류 없음 ' + errors.join(' | '));
   await browser.close();
   server.close();
