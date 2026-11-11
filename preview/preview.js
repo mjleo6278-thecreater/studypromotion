@@ -263,7 +263,8 @@
   // 처음 열면 예시 기록을 넣어 둔다 (빈 화면 대신 바로 써 볼 수 있게). 한 번 비우거나 넣은 뒤에는 다시 넣지 않는다
   if (!lsGet(SEEDED) && isEmpty()) {
     try { loadSample(); } catch (e) { /* 저장이 막힌 환경: 빈 화면으로 시작 */ }
-    setTimeout(() => toast("미리 보기예요. 위의 '미리 보기'를 누르면 달라진 점을 볼 수 있어요.", { action: '달라진 점', onAction: openPanel }), 2600);
+    // 그 사이에 이미 달라진 점 목록을 열어 봤으면 다시 알리지 않는다
+    setTimeout(() => { if (pill.classList.contains('pv-new')) toast("미리 보기예요. 위의 '미리 보기'를 누르면 달라진 점을 볼 수 있어요.", { action: '달라진 점', onAction: openPanel }); }, 2600);
   }
   window.Preview = { open: openPanel, loadSample, showBack, items: ITEMS };
 })();
