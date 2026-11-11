@@ -1,10 +1,22 @@
 /* 통계 계산 (순수 함수) */
 (function (root) {
-  function dayKey(ts) {
+  // 하루가 시작되는 시각(설정). 0이면 자정(기본). 예: 새벽 4시로 두면 새벽 1시에 한 공부는 전날 공부로 센다.
+  // 시험 범위·카드 복습·스톱워치도 같은 값을 보도록 전역(root)에 둔다.
+  const HOUR = 3600000;
+  function dayOffset() { return root.__spDayStartMs || 0; }
+  function setDayStart(hour) { root.__spDayStartMs = Math.max(0, Math.min(12, Math.floor(+hour || 0))) * HOUR; }
+
+  // 달력 날짜 그대로 (파일 이름이나 카드 복습 날짜처럼 하루 시작 시각과 상관없는 곳에 쓴다)
+  function dateKey(ts) {
     const d = new Date(ts);
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return d.getFullYear() + '-' + m + '-' + day;
+  }
+
+  // 공부한 날: 하루 시작 시각이 되기 전의 새벽은 전날로 친다
+  function dayKey(ts) {
+    return dateKey(ts - dayOffset());
   }
 
   function addDays(ts, n) {
@@ -35,7 +47,7 @@
     for (let i = n - 1; i >= 0; i--) {
       const ts = addDays(now, -i);
       const k = dayKey(ts);
-      out.push({ key: k, label: i === 0 ? '오늘' : names[new Date(ts).getDay()], minutes: map[k] || 0 });
+      out.push({ key: k, label: i === 0 ? '오늘' : names[new Date(ts - dayOffset()).getDay()], minutes: map[k] || 0 });
     }
     return out;
   }
@@ -88,9 +100,9 @@
     return jong ? parts[0] : parts[1];
   }
 
+  const ymKey = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
   function monthKey(ts) {
-    const d = new Date(ts);
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    return ymKey(new Date(ts - dayOffset()));
   }
 
   // 최근 n개월 [{key, label, minutes, days}] (오래된 달 → 이번 달). days = 공부한 날 수
@@ -102,10 +114,10 @@
       (daySets[k] = daySets[k] || new Set()).add(dayKey(s.endedAt));
     }
     const out = [];
-    const base = new Date(now);
+    const base = new Date(now - dayOffset());
     for (let i = n - 1; i >= 0; i--) {
       const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
-      const k = monthKey(d.getTime());
+      const k = ymKey(d);
       out.push({ key: k, label: (d.getMonth() + 1) + '월', year: d.getFullYear(), month: d.getMonth() + 1, minutes: mins[k] || 0, days: daySets[k] ? daySets[k].size : 0 });
     }
     return out;
@@ -115,7 +127,7 @@
   //  todayMin: 오늘 이미 한 양 (오늘 몫 계산에 사용)
   function monthGoal(goalMin, minutes, now, todayMin) {
     if (!goalMin) return null;
-    const d = new Date(now);
+    const d = new Date(now - dayOffset());
     const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
     const daysLeft = lastDay - d.getDate() + 1;
     const remaining = Math.max(0, goalMin - minutes);
@@ -160,14 +172,15 @@
 
   /**
    * 하루 공부 시간표 (10분 칸 스터디 플래너처럼 시간대별로)
-   *  key 'YYYY-MM-DD' 하루에 걸친 기록을 시(0~23)마다 조각으로 나눈다. 자정을 넘긴 기록은 그날 몫만.
+   *  key 'YYYY-MM-DD' 하루에 걸친 기록을 시(0~23)마다 조각으로 나눈다. 하루가 끝나는 시각(기본 자정)을 넘긴 기록은 그날 몫만.
    *  직접 기록은 언제 했는지 모르니 시간표에 넣지 않고 untimed(분)로 합만 낸다.
    *  반환: { hours: [{ hour, segs: [{ from, to, subjectId }] }], start, end, timed, untimed }
    *   hours는 처음 공부한 시부터 마지막 시까지, from/to는 그 시 안의 분(0~60), start/end는 시각(ms)
    */
   function dayTimeline(sessions, key) {
     const [y, m, d] = key.split('-').map(Number);
-    const d0 = new Date(y, m - 1, d).getTime(), d1 = new Date(y, m - 1, d + 1).getTime();
+    const off = dayOffset();
+    const d0 = new Date(y, m - 1, d).getTime() + off, d1 = new Date(y, m - 1, d + 1).getTime() + off;
     const segs = [];
     let untimed = 0, timed = 0, start = null, end = null;
     for (const s of sessions) {
@@ -183,10 +196,12 @@
     const hours = [];
     if (segs.length) {
       segs.sort((a, b) => a.from - b.from);
-      const h0 = new Date(start).getHours(), h1 = new Date(end - 1).getHours();
+      // 하루 시작 시각이 새벽이면 그날의 시간표가 다음 날 새벽까지 이어진다 (… 22시, 23시, 0시, 1시)
+      const midnight = new Date(y, m - 1, d).getTime();
+      const h0 = Math.floor((start - midnight) / HOUR), h1 = Math.floor((end - 1 - midnight) / HOUR);
       for (let h = h0; h <= h1; h++) {
         const t0 = new Date(y, m - 1, d, h).getTime(), t1 = new Date(y, m - 1, d, h + 1).getTime();
-        hours.push({ hour: h, segs: segs.filter((g) => g.to > t0 && g.from < t1).map((g) => ({
+        hours.push({ hour: h % 24, segs: segs.filter((g) => g.to > t0 && g.from < t1).map((g) => ({
           from: Math.round(((Math.max(g.from, t0) - t0) / 60000) * 10) / 10,
           to: Math.round(((Math.min(g.to, t1) - t0) / 60000) * 10) / 10,
           subjectId: g.subjectId,
@@ -196,7 +211,7 @@
     return { hours, start, end, timed: Math.round(timed), untimed };
   }
 
-  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes, josa };
+  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, dayKey, dateKey, dayOffset, setDayStart, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes, josa };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);

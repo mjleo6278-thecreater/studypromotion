@@ -1015,7 +1015,7 @@
     } else if (act === 'delete') {
       const count = Scope.subtreeIds(st().topics, id).length - 1;
       const what = n.kind === 'note' ? '메모' : n.parentId ? '항목' : '과목';
-      if (count > 0 && !(await ask(`'${n.title}' ${what}과 안에 든 항목 ${count}개를 삭제할까요? (되돌리기로 복구할 수 있어요)`))) return;
+      if (count > 0 && !(await ask(`'${n.title}' ${what}과 안에 든 항목 ${count}개를 삭제할까요? (되돌리기로 복구할 수 있어요)`, { ok: '삭제', danger: true }))) return;
       mutate((s) => keepPace(s, examId, () => { s.topics = Scope.removeSubtree(s.topics, id); }));
       toast(`${n.kind === 'note' ? '메모를' : `'${n.title}' ${what}을`} 삭제했어요 · 되돌리기로 복구할 수 있어요`);
     }
@@ -1102,7 +1102,7 @@
     }
     if (act === 'print') { window.print(); return; }
     if (act === 'uncheck-exam') {
-      if (!(await ask('이 시험의 체크를 모두 해제할까요?'))) return;
+      if (!(await ask('이 시험의 체크를 모두 해제할까요?', { ok: '모두 해제' }))) return;
       // 체크와 함께 진행률(%)도 0으로 (진행률이 100으로 남으면 모두 99%로 보인다)
       mutate((s) => s.topics.forEach((t) => { if (t.examId === examId) { t.done = false; t.doneAt = null; t.pct = 0; } }));
     }
@@ -1365,7 +1365,7 @@
     const ex = st().exams.find((x) => x.id === editingExam);
     if (!ex) return;
     closeExamDialog();
-    if (!(await ask(`'${ex.name}' 시험과 범위 카드를 모두 삭제할까요? (되돌리기로 복구할 수 있어요)`))) return;
+    if (!(await ask(`'${ex.name}' 시험과 범위 카드를 모두 삭제할까요? (되돌리기로 복구할 수 있어요)`, { ok: '삭제', danger: true }))) return;
     mutate((s) => {
       s.exams = s.exams.filter((x) => x.id !== ex.id);
       s.topics = s.topics.filter((t) => t.examId !== ex.id);

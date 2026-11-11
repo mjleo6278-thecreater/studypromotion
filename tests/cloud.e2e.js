@@ -123,6 +123,21 @@ const FAKE = `
   await c.waitForFunction(() => Cloud.meta.remoteAt);
   assert(docs.g1, '구글 로그인 후 계정에 저장');
 
+  // 이 기기에도 기록이 있고 계정에도 기록이 있으면: 어느 쪽을 쓸지 버튼에 그대로 적혀 있고, 꼭 골라야 한다
+  const d = await device();
+  await d.goto(base + '#account');
+  await d.evaluate(() => App.store.update((s) => s.tasks.push({ id: 'local1', title: '이 기기에서 적은 일', done: false })));
+  await d.fill('#acc-email', 'me@test.com'); await d.fill('#acc-pass', 'secret12');
+  await d.click('#acc-form [data-mode="login"]');
+  await d.waitForSelector('#ask:not([hidden])');
+  const choice = await d.evaluate(() => ({ msg: document.querySelector('#ask-msg').textContent, ok: document.querySelector('#ask-ok').textContent, cancel: document.querySelector('#ask-cancel').textContent }));
+  assert(choice.ok === '계정 기록 불러오기' && choice.cancel === '이 기기 기록 올리기' && !/취소를 누르면/.test(choice.msg), "기록 고르기 창의 버튼에 하는 일이 적혀 있음 (전에는 '확인'/'취소')");
+  await d.keyboard.press('Escape');
+  assert(await d.isVisible('#ask'), 'Esc로 닫히지 않음 (실수로 계정 기록을 덮어쓰지 않게)');
+  await d.click('#ask-ok');
+  await d.waitForFunction(() => App.store.get().tasks.some((t) => t.title === '수학 1단원'));
+  assert(!(await d.evaluate(() => App.store.get().tasks.some((t) => t.id === 'local1'))), '계정 기록 불러오기를 고르면 계정 기록으로 바뀜');
+
   assert(errors.length === 0, '페이지 오류 없음 ' + errors.join(' | '));
   await browser.close(); server.close();
 })().catch((e) => { console.error(e); process.exit(1); });

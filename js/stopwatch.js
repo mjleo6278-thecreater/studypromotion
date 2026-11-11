@@ -41,8 +41,9 @@
     sec = Math.max(0, Math.floor(sec));
     return pad(Math.floor(sec / 3600)) + ':' + pad(Math.floor((sec % 3600) / 60)) + ':' + pad(sec % 60);
   }
-  function dayStart(ts) { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
-  function nextDay(ts) { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(); }
+  // 하루의 시작과 끝: 기본은 자정, 설정에서 하루 시작 시각을 새벽으로 옮겼으면 그 시각
+  function dayStart(ts) { const off = Stats.dayOffset(); const d = new Date(ts - off); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() + off; }
+  function nextDay(ts) { const off = Stats.dayOffset(); const d = new Date(ts - off); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() + off; }
   const secOf = (s) => (s.sec > 0 ? s.sec : (Number(s.minutes) || 0) * 60);
   const subjects = () => store.get().subjects || [];
   const subjectOf = (id) => subjects().find((s) => s.id === id) || null;
@@ -260,7 +261,7 @@
   // 1초마다 바뀌는 숫자만 고친다
   function paint(t) {
     if (base.day !== Stats.dayKey(t)) countBase(); // 자정이 지나면 오늘 기록을 다시 셈
-    const d = new Date(t);
+    const d = new Date(t - Stats.dayOffset());
     $('#sw-date').textContent = `${d.getMonth() + 1}월 ${d.getDate()}일 ${DAYS[d.getDay()]}요일`;
     const today = runTodaySec(t);
     $('#sw-total').textContent = clock(base.total + today);

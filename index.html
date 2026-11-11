@@ -443,6 +443,18 @@
           <label class="field">하루 목표(분)<input type="number" id="set-goal" min="10" step="10" inputmode="numeric"></label>
           <label class="field">집중 시간(분)<input type="number" id="set-focus" min="1" max="180" inputmode="numeric"></label>
           <label class="field">휴식 시간(분)<input type="number" id="set-break" min="1" max="60" inputmode="numeric"></label>
+          <label class="field full">하루 시작 시각
+            <select id="set-daystart">
+              <option value="0">자정 (밤 12시)</option>
+              <option value="1">새벽 1시</option>
+              <option value="2">새벽 2시</option>
+              <option value="3">새벽 3시</option>
+              <option value="4">새벽 4시</option>
+              <option value="5">새벽 5시</option>
+              <option value="6">아침 6시</option>
+            </select>
+            <small class="muted">이 시각 전의 새벽 공부는 전날 공부로 쳐요. 밤늦게 공부해도 오늘 목표와 연속 학습일이 끊기지 않아요.</small>
+          </label>
           <label class="check-field"><input type="checkbox" id="set-awake"> 타이머가 도는 동안 화면 켜 두기 <small class="muted">(꺼지면 끝나는 소리가 늦을 수 있어요)</small></label>
           <button class="btn" type="submit">저장</button>
         </form>
@@ -759,7 +771,7 @@
   <div class="ask-backdrop" id="ask" hidden>
     <div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-msg">
       <p id="ask-msg"></p>
-      <div class="ask-actions"><button class="btn" id="ask-cancel">취소</button><button class="btn primary" id="ask-ok">확인</button></div>
+      <div class="ask-actions"><button class="btn" id="ask-cancel">취소</button><button class="btn" id="ask-alt" hidden></button><button class="btn primary" id="ask-ok">확인</button></div>
     </div>
   </div>
 

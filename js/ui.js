@@ -234,7 +234,7 @@
   /* ---------- 날짜 고르기 ---------- */
   const pad = (n) => String(n).padStart(2, '0');
   const keyOf = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`; // m: 0부터
-  const todayKey = () => { const t = new Date(); return keyOf(t.getFullYear(), t.getMonth(), t.getDate()); };
+  const todayKey = () => { const t = new Date(Date.now() - (root.__spDayStartMs || 0)); return keyOf(t.getFullYear(), t.getMonth(), t.getDate()); }; // 하루 시작 시각 전의 새벽은 전날
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   function parseKey(v) { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || ''); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; }
   function dateLabel(v) {

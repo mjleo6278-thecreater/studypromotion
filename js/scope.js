@@ -181,8 +181,10 @@
     return changed;
   }
 
+  // 하루 시작 시각(설정, stats.js의 setDayStart)이 되기 전의 새벽은 전날로 본다
+  const dayOffset = () => root.__spDayStartMs || 0;
   function dayKeyOf(ts) {
-    const d = new Date(ts);
+    const d = new Date(ts - dayOffset());
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
   }
 
@@ -422,7 +424,7 @@
   function daysUntil(dateStr, now) {
     if (!dateStr) return null;
     const t = new Date(dateStr + 'T00:00');
-    const d = new Date(now);
+    const d = new Date(now - dayOffset());
     d.setHours(0, 0, 0, 0);
     return Math.round((t - d) / 86400000);
   }
