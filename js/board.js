@@ -240,7 +240,7 @@
       <div class="sl-actions">
         <button class="chip" type="button" data-list-act="add-subject">＋ 과목</button>
         <button class="chip" type="button" data-list-act="paste">목록 붙여넣기</button>
-        <button class="chip" type="button" data-list-act="undo"${store.canUndo() ? '' : ' disabled'}>↶ 되돌리기</button>
+        <button class="chip" type="button" data-list-act="undo"${store.canUndo() ? '' : ' disabled'}>${A.ic('undo')}되돌리기</button>
         ${p.total ? `<label class="chip sl-left"><input type="checkbox" id="sl-only-left"${onlyLeft ? ' checked' : ''}> 남은 것만</label>` : ''}
       </div>
     </div>`;
@@ -272,9 +272,9 @@
     const pct = Scope.leafPct(n);
     const est = +n.est || 0;
     let label;
-    if (!est && !pct) label = '⏱';
+    if (!est && !pct) label = A.ic('timer');
     else if (pct >= 100) label = est ? fm(est) : '100%';
-    else if (pct > 0) label = est ? `${pct}% · 남은 ${fm(Math.round(est * (100 - pct) / 100))}` : `${pct}%`;
+    else if (pct > 0) label = est ? `${pct}%<span class="bt-left"> · 남은 ${fm(Math.round(est * (100 - pct) / 100))}</span>` : `${pct}%`; // 보드(좁은 카드)에서는 %만 보여 제목 자리를 남긴다
     else label = fm(est);
     return `<button class="btime${pct > 0 && pct < 100 ? ' partial' : ''}${!est ? ' empty' : ''}" data-time="${esc(n.id)}" style="--p:${pct}%" aria-label="${esc(n.title)} 소요시간·진행률">${label}</button>`;
   }
@@ -371,7 +371,7 @@
     const el = $('#board-pace');
     if (!plan) {
       el.hidden = !(p.total && !p.timeTotal);
-      el.innerHTML = el.hidden ? '' : '<div class="bp-row"><span>⏱ 항목 옆 <b>⏱</b>을 눌러 걸리는 시간을 적으면, 시험까지 하루에 몇 시간씩 해야 하는지 계산해 드려요.</span></div>';
+      el.innerHTML = el.hidden ? '' : `<div class="bp-row"><span>${A.ic('timer')} 항목 옆 시계 버튼을 눌러 걸리는 시간을 적으면, 시험까지 하루에 몇 시간씩 해야 하는지 계산해 드려요.</span></div>`;
       return;
     }
     el.hidden = false;
@@ -380,7 +380,7 @@
       : plan.todayLeft ? `오늘 할 양 <b>${fm(plan.todayLeft)}</b> 남음` : '오늘 할 양 <b>완료 ✓</b>';
     const behind = !plan.finished && plan.behind > 0 ? `<span class="bp-behind">밀린 양 ${fm(plan.behind)}</span>` : '';
     el.innerHTML = `<button class="bp-row" id="bp-toggle" aria-expanded="${paceOpen}">
-        <span>⏱ ${today}</span>${behind}<span class="muted">${dday}</span><span class="bp-more">${paceOpen ? '접기 ▴' : '자세히 ▾'}</span>
+        <span>${A.ic('timer')} ${today}</span>${behind}<span class="muted">${dday}</span><span class="bp-more">${paceOpen ? '접기 ▴' : '자세히 ▾'}</span>
       </button>
       ${paceOpen ? `<div class="bp-grid">
         <div><small>전체 소요시간</small><b>${fm(plan.total)}</b><small>${p.noEst ? `시간 안 적은 항목 ${p.noEst}개` : '모든 항목 기준'}</small></div>
@@ -1016,7 +1016,7 @@
       const what = n.kind === 'note' ? '메모' : n.parentId ? '항목' : '과목';
       if (count > 0 && !(await ask(`'${n.title}' ${what}과 안에 든 항목 ${count}개를 삭제할까요? (되돌리기로 복구할 수 있어요)`))) return;
       mutate((s) => keepPace(s, examId, () => { s.topics = Scope.removeSubtree(s.topics, id); }));
-      toast(`${n.kind === 'note' ? '메모를' : `'${n.title}' ${what}을`} 삭제했어요 · ↶ 되돌리기로 복구할 수 있어요`);
+      toast(`${n.kind === 'note' ? '메모를' : `'${n.title}' ${what}을`} 삭제했어요 · 되돌리기로 복구할 수 있어요`);
     }
   });
 
@@ -1029,7 +1029,7 @@
     moveReturn = document.activeElement;
     const targets = Scope.moveTargets(st().topics, id);
     const colorOf = new Map(Scope.childrenOf(st().topics, null, examId).map((c) => [c.id, c.color]));
-    $('#move-sub').textContent = `‘${n.title}’${(Scope.indexByParent(st().topics).get(id) || []).length ? '과 그 안의 항목을' : '을'} 고른 곳 아래 맨 끝으로 옮겨요.`;
+    $('#move-sub').textContent = `‘${n.title}’${(Scope.indexByParent(st().topics).get(id) || []).length ? Stats.josa(n.title, '과/와') + ' 그 안의 항목을' : Stats.josa(n.title, '을/를')} 고른 곳 아래 맨 끝으로 옮겨요.`;
     $('#move-list').innerHTML = targets.map((t) => `<li><button type="button" class="move-opt${t.depth ? '' : ' card'}" data-move-to="${esc(t.id)}" style="--d:${t.depth}"${t.current ? ' disabled aria-current="true"' : ''}>` +
       `${t.depth ? '' : `<i class="dot" style="background:${esc(colorOf.get(t.id) || '#888')}"></i>`}<span>${esc(t.title)}</span>${t.current ? '<small>지금 위치</small>' : ''}</button></li>`).join('');
     $('#move-dlg').hidden = false;
@@ -1053,7 +1053,7 @@
     mutate((s) => { moved = Scope.moveTo(s.topics, id, dest); });
     if (!moved) return;
     if (mode === 'board') settleAll = true;
-    toast(`‘${clip(n.title)}’을 ‘${clip(d.title)}’ 아래로 옮겼어요`);
+    toast(`‘${clip(n.title)}’${Stats.josa(n.title, '을/를')} ‘${clip(d.title)}’ 아래로 옮겼어요`);
     const row = cardsEl.querySelector(`[data-id="${CSS.escape(id)}"]`);
     if (row) { if (mode === 'list') row.scrollIntoView({ block: 'center' }); else ensureVisible(row); }
   });
@@ -1065,11 +1065,11 @@
   $('#bb-more').addEventListener('click', (e) => {
     if (!examId) return;
     menu.innerHTML = [
-      ['new-exam', '＋ 새 시험 만들기'],
-      ['edit-exam', '✎ 시험 이름·날짜·과목 바꾸기'],
-      ['add-subject', '＋ 과목 추가'],
+      ['new-exam', '새 시험 만들기'],
+      ['edit-exam', '시험 이름·날짜·과목 바꾸기'],
+      ['add-subject', '과목 추가'],
       ['paste', '범위 목록 붙여넣기'],
-      store.canUndo() ? ['undo', '↶ 되돌리기'] : null,
+      store.canUndo() ? ['undo', '되돌리기'] : null,
       ['copy-outline', '범위를 텍스트로 복사'],
       ['download-outline', '범위를 텍스트 파일로 저장'],
       ['print', mode === 'list' ? '범위 인쇄 / PDF' : '보드 인쇄 / PDF'],
@@ -1102,7 +1102,8 @@
     if (act === 'print') { window.print(); return; }
     if (act === 'uncheck-exam') {
       if (!(await ask('이 시험의 체크를 모두 해제할까요?'))) return;
-      mutate((s) => s.topics.forEach((t) => { if (t.examId === examId) { t.done = false; t.doneAt = null; } }));
+      // 체크와 함께 진행률(%)도 0으로 (진행률이 100으로 남으면 모두 99%로 보인다)
+      mutate((s) => s.topics.forEach((t) => { if (t.examId === examId) { t.done = false; t.doneAt = null; t.pct = 0; } }));
     }
     if (act === 'clear-ink') {
       mutate((s) => { s.strokes = s.strokes.filter((x) => x.examId !== examId); });

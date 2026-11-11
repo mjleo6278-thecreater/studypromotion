@@ -156,7 +156,7 @@
     save();
     begin();
     render();
-    if (sec >= 0) toast(sec > 0 ? `${nameOf(old)} ${Stats.formatMinutes(sec / 60)} 기록 · ${nameOf(id)} 시작` : `${nameOf(id)}(으)로 바꿨어요`); // -1이면 ‘기록하지 않았어요’ 알림을 그대로
+    if (sec >= 0) toast(sec > 0 ? `${nameOf(old)} ${Stats.formatMinutes(sec / 60)} 기록 · ${nameOf(id)} 시작` : (subjectOf(id) ? `${nameOf(id)}${Stats.josa(nameOf(id), '으로/로')} 바꿨어요` : '과목 없이 재도록 바꿨어요')); // -1이면 ‘기록하지 않았어요’ 알림을 그대로
   }
 
   function toggle() { return sw.running ? stop() : start(nextSubject()); }

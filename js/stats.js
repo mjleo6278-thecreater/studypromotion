@@ -73,6 +73,21 @@
     return m ? h + '시간 ' + m + '분' : h + '시간';
   }
 
+  // 받침에 맞는 조사를 고른다: josa('국어', '을/를') → '를', josa('수학', '을/를') → '을'
+  // pair는 '받침 있을 때/없을 때' 순서 ('을/를', '이/가', '은/는', '과/와', '으로/로')
+  function josa(word, pair) {
+    const parts = String(pair).split('/');
+    const s = String(word == null ? '' : word).replace(/[\s'"‘’“”)\]…·.,!?]+$/, '');
+    const last = s.slice(-1);
+    const code = last.charCodeAt(0);
+    let jong = 0; // 받침 번호 (0이면 받침 없음, 8이면 ㄹ)
+    if (code >= 0xac00 && code <= 0xd7a3) jong = (code - 0xac00) % 28;
+    else if (/[0-9]/.test(last)) jong = [21, 8, 0, 16, 0, 0, 1, 8, 8, 0][+last]; // 영·일·이·삼·사·오·육·칠·팔·구
+    else if (/[a-z]/i.test(last)) jong = /[lL]/.test(last) ? 8 : /[mnMN]/.test(last) || /ng$/i.test(s) ? 4 : 0;
+    if (parts[0] === '으로') return jong && jong !== 8 ? '으로' : '로';
+    return jong ? parts[0] : parts[1];
+  }
+
   function monthKey(ts) {
     const d = new Date(ts);
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
@@ -181,7 +196,7 @@
     return { hours, start, end, timed: Math.round(timed), untimed };
   }
 
-  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes };
+  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, dayKey, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes, josa };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);

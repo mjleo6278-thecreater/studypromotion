@@ -264,3 +264,31 @@ test('하루 시간표: 시간대별 조각, 자정 넘긴 기록, 직접 기록
   const none = Stats.dayTimeline(sessions.slice(3, 4), '2026-11-09');
   assert.deepStrictEqual([none.hours.length, none.timed, none.untimed, none.start], [0, 0, 90, null]);
 });
+
+test('조사: 받침에 맞게 고른다 (을/를, 이/가, 과/와, 으로/로)', () => {
+  assert.strictEqual(Stats.josa('국어', '을/를'), '를');
+  assert.strictEqual(Stats.josa('수학', '을/를'), '을');
+  assert.strictEqual(Stats.josa('한국사', '과/와'), '와');
+  assert.strictEqual(Stats.josa('문법', '과/와'), '과');
+  assert.strictEqual(Stats.josa('영어', '이/가'), '가');
+  // (으)로: 받침이 없거나 ㄹ 받침이면 '로'
+  assert.strictEqual(Stats.josa('국어', '으로/로'), '로');
+  assert.strictEqual(Stats.josa('수학', '으로/로'), '으로');
+  assert.strictEqual(Stats.josa('미술', '으로/로'), '로');
+  // 숫자·영어·따옴표로 끝나도
+  assert.strictEqual(Stats.josa('기출 2', '을/를'), '를');
+  assert.strictEqual(Stats.josa('기출 3', '을/를'), '을');
+  assert.strictEqual(Stats.josa('수학 1', '으로/로'), '로');
+  assert.strictEqual(Stats.josa('Day 10', '을/를'), '을');
+  assert.strictEqual(Stats.josa('‘국어’', '을/를'), '를');
+  assert.strictEqual(Stats.josa('Reading', '을/를'), '을');
+  assert.strictEqual(Stats.josa('Grammar', '을/를'), '를');
+});
+
+test('기록 정리: 체크는 풀렸는데 진행률이 100%로 남은 범위 항목은 0%로 바로잡는다', () => {
+  const out = StoreLib.normalize({ tasks: [], topics: [
+    { id: 'a', done: false, pct: 100 }, { id: 'b', done: true, pct: 100 }, { id: 'c', done: false, pct: 40 }, { id: 'd', done: true }, { id: 'e', done: false },
+  ] });
+  assert.deepStrictEqual(out.topics.map((t) => t.pct), [0, 100, 40, undefined, undefined]);
+  assert.deepStrictEqual(out.topics.map((t) => t.done), [false, true, false, true, false]);
+});

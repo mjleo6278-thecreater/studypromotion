@@ -262,7 +262,14 @@
   $('#acc-sync').addEventListener('click', () => syncNow(true));
   $('#acc-logout').addEventListener('click', async () => {
     if (!(await ask('로그아웃할까요? 계정에 저장된 기록은 그대로 남고, 이 기기의 기록도 지워지지 않아요.'))) return;
-    pushNow();
+    // 아직 계정에 올리지 못한 변경이 있으면 로그아웃 전에 마저 올린다 (올리는 도중에 로그아웃되면 저장이 실패할 수 있다)
+    clearTimeout(pushTimer);
+    if (user && meta.dirty && !busy && navigator.onLine !== false) {
+      busy = true;
+      render('계정에 저장하는 중…');
+      try { await Promise.race([upload(), new Promise((res, rej) => setTimeout(() => rej(new Error('timeout')), 6000))]); } catch (e) { /* 올리지 못해도 이 기기의 기록은 그대로 남는다 */ }
+      busy = false;
+    }
     try { await fb.auth().signOut(); } catch (e) { /* 무시 */ }
     meta = {}; saveMeta();
     render();

@@ -38,7 +38,7 @@
       back.className = 'ui-back' + (pop ? ' pop' : '');
       back.innerHTML = `<div class="ui-sheet ${cls || ''}" role="dialog" aria-modal="true" aria-label="${esc(title || '선택')}">` +
         (pop ? '' : '<div class="ui-grip" aria-hidden="true"></div>') +
-        (title ? `<div class="ui-sheet-head"><b>${esc(title)}</b><button type="button" class="ui-x" data-ui-close aria-label="닫기">✕</button></div>` : '') +
+        (title ? `<div class="ui-sheet-head"><b>${esc(title)}</b><button type="button" class="ui-x" data-ui-close aria-label="닫기"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>` : '') +
         `<div class="ui-sheet-body">${body}</div></div>`;
       doc.body.appendChild(back);
       const box = back.firstElementChild;

@@ -107,10 +107,13 @@ const FAKE = `
   await b.waitForFunction(() => /로그인됨/.test(document.querySelector('#acc-status').textContent));
   assert(true, '다시 열어도 로그인 유지');
 
-  // 로그아웃
+  // 로그아웃: 바꾼 직후 바로 로그아웃해도 그 변경은 계정에 올라간다
+  await b.evaluate(() => App.store.update((s) => s.tasks.push({ id: 'x3', title: '로그아웃 직전에 적은 일', done: false })));
   await b.click('#acc-logout'); await b.click('#ask-ok');
   await b.waitForFunction(() => !document.querySelector('#acc-out').hidden);
-  assert(await b.evaluate(() => App.store.get().tasks.length) === 2, '로그아웃해도 이 기기 기록은 남음');
+  assert(Object.values(docs).some((d) => d && String(d.data).includes('로그아웃 직전에 적은 일')), '바꾼 직후 로그아웃해도 그 변경이 계정에 저장됨');
+  assert(await b.evaluate(() => App.store.get().tasks.length) === 3, '로그아웃해도 이 기기 기록은 남음');
+  assert(await b.evaluate(() => !JSON.parse(localStorage.getItem('studypromotion.cloud') || '{}').uid), '로그아웃하면 연결 정보가 지워짐');
 
   // 구글 로그인 버튼
   const c = await device();

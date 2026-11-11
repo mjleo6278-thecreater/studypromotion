@@ -53,6 +53,8 @@
       activeExamId: data.activeExamId || null,
       settings: Object.assign({}, base.settings, data.settings && typeof data.settings === 'object' ? data.settings : {}),
     });
+    // 예전 버전의 ‘이 시험 체크 모두 해제’가 체크만 풀고 진행률 100%를 남겨 둔 항목을 바로잡는다 (99%로 보이던 문제)
+    out.topics.forEach((t) => { if (t && !t.done && +t.pct >= 100) t.pct = 0; });
     return out;
   }
 

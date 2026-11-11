@@ -13,6 +13,8 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
   const now = () => Date.now();
+  // 선 아이콘 (index.html 맨 위 아이콘 묶음의 기호를 가져다 쓴다)
+  const ic = (name, cls) => `<svg class="ic${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
   const todayKey = () => Stats.dayKey(now());
 
   // opts.action / opts.onAction: 알림 옆에 '되돌리기' 같은 버튼 (5초 동안)
@@ -127,8 +129,8 @@
           ${t.done ? '' : dueLabel(t.due)}
         </div>
       </div>
-      <button class="icon-btn task-edit-btn" aria-label="고치기" title="고치기">✎</button>
-      <button class="icon-btn task-del" aria-label="삭제" title="삭제">✕</button>
+      <button class="icon-btn task-edit-btn" aria-label="고치기" title="고치기">${ic('edit')}</button>
+      <button class="icon-btn task-del" aria-label="삭제" title="삭제">${ic('x')}</button>
     </li>`;
   }
 
@@ -180,7 +182,7 @@
         if (t) { t.done = e.target.checked; t.doneAt = t.done ? now() : null; }
       });
       if (e.target.checked) toast('잘했어요! 할 일 하나 완료');
-    } else if (e.target.classList.contains('task-del')) {
+    } else if (e.target.closest('.task-del')) {
       const list = store.get().tasks;
       const i = list.findIndex((x) => x.id === id);
       if (i < 0) return;
@@ -261,7 +263,7 @@
     const emptyText = { open: '남은 할 일이 없어요. 위에서 추가해 보세요.', today: '오늘까지 할 일이 없어요.', done: '아직 완료한 일이 없어요.', all: '할 일이 없어요.' }[taskFilter];
     renderTaskList($('#tasklist'), filteredTasks(), emptyText);
     $('#subject-list').innerHTML = store.get().subjects.map((s) =>
-      `<span class="subject-pill"><i class="dot" style="background:${esc(s.color)}"></i>${esc(s.name)}<button class="icon-btn" data-del-subject="${esc(s.id)}" aria-label="${esc(s.name)} 삭제">✕</button></span>`
+      `<span class="subject-pill"><i class="dot" style="background:${esc(s.color)}"></i>${esc(s.name)}<button class="icon-btn" data-del-subject="${esc(s.id)}" aria-label="${esc(s.name)} 삭제">${ic('x')}</button></span>`
     ).join('') || '<span class="muted">과목이 없어요.</span>';
   }
 
@@ -355,7 +357,7 @@
     const sk = Stats.streak(activeDays(), now());
     $('#h-streak').textContent = sk + '일';
     const h = new Date().getHours();
-    $('#home-greeting').textContent = h < 12 ? '좋은 아침이에요' : h < 18 ? '오늘도 한 걸음씩' : '오늘 하루 마무리해 볼까요';
+    $('#home-greeting').textContent = h < 5 ? '늦은 시간까지 수고 많아요' : h < 12 ? '좋은 아침이에요' : h < 18 ? '오늘도 한 걸음씩' : '오늘 하루 마무리해 볼까요';
     touchPlans();
     renderHomeExams();
     renderHomeNext();
@@ -423,11 +425,11 @@
         <button class="bchk s-${pct > 0 ? 'some' : 'none'}" data-next-check="${esc(n.id)}" role="checkbox" aria-checked="${pct > 0 ? 'mixed' : 'false'}" aria-label="${esc(n.title)} 끝냄"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.8 3.8 7.4-8.2"/><path class="dash" d="M5.5 10h9"/></svg></button>
         <div class="next-body"><div class="next-title">${esc(n.title)}</div>
           <div class="next-meta"><i class="dot" style="background:${esc(card.color || '#888')}"></i>${esc(path.join(' · ') || card.title)}${it.left ? ` · ${pct > 0 ? `${pct}% · ` : ''}남은 ${Stats.formatMinutes(it.left)}` : ''}</div></div>
-        <button class="icon-btn next-play" data-next-focus="${esc(n.id)}" aria-label="${esc(n.title)} 타이머 시작" title="이 범위로 타이머 시작">▶</button>
+        <button class="icon-btn next-play" data-next-focus="${esc(n.id)}" aria-label="${esc(n.title)} 타이머 시작" title="이 범위로 타이머 시작">${ic('play')}</button>
       </li>`;
     }).join('');
     $('#h-next-foot').innerHTML = quotaDone ? '오늘 몫을 다 했어요 🎉 더 하고 싶다면 위 범위를 이어서 해 보세요.'
-      : !plan ? '항목마다 ⏱ 걸리는 시간을 적으면, 오늘 할 양에 딱 맞춰 골라 드려요.'
+      : !plan ? `항목마다 ${ic('timer')} 걸리는 시간을 적으면, 오늘 할 양에 딱 맞춰 골라 드려요.`
       : '과목을 번갈아 가며, 오늘 할 양만큼 골랐어요.';
   }
 
@@ -771,8 +773,9 @@
     $('#timer-topic-text').textContent = timer.label ? '공부 중: ' + timer.label : '';
     const st = store.get();
     const todays = st.sessions.filter((s) => Stats.dayKey(s.endedAt) === todayKey());
-    // 직접 기록한 시간은 공부 시간에는 넣고, 집중 횟수에는 넣지 않는다
-    $('#timer-today').textContent = `오늘 공부 ${Stats.formatMinutes(todays.reduce((a, s) => a + s.minutes, 0))} · 집중 ${todays.filter((s) => !s.manual).length}회`;
+    // 직접 기록·스톱워치로 잰 시간은 공부 시간에는 넣고, 집중 횟수에는 넣지 않는다. 스톱워치가 재는 중인 시간도 홈과 같게 더한다
+    const live = window.Stopwatch ? window.Stopwatch.todayMinutes() : 0;
+    $('#timer-today').textContent = `오늘 공부 ${Stats.formatMinutes(todays.reduce((a, s) => a + s.minutes, 0) + live)} · 집중 ${todays.filter((s) => !s.manual && s.kind !== 'stopwatch').length}회`;
     renderTimerFace();
   }
 
@@ -807,9 +810,17 @@
   });
   // 집중/휴식 전환 (로그인 버튼 같은 다른 data-mode 버튼은 건드리지 않게 범위를 좁힘)
   $$('.mode-switch [data-mode]').forEach((b) => b.addEventListener('click', async () => {
+    const to = b.dataset.mode;
+    if (to === timer.mode) return; // 지금 모드를 다시 눌러도 하던 타이머가 처음으로 돌아가지 않게
     if (timer.running && !(await ask('진행 중인 타이머를 멈추고 바꿀까요?'))) return;
+    // 집중하다가 휴식으로 바꾸면 그때까지 한 시간은 ‘건너뛰기’처럼 기록한다 (말없이 사라지지 않게)
+    if (timer.mode === 'focus' && timerBusy()) {
+      if (timer.running) timer.remaining = Math.max(0, Math.ceil((timer.endAt - now()) / 1000));
+      const min = Math.floor((timer.total - timer.remaining) / 60);
+      if (min >= 1) { recordFocus(min, now()); toast(`${Stats.formatMinutes(min)} 기록했어요`); }
+    }
     timer.startedAt = 0;
-    setMode(b.dataset.mode);
+    setMode(to);
   }));
   // 다른 앱에 갔다 오면 바로 남은 시간을 맞추고, 화면 켜 두기를 다시 건다
   document.addEventListener('visibilitychange', () => {
@@ -864,7 +875,7 @@
           <span class="card-edit-actions"><button class="btn sm" type="button" data-card-cancel>취소</button><button class="btn primary sm" type="submit">저장</button></span></form></li>`;
       }
       const next = SRS.isDue(c, t) ? '복습 대기' : `${Stats.dayKey(c.due).slice(5).replace('-', '/')} 복습`;
-      return `<li class="card-row" data-card="${esc(c.id)}"><span>${esc(c.front)}</span><span class="muted-text">${esc(c.back)}</span><span class="muted">${next}</span><button class="icon-btn card-edit-btn" aria-label="카드 고치기" title="고치기">✎</button><button class="icon-btn card-del" aria-label="카드 삭제" title="삭제">✕</button></li>`;
+      return `<li class="card-row" data-card="${esc(c.id)}"><span>${esc(c.front)}</span><span class="muted-text">${esc(c.back)}</span><span class="muted">${next}</span><button class="icon-btn card-edit-btn" aria-label="카드 고치기" title="고치기">${ic('edit')}</button><button class="icon-btn card-del" aria-label="카드 삭제" title="삭제">${ic('x')}</button></li>`;
     }).join('') || '<li class="empty">카드를 추가해 보세요.</li>';
     if (draft && draft.focus) { const el = $('#card-list .card-edit [name="' + draft.focus + '"]'); if (el) el.focus(); }
   }
@@ -1124,10 +1135,12 @@
     $('#session-list').innerHTML = recent.length ? recent.map((s) => {
       const sub = subjectById(s.subjectId);
       const d = new Date(s.endedAt);
-      const label = s.manual && s.label === '직접 기록' ? '' : s.label;
+      let label = s.manual && s.label === '직접 기록' ? '' : s.label;
+      // 범위에서 시작한 기록은 이름이 ‘과목 · 항목’이라, 앞에 적힌 과목 이름과 겹치지 않게 뒤쪽만 보여 준다
+      if (label && sub && label.startsWith(sub.name + ' · ')) label = label.slice(sub.name.length + 3);
       return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.manual ? ' <span class="sl-tag">직접</span>' : s.kind === 'stopwatch' ? ' <span class="sl-tag">스톱워치</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>
         <span class="muted sl-when">${d.getMonth() + 1}/${d.getDate()}${s.manual ? '' : ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`} · ${Stats.formatMinutes(s.minutes)}</span>
-        <button class="icon-btn" data-del-session="${esc(s.id)}" aria-label="이 기록 삭제" title="기록 삭제">✕</button></li>`;
+        <button class="icon-btn" data-del-session="${esc(s.id)}" aria-label="이 기록 삭제" title="기록 삭제">${ic('x')}</button></li>`;
     }).join('') + (more > 0 ? `<li class="sl-more"><button class="btn link" type="button" data-more-sessions>이전 기록 더 보기 (${more}개)</button></li>` : '')
       : '<li class="empty">아직 기록이 없어요. 타이머로 집중하거나 <button class="btn link inline" type="button" data-log-open>직접 기록</button>해 보세요.</li>';
   }
@@ -1401,7 +1414,7 @@
       st.settings.keepAwake = $('#set-awake').checked;
     });
     if (!store.get().settings.keepAwake) releaseAwake(); else if (timer.running) keepAwake();
-    if (!timer.running) setMode(timer.mode);
+    if (!timerBusy()) setMode(timer.mode); // 하던 타이머(일시정지 포함)는 그대로 두고, 새 시간은 다음 타이머부터
     $('#set-goal').blur();
     renderAccount();
     toast('설정을 저장했어요');
@@ -1546,7 +1559,7 @@
     const left = timer.running ? Math.max(0, Math.ceil((timer.endAt - now()) / 1000)) : timer.remaining;
     const doneMin = timer.mode === 'focus' ? Math.floor((timer.total - left) / 60) : 0;
     if (doneMin >= 1) {
-      const ok = await ask(`지금 집중 중인 ${Stats.formatMinutes(doneMin)}을 기록하고\n'${opts.label || '새 범위'}'(으)로 새로 시작할까요?`, { ok: '기록하고 바꾸기', cancel: '그대로 두기' });
+      const ok = await ask(`지금 집중 중인 ${Stats.formatMinutes(doneMin)}을 기록하고\n'${opts.label || '새 범위'}'${Stats.josa(opts.label || '새 범위', '으로/로')} 새로 시작할까요?`, { ok: '기록하고 바꾸기', cancel: '그대로 두기' });
       if (!ok) return go('timer');
       if (timer.running) pauseTimer();
       recordFocus(doneMin, now());
@@ -1613,7 +1626,7 @@
     toast('테마 색: ' + ACCENTS[accent]);
   });
 
-  window.App = { store, focusOn, pawnTrack, $, $$, esc, toast, ask, uid, go, now, render, openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
+  window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, uid, go, now, render, openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   go(location.hash.slice(1) || 'home');

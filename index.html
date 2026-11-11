@@ -58,6 +58,16 @@
     <symbol id="i-review" viewBox="0 0 24 24"><rect x="3.8" y="7.6" width="12.6" height="12.6" rx="2.4"/><path d="M7.6 4.4h10.2a2.4 2.4 0 0 1 2.4 2.4V17"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20c1.1-3.9 4-6 7.4-6s6.3 2.1 7.4 6"/></symbol>
     <symbol id="i-install" viewBox="0 0 24 24"><path d="M12 4v10.4"/><path d="m7.6 10.2 4.4 4.4 4.4-4.4"/><path d="M4.6 15.6v2.6a1.8 1.8 0 0 0 1.8 1.8h11.2a1.8 1.8 0 0 0 1.8-1.8v-2.6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4.8 19.2l.8-3.9L15.8 5.1a1.9 1.9 0 0 1 2.7 0l.4.4a1.9 1.9 0 0 1 0 2.7L8.7 18.4z"/><path d="m14 6.9 3.1 3.1"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.6 6.6l10.8 10.8M17.4 6.6 6.6 17.4"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M8 5.7v12.6a1 1 0 0 0 1.53.85l9.9-6.3a1 1 0 0 0 0-1.7l-9.9-6.3A1 1 0 0 0 8 5.7z"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8.4 5.2 4.4 9.2l4 4"/><path d="M4.8 9.2h9.6a5 5 0 0 1 0 10H9.8"/></symbol>
+    <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M6 4.4l12.6 5.4-5.3 2.1-2.1 5.5z"/><path d="m13.6 13.6 4.6 4.6"/></symbol>
+    <symbol id="i-marker" viewBox="0 0 24 24"><path d="m9.3 14.9 7.6-9.1 2.9 2.4-7.6 9.1z"/><path d="m9.3 14.9-1.2 3.6 3.9-.9"/><path d="M4.4 20h7"/></symbol>
+    <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M9 19.4 4.6 15a1.7 1.7 0 0 1 0-2.4l7.8-7.8a1.7 1.7 0 0 1 2.4 0l4.6 4.6a1.7 1.7 0 0 1 0 2.4l-7.6 7.6z"/><path d="m8.4 8.8 6.8 6.8"/><path d="M9 19.4h10.4"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.2" y="10.6" width="13.6" height="9.6" rx="2.4"/><path d="M8.4 10.6V8.2a3.6 3.6 0 0 1 7.2 0v2.4"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.8h10.4M9 12h10.4M9 17.2h10.4"/><path d="M4.8 6.8h.1M4.8 12h.1M4.8 17.2h.1" stroke-width="2.4"/></symbol>
+    <symbol id="i-pawn" viewBox="0 0 20 20"><g fill="currentColor" stroke="none"><circle cx="10" cy="5.2" r="3"/><path d="M7.6 8.6h4.8l-.6 1.3c1.4 1.6 2.4 3.6 2.6 6H5.6c.2-2.4 1.2-4.4 2.6-6z"/><rect x="4.2" y="15.6" width="11.6" height="2.6" rx="1"/></g></symbol>
     <symbol id="i-stats" viewBox="0 0 24 24"><rect x="4.4" y="12.4" width="3.8" height="7.6" rx="1.2"/><rect x="10.1" y="4.2" width="3.8" height="15.8" rx="1.2"/><rect x="15.8" y="8.6" width="3.8" height="11.4" rx="1.2"/></symbol>
   </svg>
   <header class="topbar">
@@ -114,7 +124,7 @@
         <div class="panel-head"><h2>오늘 할 일</h2><a href="#plan" data-go="plan">전체 보기</a></div>
         <ul class="task-list" id="h-tasklist"></ul>
       </div>
-      <p class="home-about"><a href="#about" data-go="about">♟ 스터디 프로모션 이야기 · 사용설명서</a></p>
+      <p class="home-about"><a href="#about" data-go="about"><svg class="ic" aria-hidden="true"><use href="#i-pawn"/></svg>스터디 프로모션 이야기 · 사용설명서</a></p>
     </section>
 
     <!-- 시험 범위 화이트보드 -->
@@ -122,7 +132,7 @@
       <div class="board-bar" id="board-bar">
         <div class="bb-group">
           <select id="bb-exam" aria-label="시험 선택"></select>
-          <button class="bb-btn" id="bb-exam-edit" title="시험 이름·날짜 바꾸기" aria-label="시험 편집">✎</button>
+          <button class="bb-btn" id="bb-exam-edit" title="시험 이름·날짜 바꾸기" aria-label="시험 편집"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg></button>
           <span class="bb-dday" id="bb-dday"></span>
           <span class="bb-pace" id="bb-pace"></span>
           <div class="pawn-track" id="bb-track" title="전체 진행률: 폰이 끝 칸에 닿으면 퀸으로 승급"></div>
@@ -130,8 +140,8 @@
         </div>
         <div class="bb-group bb-modes">
           <div class="seg" role="group" aria-label="보기 방식">
-            <button class="seg-btn" type="button" data-scope-mode="list" aria-pressed="false" title="과목 → 공부할 내용 목록으로 보기"><span class="seg-ico" aria-hidden="true">☰</span>목록</button>
-            <button class="seg-btn" type="button" data-scope-mode="board" aria-pressed="false" title="넓은 화이트보드로 보기"><span class="seg-ico" aria-hidden="true">▦</span>보드</button>
+            <button class="seg-btn" type="button" data-scope-mode="list" aria-pressed="false" title="과목 → 공부할 내용 목록으로 보기"><svg class="ic seg-ico" aria-hidden="true"><use href="#i-list"/></svg>목록</button>
+            <button class="seg-btn" type="button" data-scope-mode="board" aria-pressed="false" title="넓은 화이트보드로 보기"><svg class="ic seg-ico" aria-hidden="true"><use href="#i-board"/></svg>보드</button>
           </div>
         </div>
         <div class="bb-group board-only">
@@ -144,10 +154,10 @@
           </form>
         </div>
         <div class="bb-group board-only" role="group" aria-label="도구">
-          <button class="bb-btn tool active" data-tool="select" title="선택·이동 (V)" aria-label="선택">✋</button>
-          <button class="bb-btn tool" data-tool="pen" title="펜 (P) — 체크 표시·밑줄" aria-label="펜">✎</button>
-          <button class="bb-btn tool" data-tool="marker" title="형광펜 (H)" aria-label="형광펜">▍</button>
-          <button class="bb-btn tool" data-tool="eraser" title="지우개 (E)" aria-label="지우개">⌫</button>
+          <button class="bb-btn tool active" data-tool="select" title="선택·이동 (V)" aria-label="선택"><svg class="ic" aria-hidden="true"><use href="#i-cursor"/></svg></button>
+          <button class="bb-btn tool" data-tool="pen" title="펜 (P) — 체크 표시·밑줄" aria-label="펜"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg></button>
+          <button class="bb-btn tool" data-tool="marker" title="형광펜 (H)" aria-label="형광펜"><svg class="ic" aria-hidden="true"><use href="#i-marker"/></svg></button>
+          <button class="bb-btn tool" data-tool="eraser" title="지우개 (E)" aria-label="지우개"><svg class="ic" aria-hidden="true"><use href="#i-eraser"/></svg></button>
           <span class="bb-colors" id="bb-colors"></span>
         </div>
         <div class="bb-group">
@@ -156,7 +166,7 @@
           <button class="bb-btn board-only" id="bb-zoom-in" title="확대" aria-label="확대">＋</button>
           <button class="bb-btn text board-only" id="bb-fit" title="전체 범위가 한눈에 보이게">한눈에 보기</button>
           <button class="bb-btn text board-only" id="bb-arrange" title="카드 자동 정렬">정렬</button>
-          <button class="bb-btn board-only" id="bb-undo" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기">↶</button>
+          <button class="bb-btn board-only" id="bb-undo" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></button>
           <button class="bb-btn" id="bb-more" title="더 보기" aria-label="더 보기">⋯</button>
         </div>
       </div>
@@ -237,7 +247,7 @@
           </svg>
           <div class="ring-text"><div id="timer-time">25:00</div><div id="timer-mode" class="muted">집중</div></div>
         </div>
-        <div class="timer-topic" id="timer-topic" hidden><span id="timer-topic-text"></span><button class="icon-btn" id="timer-topic-clear" aria-label="공부 항목 지우기">✕</button></div>
+        <div class="timer-topic" id="timer-topic" hidden><span id="timer-topic-text"></span><button class="icon-btn" id="timer-topic-clear" aria-label="공부 항목 지우기"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></div>
         <label class="field">과목
           <select id="timer-subject"></select>
         </label>
@@ -250,7 +260,7 @@
         <p class="muted small timer-key">PC에서는 스페이스 키로 시작·일시정지할 수 있어요.</p>
         <button class="btn link log-link" type="button" data-log-open>＋ 타이머 없이 공부한 시간 기록하기</button>
         <div class="lock-setup">
-          <h3>🔒 폰 잠금 모드</h3>
+          <h3><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>폰 잠금 모드</h3>
           <p class="muted small">정한 시간 동안 이 화면만 보이게 잠가요. 앱을 닫았다 다시 열어도 시간이 끝날 때까지 잠금 화면이 이어지고, 다른 앱으로 나간 횟수가 기록돼요.</p>
           <div class="lock-chips" id="lock-chips" role="group" aria-label="잠글 시간 고르기">
             <button class="chip" data-lock="30" type="button">30분</button>
@@ -500,14 +510,14 @@
           <ol>
             <li><a href="#board" data-go="board">범위</a> 탭에서 시험 이름과 날짜를 적고, 시험 보는 과목을 고르세요.</li>
             <li>과목마다 <b>공부할 내용 추가</b> 칸에 시험 범위를 하나씩 적어요. 예: ‘1단원 다항식’, ‘본문 1~3과’.</li>
-            <li>항목 옆 <b>⏱</b>을 눌러 걸리는 시간을 적으면, 시험까지 하루에 얼마나 해야 하는지 계산해 줘요.</li>
+            <li>항목 옆 <svg class="ic" aria-hidden="true"><use href="#i-timer"/></svg> 버튼을 눌러 걸리는 시간을 적으면, 시험까지 하루에 얼마나 해야 하는지 계산해 줘요.</li>
             <li>공부할 땐 <a href="#timer" data-go="timer">타이머</a>나 폰 잠금 모드를 켜고, 끝낸 범위는 체크하세요. 체크할 때마다 폰이 한 칸씩 전진해요.</li>
           </ol>
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-home"/></svg>홈</summary>
           <p>오늘 공부한 시간과 하루 목표, 남은 할 일, 오늘 복습할 카드, 연속 학습일을 한눈에 보여 줘요. <b>시험 준비</b>에는 시험마다 D-day, 진행률(폰이 걷는 체스 칸), 남은 시간과 오늘 더 해야 할 양이 나와요.</p>
-          <p><b>오늘 할 범위</b>는 가장 가까운 시험에서 아직 안 끝낸 내용을 과목을 번갈아 가며 오늘 할 양만큼 골라 줘요. 바로 체크할 수 있고, ▶를 누르면 그 범위로 타이머가 준비돼요.</p>
+          <p><b>오늘 할 범위</b>는 가장 가까운 시험에서 아직 안 끝낸 내용을 과목을 번갈아 가며 오늘 할 양만큼 골라 줘요. 바로 체크할 수 있고, <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼을 누르면 그 범위로 타이머가 준비돼요.</p>
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-board"/></svg>범위 — 목록과 보드</summary>
@@ -517,22 +527,22 @@
             <li><b>체크</b>: 끝낸 항목을 체크해요. 단원을 체크하면 안에 든 항목이 모두 체크돼요. 과목을 다 끝내면 ‘♛ 승급’ 도장이 찍혀요.</li>
             <li><b>단계 나누기</b>: 항목 옆 <b>＋</b>를 누르면 그 항목 바로 아래에 넣을 수 있어요. 국어 › 비문학 › 수특 주제통합 1강 › 분석처럼 몇 단계든 나눌 수 있어요.</li>
             <li><b>⋯ 메뉴</b>: 하위 항목 추가, 이름 바꾸기, 소요시간·진행률, 이 범위로 타이머 시작, 오늘 할 일로 보내기, 삭제. <b>표시 ›</b> 안에서 ★ 중요·! 어려움·↻ 다시 보기를 켜고 끄고, <b>옮기기 ›</b> 안에서 위로·아래로, 한 단계 안으로·밖으로, 다른 곳으로 옮길 수 있어요.</li>
-            <li><b>⏱ 소요시간·진행률</b>: 걸리는 시간과 얼마나 했는지(%)를 적어요. 반쯤 했다면 50%로 두면 돼요.</li>
+            <li><b><svg class="ic" aria-hidden="true"><use href="#i-timer"/></svg> 소요시간·진행률</b>: 걸리는 시간과 얼마나 했는지(%)를 적어요. 반쯤 했다면 50%로 두면 돼요.</li>
             <li><b>페이스 띠</b>: 오늘 할 양, 밀린 양, 지금 필요한 하루 페이스를 알려 줘요. ‘자세히’를 누르면 전체 소요시간과 한 만큼이 나와요.</li>
             <li><b>목록 붙여넣기</b>: 이미 정리해 둔 범위가 있으면 한 번에 붙여넣을 수 있어요. ‘# 과목’, ‘- 단원’, 들여쓰기로 단계를 나눠요.</li>
-            <li>실수로 지웠다면 <b>↶ 되돌리기</b>로 되살릴 수 있어요.</li>
+            <li>실수로 지웠다면 <b><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg> 되돌리기</b>로 되살릴 수 있어요.</li>
           </ul>
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-plan"/></svg>계획</summary>
-          <p>할 일을 적고 과목, 마감일, 예상 시간을 정해요. 끝내면 체크하고, ‘오늘까지’를 누르면 오늘 할 일만 모아 봐요. ✎로 고칠 수 있고, 실수로 지웠다면 아래 알림의 <b>되돌리기</b>를 눌러요. 과목 목록도 여기서 관리해요.</p>
+          <p>할 일을 적고 과목, 마감일, 예상 시간을 정해요. 끝내면 체크하고, ‘오늘까지’를 누르면 오늘 할 일만 모아 봐요. <svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg> 버튼으로 고칠 수 있고, 실수로 지웠다면 아래 알림의 <b>되돌리기</b>를 눌러요. 과목 목록도 여기서 관리해요.</p>
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-timer"/></svg>타이머·스톱워치와 폰 잠금 모드</summary>
           <ul>
             <li><b>집중 타이머</b>: 집중(기본 25분)과 휴식(기본 5분)을 번갈아 해요. 시작 전에 25·50·90분(휴식은 5·10·15분)을 바로 고르거나, <b>직접</b>을 눌러 원하는 분을 적을 수 있어요(집중은 180분, 휴식은 60분까지). 시간이 끝나면 소리와 알림으로 알려 주고, 집중한 시간은 과목별로 기록돼요.</li>
             <li><b>스톱워치</b>: 타이머 화면 위에서 ‘스톱워치’를 고르면 과목을 눌러 공부 시간을 재요. 오늘 공부한 시간과 과목별 시간이 1초마다 쌓이고, 재는 중에 다른 과목을 누르면 지금까지를 기록하고 바로 바꿔요. 멈추면 공부 기록과 통계에 들어가요(1분이 안 되면 빼요). 재는 중에는 홈 ‘오늘 공부’에도 바로 더해지고, 아래 타이머 탭에 점이 떠요. 앱을 닫아도 계속 재고, 자정을 넘기면 날마다 나눠서 기록해요. 같은 시간이 두 번 쌓이지 않게 집중 타이머·잠금 모드와는 하나만 켤 수 있어요.</li>
-            <li>범위의 ⋯ 메뉴나 홈의 ▶에서 시작하면 무엇을 공부했는지도 함께 남고, 집중이 끝나면 그 범위를 끝냈는지 물어본 뒤 체크해 줘요.</li>
+            <li>범위의 ⋯ 메뉴나 홈의 <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼에서 시작하면 무엇을 공부했는지도 함께 남고, 집중이 끝나면 그 범위를 끝냈는지 물어본 뒤 체크해 줘요.</li>
             <li>앱을 닫거나 다른 앱에 다녀와도 타이머는 계속 돌아요. 다시 열면 남은 시간부터 이어지고, 닫혀 있는 동안 끝났다면 그 시간까지 기록해요. 타이머가 도는 동안은 화면이 꺼지지 않아요(계정·설정에서 끌 수 있어요).</li>
             <li>학원·독서실·인강처럼 타이머 없이 공부했다면 <b>＋ 타이머 없이 공부한 시간 기록하기</b>로 날짜와 시간을 직접 남겨요.</li>
             <li><b>폰 잠금 모드</b>: 30분~2시간 중에 고르거나 ‘직접’을 눌러 10시간까지 원하는 시간을 적고, 그 시간 동안 잠금 화면만 보여요. 다른 앱으로 나간 시간은 공부 시간에서 빠지고, 그만두려면 3초 동안 길게 눌러야 해요.</li>
