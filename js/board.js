@@ -444,6 +444,7 @@
         $('#bb-track').innerHTML = '';
         $('#board-pace').hidden = true;
         vp.style.backgroundPosition = '0 0';
+        vp.style.backgroundSize = `${GRID * 4}px ${GRID * 4}px`; // 시험이 없을 때 체스판 무늬가 화면만 한 큰 네 칸으로 늘어나지 않게
         wizard.draw();
         return;
       }

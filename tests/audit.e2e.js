@@ -192,6 +192,29 @@ const server = http.createServer((req, res) => {
   await page.goto(base + '#home');
   assert((await page.textContent('#home-greeting')) === '늦은 시간까지 수고 많아요', '새벽 3시에는 아침 인사 대신 밤 인사');
 
+  /* 10) 처음 쓰는 사람 화면(기록 없음): 안내 문장·안내 상자·체스판 무늬 */
+  const fresh = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, locale: 'ko-KR', timezoneId: 'Asia/Seoul' });
+  const fp = await fresh.newPage();
+  fp.on('pageerror', (e) => errors.push(e.message));
+  await fp.goto(base + '#stats');
+  assert(await fp.$eval('#session-list li.empty', (li) => getComputedStyle(li).display) === 'block', '기록이 없을 때 안내가 한 문장으로 이어짐 (세 칸으로 갈라지지 않음)');
+  await fp.goto(base + '#board');
+  await fp.fill('#ex-name', '기말고사');
+  await fp.tap('#exam-form button[type=submit]');
+  await fp.evaluate(() => Board.setMode('board'));
+  await fp.waitForSelector('.board-hint');
+  const hintBox = await fp.$eval('.board-hint', (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right }; });
+  assert(hintBox.left >= 0 && hintBox.right <= 390, '보드 보기 안내 상자가 휴대폰 화면 안에 들어옴 (' + Math.round(hintBox.left) + '~' + Math.round(hintBox.right) + ')');
+  await fresh.close();
+  const wide = await browser.newContext({ viewport: { width: 1280, height: 860 }, locale: 'ko-KR', timezoneId: 'Asia/Seoul' });
+  const wp = await wide.newPage();
+  wp.on('pageerror', (e) => errors.push(e.message));
+  await wp.goto(base + '#board');
+  await wp.waitForSelector('#exam-form');
+  const bg = await wp.evaluate(() => { const vp = document.querySelector('#board-viewport'); return vp ? parseFloat(getComputedStyle(vp).backgroundSize) : -1; });
+  assert(bg > 0 && bg <= 200, '시험이 없을 때 체스판 무늬가 큰 네 칸으로 늘어나지 않음 (' + bg + 'px)');
+  await wide.close();
+
   assert(errors.length === 0, '콘솔 오류 없음 ' + errors.join(' | '));
   await browser.close();
   server.close();

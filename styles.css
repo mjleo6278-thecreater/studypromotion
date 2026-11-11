@@ -1520,3 +1520,7 @@ input[type="search"]::-webkit-search-cancel-button {
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --hit: #6a5810; } }
 :root[data-theme="dark"] { --hit: #6a5810; }
 @keyframes hit { 0%, 60% { background: var(--hit); box-shadow: 0 0 0 3px var(--hit); } 100% { background: transparent; box-shadow: none; } }
+/* 통계 ‘최근 공부 기록’이 비어 있을 때: 안내 문장이 세 칸으로 갈라지지 않고 한 문장으로 */
+.simple-list li.empty { display: block; }
+/* 보드 보기에서 과목이 없을 때의 안내 상자: 휴대폰 화면 밖으로 잘리지 않게 */
+@media (max-width: 720px) { .board-hint { left: 24px; top: 24px; width: min(360px, calc(100vw - 90px)); } }
