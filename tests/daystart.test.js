@@ -104,3 +104,47 @@ test('하루 시작 시각: 카드 복습 날짜도 새벽에는 전날 기준',
   assert.ok(SRS.isDue(c, at(11, 4, 0)));
   assert.strictEqual(Stats.dateKey(c.due), '2026-11-11');
 }));
+
+// 타임테이블 (v2.9): 하루 전체 24줄과 지금 재는 구간
+test('타임테이블: 하루 전체(full)는 0시부터 24줄, 기록이 없어도 줄은 있다', () => {
+  const sessions = [{ minutes: 50, endedAt: at(9, 9, 55), subjectId: 'kor' }];
+  const tl = Stats.dayTimeline(sessions, '2026-11-09', { full: true });
+  assert.deepStrictEqual(tl.hours.map((h) => h.hour), Array.from({ length: 24 }, (_, i) => i));
+  assert.deepStrictEqual(tl.hours[9].segs, [{ from: 5, to: 55, subjectId: 'kor' }]);
+  assert.strictEqual(tl.hours.filter((h) => h.segs.length).length, 1);
+  const none = Stats.dayTimeline(sessions, '2026-11-08', { full: true });
+  assert.deepStrictEqual([none.hours.length, none.start, none.end, none.timed], [24, null, null, 0]);
+  // full을 안 주면 예전처럼 공부한 시간대만
+  assert.deepStrictEqual(Stats.dayTimeline(sessions, '2026-11-09').hours.map((h) => h.hour), [9]);
+  assert.deepStrictEqual(Stats.dayTimeline(sessions, '2026-11-08').hours, []);
+});
+
+test('타임테이블: 지금 재는 구간(live)은 기록 전이어도 칠하고 live 표시가 붙는다', () => {
+  const sessions = [{ minutes: 50, endedAt: at(9, 9, 55), subjectId: 'kor' }];
+  const live = { from: at(9, 16, 8), to: at(9, 16, 20), subjectId: 'math' };
+  const tl = Stats.dayTimeline(sessions, '2026-11-09', { full: true, live });
+  assert.deepStrictEqual(tl.hours[16].segs, [{ from: 8, to: 20, subjectId: 'math', live: true }]);
+  assert.deepStrictEqual(tl.hours[9].segs, [{ from: 5, to: 55, subjectId: 'kor' }]); // 기록된 조각에는 live가 없다
+  assert.deepStrictEqual([tl.timed, tl.start, tl.end], [62, at(9, 9, 5), at(9, 16, 20)]);
+  // full 없이도: 처음 공부한 시부터 지금 재는 시까지
+  assert.deepStrictEqual(Stats.dayTimeline(sessions, '2026-11-09', { live }).hours.map((h) => h.hour), [9, 10, 11, 12, 13, 14, 15, 16]);
+  // 자정을 넘겨 재는 중이면 날마다 그날 몫만
+  const late = { from: at(9, 23, 50), to: at(10, 0, 10), subjectId: null };
+  assert.deepStrictEqual(Stats.dayTimeline([], '2026-11-09', { full: true, live: late }).hours[23].segs, [{ from: 50, to: 60, subjectId: null, live: true }]);
+  assert.deepStrictEqual(Stats.dayTimeline([], '2026-11-10', { full: true, live: late }).hours[0].segs, [{ from: 0, to: 10, subjectId: null, live: true }]);
+  // 다른 날을 볼 때는 영향 없음
+  assert.strictEqual(Stats.dayTimeline(sessions, '2026-11-08', { full: true, live }).timed, 0);
+  assert.deepStrictEqual(Stats.dayTimeline(sessions, '2026-11-09', { live: null }), Stats.dayTimeline(sessions, '2026-11-09'));
+});
+
+test('타임테이블: 하루 시작 시각이 새벽 4시면 4시부터 다음 날 3시까지 24줄', () => withStart(4, () => {
+  const sessions = [
+    { minutes: 60, endedAt: at(11, 1, 0), subjectId: 'b' }, // 11일 00:00~01:00 → 10일 몫
+    { minutes: 30, endedAt: at(10, 5, 0), subjectId: 'c' }, // 10일 04:30~05:00
+  ];
+  const tl = Stats.dayTimeline(sessions, '2026-11-10', { full: true });
+  assert.deepStrictEqual(tl.hours.map((h) => h.hour), [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3]);
+  assert.deepStrictEqual(tl.hours[0].segs, [{ from: 30, to: 60, subjectId: 'c' }]);
+  assert.deepStrictEqual(tl.hours[20].segs, [{ from: 0, to: 60, subjectId: 'b' }]);
+  assert.strictEqual(tl.timed, 90);
+}));

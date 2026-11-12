@@ -259,6 +259,8 @@
     renderTabs();
     navDot();
     if (App.view === 'home') { renderHomeLive(); homeMin = -1; if (App.renderHomeToday) App.renderHomeToday(); }
+    // 시작·멈춤이 타임테이블에도 바로 보이게 (재는 중 구간이 생기거나 기록된 칸으로 바뀐다)
+    if (window.Timetable && (App.view === 'home' || App.view === 'timetable')) window.Timetable.render();
     if (App.view !== 'timer' || tab !== 'sw') return;
     countBase();
     const list = subjects();

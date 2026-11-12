@@ -1,4 +1,5 @@
-// 개선안(미리 보기) 확인: 분명한 확인 창, 타이머 초기화 때 기록 묻기, 휴대폰 뒤로 가기, 하루 시작 시각
+// v2.9에 들어간 개선 확인: 분명한 확인 창, 타이머 초기화 때 기록 묻기, 휴대폰 뒤로 가기, 하루 시작 시각,
+// 집중이 끝나면 이어서 무엇을 할지 고르기, 최근 7일을 그 전 7일과 비교
 const { chromium } = require('playwright');
 const http = require('http');
 const fs = require('fs');
@@ -264,39 +265,111 @@ const server = http.createServer((req, res) => {
   assert(rec.length === 2 && rec.some((x) => x.minutes === 40 && x.day === '2026-11-10') && rec.some((x) => x.minutes === 30 && x.day === '2026-11-11'), '스톱워치: 새벽 4시를 넘기면 40분은 10일, 30분은 11일로 나눔 (' + JSON.stringify(rec) + ')');
   await page.context().close();
 
-  /* ===== 5) 집중이 끝나면 휴식 바로 시작 (설정) ===== */
+  /* ===== 5) 집중이 끝나면 이어서 무엇을 할지 고르기 ===== */
   page = await open();
   await page.goto(base + '#timer');
-  await page.evaluate(() => localStorage.setItem('studypromotion.welcomeClosed', '1'));
+  await page.evaluate(() => {
+    localStorage.setItem('studypromotion.welcomeClosed', '1');
+    App.store.update((s) => { s.subjects = [{ id: 's-kor', name: '국어', color: '#e05a4f' }, { id: 's-math', name: '수학', color: '#3d96e0' }]; });
+  });
   const tm = () => page.evaluate(() => { const x = window.__studypromotion.timer; return { running: x.running, mode: x.mode, remaining: x.remaining, total: x.total }; });
+  const sheetOpen = () => page.locator('.ui-back.in .next-sheet').count();
+  const endNow = () => page.evaluate(() => { const x = window.__studypromotion.timer; x.endAt = Date.now() - 10; });
+  // 집중을 시작해서 끝까지 마친 것처럼: 고르는 창이 뜰 때까지
   const finishFocus = async () => {
     await page.tap('#timer-start');
-    await page.evaluate(() => { const x = window.__studypromotion.timer; x.endAt = Date.now() - 10; });
-    await page.waitForFunction(() => window.__studypromotion.timer.mode === 'break');
+    await endNow();
+    await page.waitForSelector('.ui-back.in .next-sheet');
+    await page.waitForTimeout(250);
   };
+  const pickNext = async (n) => { await page.tap(`.ui-back.in .next-sheet .ch-opt >> nth=${n}`); await page.waitForTimeout(350); };
+  await page.selectOption('#timer-subject', 's-math');
   await finishFocus();
   let m5 = await tm();
-  assert(m5.mode === 'break' && !m5.running, '기본: 집중이 끝나면 휴식으로 바뀌고 멈춰 있음 (지금과 같음)');
-  await page.tap('.mode-switch [data-mode="focus"]');
-  await page.goto(base + '#account');
-  assert(!(await page.isChecked('#set-autobreak')), '휴식 바로 시작은 기본으로 꺼져 있음');
-  await page.evaluate(() => document.querySelector('#set-autobreak').click());
-  await page.tap('#settings-form button[type="submit"]');
-  assert((await stateOf(page)).settings.autoBreak === true, '설정 저장');
-  await page.goto(base + '#timer');
-  await finishFocus();
+  assert(!m5.running && !(await page.evaluate(() => Stopwatch.running())), '집중이 끝나도 고르기 전에는 아무것도 저절로 시작하지 않음');
+  const opts5 = await page.$$eval('.ui-back.in .next-sheet .ch-opt b', (els) => els.map((e) => e.textContent));
+  assert(opts5.join(' / ') === '스톱워치 켜고 계속 공부하기 / 휴식 타이머 시작하기 / 같은 타이머 다시 시작 / 그냥 끄기', '선택지 네 가지: ' + opts5.join(' / '));
+  assert(/집중 25분 끝/.test(await page.textContent('.ui-back.in .next-sheet .ui-sheet-head b')) && /25분은 기록했어요/.test(await page.textContent('.ui-back.in .next-sheet .ch-note')), '창에 끝난 시간과 기록했다는 말이 적혀 있음');
+  assert((await stateOf(page)).sessions.length === 1 && (await stateOf(page)).sessions[0].minutes === 25, '집중한 시간은 고르기 전에 이미 기록됨');
+  const hints5 = await page.$$eval('.ui-back.in .next-sheet .ch-opt small', (els) => els.map((e) => e.textContent));
+  assert(/수학 그대로/.test(hints5[0]) && hints5[1] === '5분' && hints5[2] === '집중 25분', '선택지 아래에 과목·시간이 적혀 있음: ' + hints5.join(' / '));
+  const box5 = await page.evaluate(() => { const r = document.querySelector('.ui-back.in .next-sheet').getBoundingClientRect(); const t = document.querySelector('#toast'); return { bottom: r.bottom, vh: innerHeight, toast: t.classList.contains('show') }; });
+  assert(box5.bottom <= box5.vh + 1 && !box5.toast, '창이 화면 안에 다 들어오고, 알림이 선택지를 가리지 않음');
+  // 휴식 타이머 시작하기
+  await pickNext(1);
   m5 = await tm();
-  assert(m5.mode === 'break' && m5.running && m5.remaining > m5.total - 5, '켜 두면 집중이 끝나자마자 휴식 타이머가 돎');
-  assert((await stateOf(page)).sessions.length === 2, '집중 기록은 그대로 남음');
-  // 휴식이 끝나면 집중은 자동으로 시작하지 않음
-  await page.evaluate(() => { const x = window.__studypromotion.timer; x.endAt = Date.now() - 10; });
+  assert(m5.mode === 'break' && m5.running && m5.remaining > m5.total - 5 && !(await sheetOpen()), "'휴식 타이머 시작하기' → 휴식이 바로 돎");
+  // 휴식이 끝나면 묻지 않고, 집중은 직접 시작
+  await endNow();
   await page.waitForFunction(() => window.__studypromotion.timer.mode === 'focus');
-  assert(!(await tm()).running, '휴식이 끝난 뒤 집중은 직접 시작 (자리에 없는데 공부 시간이 쌓이지 않게)');
-  // 건너뛰면 자동 시작하지 않음
+  await page.waitForTimeout(800);
+  assert(!(await tm()).running && !(await sheetOpen()), '휴식이 끝난 뒤에는 묻지 않고 집중도 저절로 시작하지 않음');
+  // 같은 타이머 다시 시작
+  await finishFocus();
+  await pickNext(2);
+  m5 = await tm();
+  assert(m5.mode === 'focus' && m5.running && m5.remaining > m5.total - 5, "'같은 타이머 다시 시작' → 집중 25분이 다시 돎");
+  // 그냥 끄기
+  await endNow();
+  await page.waitForSelector('.ui-back.in .next-sheet');
+  await page.waitForTimeout(250);
+  await pickNext(3);
+  m5 = await tm();
+  assert(m5.mode === 'focus' && !m5.running && m5.remaining === m5.total, "'그냥 끄기' → 아무것도 돌지 않고 집중 25:00으로 돌아옴");
+  assert((await stateOf(page)).sessions.length === 3, '끝까지 마친 집중 세 번이 모두 기록됨');
+  // 창을 그냥 닫아도(✕, 휴대폰 뒤로) 끄기와 같다
+  await finishFocus();
+  await page.tap('.ui-back.in .next-sheet [data-ui-close]');
+  await page.waitForTimeout(350);
+  m5 = await tm();
+  assert(m5.mode === 'focus' && !m5.running && !(await page.evaluate(() => Stopwatch.running())), '창을 ✕로 닫으면 그냥 끄기와 같음');
+  await finishFocus();
+  await page.goBack();
+  await page.waitForTimeout(400);
+  assert(!(await sheetOpen()) && !(await tm()).running && await page.evaluate(() => App.view) === 'timer', "휴대폰 '뒤로'를 누르면 고르는 창만 닫힘");
+  // 스톱워치 켜고 계속 공부하기: 같은 과목으로 스톱워치가 켜진다
+  await finishFocus();
+  await pickNext(0);
+  const sw5 = await page.evaluate(() => ({ running: Stopwatch.running(), tab: Stopwatch.tab(), view: App.view, st: JSON.parse(localStorage.getItem('studypromotion.stopwatch')) }));
+  assert(sw5.running && sw5.tab === 'sw' && sw5.view === 'timer' && sw5.st.subjectId === 's-math', "'스톱워치 켜고 계속 공부하기' → 수학 그대로 스톱워치가 켜지고 스톱워치 화면으로");
+  assert(!(await tm()).running && await page.isVisible('#timer-pane-sw'), '집중 타이머는 멈춰 있음 (같은 시간이 두 번 쌓이지 않게)');
+  await page.evaluate(() => { Stopwatch.stop(); });
+  await page.waitForTimeout(300);
+  // 건너뛰기로 넘어간 집중은 묻지 않는다
+  await page.evaluate(() => Stopwatch.showTab('focus'));
   await page.tap('#timer-start');
   await page.tap('#timer-skip');
+  await page.waitForTimeout(800);
   m5 = await tm();
-  assert(m5.mode === 'break' && !m5.running, '건너뛰기로 넘어간 휴식은 자동으로 시작하지 않음');
+  assert(m5.mode === 'break' && !m5.running && !(await sheetOpen()), '건너뛰기로 넘어가면 묻지 않고 휴식은 멈춰 있음 (전과 같음)');
+  // 범위에서 시작한 집중: 끝냈는지 먼저 묻고, 그다음에 고른다
+  await page.evaluate(() => {
+    App.store.update((s) => {
+      s.exams = [{ id: 'ex5', name: '중간고사', date: null, createdAt: Date.now() }];
+      s.topics = [{ id: 'tp-s', examId: 'ex5', parentId: null, kind: 'topic', title: '수학', done: false, flags: {}, order: 0 }, { id: 'tp-1', examId: 'ex5', parentId: 'tp-s', kind: 'topic', title: '인수분해', done: false, flags: {}, order: 0 }];
+    });
+    App.focusOn({ label: '수학 · 인수분해', topicId: 'tp-1', subjectName: '수학' });
+  });
+  await page.waitForTimeout(300);
+  await page.tap('#timer-start');
+  await endNow();
+  await page.waitForSelector('#ask:not([hidden])');
+  assert(/인수분해.*끝냈나요/.test(await page.textContent('#ask-msg')) && !(await sheetOpen()), '범위에서 시작한 집중은 끝냈는지 먼저 물어봄');
+  await page.tap('#ask-ok');
+  await page.waitForSelector('.ui-back.in .next-sheet');
+  assert((await stateOf(page)).topics.find((t) => t.id === 'tp-1').done === true, '답한 뒤에 고르는 창이 뜸 (범위는 체크됨)');
+  await page.waitForTimeout(250);
+  await pickNext(0);
+  const sw6 = await page.evaluate(() => JSON.parse(localStorage.getItem('studypromotion.stopwatch')));
+  assert(sw6.running && sw6.topicId === 'tp-1' && /인수분해/.test(sw6.label || ''), '스톱워치로 이어 가면 공부하던 범위도 함께 이어짐: ' + sw6.label);
+  await page.evaluate(() => { const k = 'studypromotion.stopwatch'; const x = JSON.parse(localStorage.getItem(k)); x.startAt -= 5 * 60000; localStorage.setItem(k, JSON.stringify(x)); window.dispatchEvent(new StorageEvent('storage', { key: k })); });
+  await page.evaluate(() => { Stopwatch.stop(); });
+  await page.waitForTimeout(400);
+  const last5 = (await stateOf(page)).sessions.slice(-1)[0];
+  assert(last5.kind === 'stopwatch' && last5.minutes === 5 && last5.topicId === 'tp-1' && /인수분해/.test(last5.label || ''), '이어서 잰 5분도 그 범위의 공부로 기록됨');
+  // 예전 미리 보기에 있던 '휴식 바로 시작' 설정은 없다
+  await page.goto(base + '#account');
+  assert((await page.locator('#set-autobreak').count()) === 0, "'집중이 끝나면 휴식 바로 시작' 설정은 넣지 않음 (고르는 창으로 대신함)");
   await page.context().close();
 
   /* ===== 6) 최근 7일을 그 전 7일과 비교 ===== */

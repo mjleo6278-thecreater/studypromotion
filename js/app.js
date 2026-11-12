@@ -680,7 +680,7 @@
       recordFocus(Math.round(elapsedMin), at, completed ? 'focus-' + Math.round(at) : null);
       if (completed) {
         if (opts.quiet) toast(`앱이 닫혀 있는 동안 집중 ${Stats.formatMinutes(elapsedMin)}이 끝나서 기록했어요`);
-        else { beep(); notify('집중 완료! 이어서 무엇을 할지 골라 주세요.'); toast(`${Stats.formatMinutes(elapsedMin)} 집중 기록 완료`); }
+        else { beep(); notify('집중 완료! 이어서 무엇을 할지 골라 주세요.'); if (topicId) toast(`${Stats.formatMinutes(elapsedMin)} 집중 기록 완료`); } // 고르는 창에 ‘기록했어요’가 적혀 있어서, 알림은 범위를 먼저 물을 때만
         // 범위에서 시작했으면 끝냈는지 먼저 묻고, 그다음에 이어서 무엇을 할지 고른다 (앱이 닫혀 있는 동안 끝났으면 고르기는 건너뜀)
         setTimeout(async () => {
           if (topicId) await askTopicDone(topicId, label);
@@ -697,7 +697,7 @@
   let nextOpen = false;
   const somethingRunning = () => timer.running || !!(window.Stopwatch && window.Stopwatch.running()) || !!(window.Lock && window.Lock.state);
   async function afterFocus(min) {
-    if (nextOpen || somethingRunning()) return;
+    if (nextOpen || somethingRunning()) return toast(`${Stats.formatMinutes(min)} 집중 기록 완료`);
     const set = store.get().settings;
     const subj = timer.subjectId ? subjectById(timer.subjectId) : null;
     nextOpen = true;
@@ -706,7 +706,7 @@
       { value: 'break', label: '휴식 타이머 시작하기', hint: `${set.breakMin}분` },
       { value: 'again', label: '같은 타이머 다시 시작', hint: `집중 ${set.focusMin}분` },
       { value: 'off', label: '그냥 끄기' },
-    ], { cls: 'next-sheet' });
+    ], { cls: 'next-sheet', note: `집중한 ${Stats.formatMinutes(min)}은 기록했어요.` });
     nextOpen = false;
     if (somethingRunning()) return; // 고르는 동안 다른 창에서 이미 무언가를 시작함
     if (pick === 'sw' && window.Stopwatch) {

@@ -1,4 +1,5 @@
-// 미리 보기 파일 확인: 실제 앱의 기록·계정과 따로 도는지, 달라진 점 목록과 '써 보기'가 동작하는지
+// 미리 보기 파일 확인: 실제 앱의 기록·계정과 따로 도는지, 미리 보기 단추와 안내 창, 예시 기록 넣기·비우기
+// (미리 보기에만 있던 개선안 여섯 가지는 v2.9에서 실제 앱에 들어가 목록이 비어 있다. 그 기능들의 테스트는 tests/improve.e2e.js)
 //  node tests/preview-build.e2e.js [스크린샷 폴더]
 const { chromium } = require('playwright');
 const { execFileSync } = require('child_process');
@@ -73,7 +74,7 @@ const server = http.createServer((req, res) => {
   assert(requests.length === 0, '바깥으로 나가는 요청 없음 ' + requests.slice(0, 3).join(' '));
   assert(await page.evaluate(() => typeof window.firebase === 'undefined'), '로그인 도구(Firebase)를 불러오지 않음');
 
-  /* 3) 미리 보기 단추와 달라진 점 목록 */
+  /* 3) 미리 보기 단추와 안내 창 (지금은 미리 보기에만 있는 변경이 없다) */
   await page.evaluate(() => App.go('home'));
   await page.waitForTimeout(300);
   const fit = await page.evaluate(() => { const b = document.querySelector('.topbar'); return { sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, pill: document.querySelector('#pv-open').getBoundingClientRect().right, brand: document.querySelector('.brand').getBoundingClientRect().height, bar: b.getBoundingClientRect().height }; });
@@ -81,62 +82,14 @@ const server = http.createServer((req, res) => {
   await shot('pv-01-home');
   await page.tap('#pv-open');
   await page.waitForSelector('.ui-back.in .pv-sheet');
-  const items = await page.$$eval('.pv-item h3', (els) => els.map((e) => e.textContent));
-  assert(items.length === 6, '달라진 점 6가지: ' + items.map((t) => t.slice(1)).join(' / '));
-  assert((await page.$$eval('.pv-diff dt', (els) => els.map((e) => e.textContent))).join(',') === Array(6).fill('지금 앱,미리 보기').join(','), "항목마다 '지금 앱'과 '미리 보기'를 나란히 적음");
+  assert(await page.evaluate(() => Preview.items.length) === 0 && (await page.locator('.pv-item').count()) === 0, '미리 보기에만 있는 변경은 지금 없음');
+  assert(/미리 보기에만 있는 변경이 없어요/.test(await page.textContent('.pv-sheet .pv-none')) && /버전 2\.9/.test(await page.textContent('.pv-sheet .pv-none')), '안내 창에 까닭이 적혀 있음 (개선안은 실제 앱 2.9에 들어감)');
+  assert(await page.isVisible('[data-pv-sample]') && await page.isVisible('[data-pv-empty]'), '예시 기록 다시 넣기·비우기 단추는 그대로');
   await shot('pv-02-panel');
-  await page.evaluate(() => { const b = document.querySelector('.ui-sheet-body'); b.scrollTop = b.scrollHeight; });
-  await shot('pv-03-panel-end');
-  const tryIt = async (i) => {
-    if (!(await page.locator('.ui-back.in .pv-sheet').count())) { await page.evaluate(() => Preview.open()); await page.waitForSelector('.ui-back.in .pv-sheet'); }
-    await page.evaluate((n) => document.querySelector(`[data-pv-try="${n}"]`).click(), i);
-    await page.waitForTimeout(900);
-  };
-  // ① 확인 창
-  await tryIt(0);
-  assert(await page.isVisible('#ask') && (await page.textContent('#ask-ok')) === '삭제' && await page.evaluate(() => document.querySelector('#ask-ok').classList.contains('danger-fill')), "① 써 보기 → 빨간 '삭제' 확인 창");
-  await shot('pv-04-ask-danger');
-  await page.tap('#ask-cancel');
-  // ② 타이머 초기화
-  await tryIt(1);
-  assert(await page.evaluate(() => App.view === 'timer' && window.__studypromotion.timer.running) && /18:\d\d/.test(await page.textContent('#timer-time')), '② 써 보기 → 7분 집중한 상태 (' + (await page.textContent('#timer-time')) + ')');
-  await page.tap('#timer-reset');
-  assert((await page.textContent('#ask-alt')) === '기록 없이 초기화' && /7분/.test(await page.textContent('#ask-msg')), '② 초기화를 누르면 기록할지 물어봄');
-  await shot('pv-05-ask-reset');
-  await page.tap('#ask-alt');
-  // ③ 뒤로 가기
-  await tryIt(2);
-  assert(await page.isVisible('#log-dlg') && await page.isVisible('#pv-back-go'), "③ 써 보기 → 창이 열리고 '뒤로' 단추가 생김");
-  await shot('pv-06-back');
-  await page.tap('#pv-back-go');
+  await page.tap('.pv-sheet [data-ui-close]');
   await page.waitForTimeout(300);
-  assert(await page.isHidden('#log-dlg') && await page.evaluate(() => App.view) === 'stats', "③ '뒤로' → 창만 닫힘");
-  await page.tap('#pv-back-go');
-  await page.waitForTimeout(300);
-  assert(await page.evaluate(() => App.view) === 'home', "③ '뒤로' → 홈으로");
-  await page.tap('#pv-back-go');
-  await page.waitForTimeout(300);
-  await page.tap('#pv-back-go');
-  assert(/한 번 더 누르면 실제 앱은 닫혀요/.test(await toastOf()) && await page.evaluate(() => !!window.App), "③ 홈에서 '뒤로'를 거듭 눌러도 미리 보기는 닫히지 않고 알려 줌");
-  await page.tap('#pv-back-x');
-  await page.waitForTimeout(2300);
-  // ④ 하루 시작 시각
-  await tryIt(3);
-  assert(await page.evaluate(() => App.view === 'account' && document.querySelector('#set-daystart').closest('.field').classList.contains('pv-hit')), '④ 써 보기 → 설정의 하루 시작 시각 칸을 표시');
-  await shot('pv-07-daystart');
-  // ⑥ 주간 비교
-  await tryIt(5);
-  assert(await page.evaluate(() => App.view === 'stats') && /그 전 7일보다 .+ (더|덜) 했어요/.test(await page.textContent('#week-compare')), '⑥ 써 보기 → 통계의 비교 줄: ' + (await page.textContent('#week-compare')));
-  await shot('pv-08-week');
-  // ⑤ 휴식 바로 시작
-  const before = (await page.evaluate(() => App.store.get().sessions.length));
-  await tryIt(4);
-  assert(await page.evaluate(() => App.store.get().settings.autoBreak === true && window.__studypromotion.timer.running && window.__studypromotion.timer.mode === 'focus'), '⑤ 써 보기 → 설정을 켜고 10초 남은 집중 시작');
-  await page.waitForFunction(() => window.__studypromotion.timer.mode === 'break' && window.__studypromotion.timer.running, null, { timeout: 15000 });
-  assert(await page.evaluate(() => App.store.get().sessions.length) === before + 1, '⑤ 10초 뒤 집중이 끝나고 휴식이 바로 돎');
-  await shot('pv-09-autobreak');
-  await page.evaluate(() => { const t = window.__studypromotion.timer; t.endAt = Date.now() - 10; });
-  await page.waitForFunction(() => window.__studypromotion.timer.mode === 'focus');
+  // 미리 보기 파일에도 새 기능이 그대로 들어 있다 (타임테이블, 공부 시작하기)
+  assert(await page.evaluate(() => !!window.Timetable && App.version === '2.9') && await page.isVisible('#h-start') && await page.isVisible('#h-tt .day-strip'), '미리 보기 파일에도 타임테이블과 공부 시작하기가 들어 있음');
 
   /* 4) 비우고 처음부터 / 예시 다시 넣기 */
   await page.evaluate(() => Preview.open());
@@ -163,7 +116,7 @@ const server = http.createServer((req, res) => {
     // 어두운 화면, PC 화면
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.evaluate(() => { App.go('home'); Preview.open(); });
-    await shot('pv-10-dark-panel');
+    await shot('pv-03-dark-panel');
     await ctx.close();
     const wide = await browser.newContext({ viewport: { width: 1280, height: 860 }, locale: 'ko-KR', timezoneId: 'Asia/Seoul' });
     const wp = await wide.newPage();
@@ -171,10 +124,10 @@ const server = http.createServer((req, res) => {
     await wp.goto(base);
     await wp.waitForFunction(() => window.Preview && window.App);
     await wp.waitForTimeout(3200);
-    await wp.screenshot({ path: path.join(shots, 'pv-11-desktop-home.png') });
+    await wp.screenshot({ path: path.join(shots, 'pv-04-desktop-home.png') });
     await wp.click('#pv-open');
     await wp.waitForTimeout(500);
-    await wp.screenshot({ path: path.join(shots, 'pv-12-desktop-panel.png') });
+    await wp.screenshot({ path: path.join(shots, 'pv-05-desktop-panel.png') });
     await wide.close();
   }
   assert(errors.length === 0, '콘솔 오류 없음 ' + errors.join(' | '));

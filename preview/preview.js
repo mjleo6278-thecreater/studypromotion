@@ -94,7 +94,7 @@
     return {
       version: 2, subjects, tasks, sessions, decks, cards, reviewLog: [{ cardId: cards[0].id, grade: 'good', at: now - DAY }],
       exams, topics, strokes: [], boardView: {}, activeExamId: 'ex1',
-      settings: { dailyGoalMin: 180, focusMin: 25, breakMin: 5, monthlyGoalMin: 60 * 60, keepAwake: true, dayStartHour: 0, autoBreak: false },
+      settings: { dailyGoalMin: 180, focusMin: 25, breakMin: 5, monthlyGoalMin: 60 * 60, keepAwake: true, dayStartHour: 0 },
     };
   }
   const isEmpty = () => { const st = App.store.get(); return !st.tasks.length && !st.sessions.length && !st.cards.length && !st.topics.length && !st.exams.length; };
@@ -113,92 +113,14 @@
     setTimeout(() => el.classList.remove('pv-hit'), 2600);
   };
   const later = (fn, ms) => setTimeout(fn, ms || 260);
-  const ITEMS = [
-    {
-      title: '지우기 전에 묻는 창이 더 분명해졌어요',
-      before: "무엇을 지우든 버튼이 똑같이 '확인'이에요.",
-      after: "지우는 버튼은 빨간색에 '삭제'라고 적혀 있고, Enter를 잘못 눌러도 지워지지 않아요. 로그인할 때 기록을 고르는 창도 '계정 기록 불러오기' / '이 기기 기록 올리기'로 적혀 있어요.",
-      tryLabel: '과목 삭제 창 띄워 보기',
-      hint: "'취소'를 누르면 아무것도 지워지지 않아요.",
-      run() {
-        App.go('plan');
-        later(() => { const b = document.querySelector('#subject-list [data-del-subject]'); if (b) b.click(); else toast('과목이 없어요. 예시 기록을 넣고 다시 눌러 주세요.'); });
-      },
-    },
-    {
-      title: '타이머를 초기화하기 전에 기록할지 물어봐요',
-      before: "집중하다가 '초기화'를 누르면 그때까지 한 시간이 말없이 사라져요.",
-      after: "1분 넘게 집중했으면 '기록하고 초기화 / 기록 없이 초기화 / 계속하기' 중에 고를 수 있어요.",
-      tryLabel: '7분 집중한 상태 만들기',
-      hint: "타이머 화면에서 '초기화'를 눌러 보세요.",
-      run() {
-        const t = timerOf();
-        if (window.Stopwatch) window.Stopwatch.showTab('focus');
-        App.go('timer');
-        if (!t) return;
-        if (window.Stopwatch && window.Stopwatch.running()) return toast('스톱워치가 돌고 있어요. 멈춘 뒤 다시 눌러 주세요.');
-        later(() => {
-          if (t.mode !== 'focus') { const f = document.querySelector('.mode-switch [data-mode="focus"]'); if (f) f.click(); }
-          if (!t.running) $('#timer-start').click();
-          const min = Math.min(7, Math.floor(t.total / 60) - 1);
-          if (t.running && min >= 1 && t.total - Math.ceil((t.endAt - Date.now()) / 1000) < 60) t.endAt -= min * 60000;
-          later(() => { hit($('#timer-reset')); toast("집중하던 중이에요. 이제 '초기화'를 눌러 보세요."); }, 400);
-        });
-      },
-    },
-    {
-      title: "휴대폰 '뒤로' 버튼이 앱처럼 움직여요",
-      before: "'뒤로'를 누르면 어느 화면에 있든 앱이 바로 닫혀요.",
-      after: '열려 있는 창이 먼저 닫히고, 그다음엔 홈으로 가고, 홈에서 한 번 더 누르면 앱이 닫혀요.',
-      tryLabel: "창을 열고 '뒤로' 눌러 보기",
-      hint: "왼쪽 아래에 생기는 '뒤로' 단추가 휴대폰의 뒤로 버튼을 대신해요.",
-      run() {
-        App.go('stats');
-        later(() => { App.openLog(); showBack(); });
-      },
-    },
-    {
-      title: '하루 시작 시각을 새벽으로 옮길 수 있어요',
-      before: '자정이 지나면 새 하루라서, 새벽 1시에 한 공부는 다음 날 공부로 들어가요.',
-      after: "설정에서 '새벽 4시'처럼 정하면 그 전의 새벽 공부는 전날 공부로 쳐요. 오늘 공부, 연속 학습일, 달력, D-day가 모두 같은 기준이에요.",
-      tryLabel: '설정에서 바꿔 보기',
-      hint: "예시 기록에는 자정을 넘긴 공부가 섞여 있어요. '새벽 4시'로 저장하고 통계의 달력을 보세요.",
-      run() { App.go('account'); later(() => hit($('#set-daystart').closest('.field'))); },
-    },
-    {
-      title: '집중이 끝나면 휴식을 바로 시작할 수 있어요',
-      before: "집중이 끝나면 휴식 타이머는 멈춰 있고, '시작'을 한 번 더 눌러야 해요.",
-      after: "설정을 켜 두면 집중이 끝나자마자 휴식이 돌아요. 휴식 뒤의 집중은 직접 시작해요.",
-      tryLabel: '10초 뒤 끝나는 집중으로 보기',
-      hint: '설정을 켜고 집중 타이머를 10초만 남겨 둬요. 예시로 집중 기록이 한 줄 생겨요.',
-      run() {
-        const t = timerOf();
-        if (!t) return;
-        if (App.timerBusy() || (window.Stopwatch && window.Stopwatch.running())) return toast('돌고 있는 타이머가 있어요. 초기화한 뒤 다시 눌러 주세요.');
-        App.store.update((st) => { st.settings.autoBreak = true; });
-        if (window.Stopwatch) window.Stopwatch.showTab('focus');
-        App.go('timer');
-        later(() => {
-          if (t.mode !== 'focus') { const f = document.querySelector('.mode-switch [data-mode="focus"]'); if (f) f.click(); }
-          $('#timer-start').click();
-          if (t.running) t.endAt = Date.now() + 10000;
-          toast('10초 뒤 집중이 끝나고 휴식이 바로 시작돼요.');
-        });
-      },
-    },
-    {
-      title: '최근 7일을 그 전 7일과 비교해 줘요',
-      before: "통계의 '최근 7일 공부 시간'에는 합계와 하루 평균만 있어요.",
-      after: '그 전 7일보다 얼마나 더 했는지, 덜 했는지 한 줄로 보여 줘요.',
-      tryLabel: '통계에서 보기',
-      hint: '',
-      run() { App.go('stats'); later(() => hit($('#week-compare').hidden ? $('#week-chart') : $('#week-compare'))); },
-    },
-  ];
+  // 미리 보기에만 있는 변경을 여기에 적는다. 지금은 없다: 전에 있던 개선안은 실제 앱(v2.9)에 들어갔다.
+  // 항목 모양: { title, before(지금 앱), after(미리 보기), tryLabel(써 보기 단추 글자), hint, run() }
+  const ITEMS = [];
 
   function openPanel() {
     const body =
       '<p class="pv-note"><b>미리 보기</b>예요. 여기서 쓰는 기록은 이 미리 보기 안에만 저장돼요. 실제 앱의 기록이나 계정과는 이어져 있지 않으니 마음껏 눌러 보세요.</p>' +
+      (ITEMS.length ? '' : '<p class="pv-none">지금은 미리 보기에만 있는 변경이 없어요. 전에 여기서 보여 드린 개선안은 실제 앱(버전 2.9)에 들어갔어요. 새 개선안이 생기면 이 목록에 다시 나와요.</p>') +
       '<ol class="pv-list">' + ITEMS.map((it, i) =>
         `<li class="pv-item"><h3><span class="pv-no">${i + 1}</span><span>${esc(it.title)}</span></h3>` +
         `<dl class="pv-diff"><dt>지금 앱</dt><dd>${esc(it.before)}</dd><dt>미리 보기</dt><dd class="pv-after">${esc(it.after)}</dd></dl>` +
@@ -206,7 +128,7 @@
       '<div class="pv-foot"><div class="pv-row"><button type="button" class="btn" data-pv-sample>예시 기록 다시 넣기</button><button type="button" class="btn" data-pv-empty>기록 비우고 처음부터 써 보기</button></div>' +
       '<p>미리 보기에서는 로그인(계정 동기화), 앱 설치, 파일 내보내기·저장이 동작하지 않아요. 나머지는 실제 앱과 같아요.</p></div>';
     UI.openSheet({
-      title: `미리 보기에서 달라진 점 ${ITEMS.length}가지`, body, cls: 'pv-sheet', focusSel: '[data-ui-close]',
+      title: ITEMS.length ? `미리 보기에서 달라진 점 ${ITEMS.length}가지` : '미리 보기', body, cls: 'pv-sheet', focusSel: '[data-ui-close]',
       onClick: async (e, close) => {
         const t = e.target.closest('[data-pv-try]');
         if (t) { close(); later(() => ITEMS[+t.dataset.pvTry].run(), 220); return; }
@@ -252,7 +174,7 @@
   /* ---------- 시작 ---------- */
   const pill = document.createElement('button');
   pill.type = 'button';
-  pill.className = 'pv-pill' + (lsGet(SEEDED) ? '' : ' pv-new');
+  pill.className = 'pv-pill' + (lsGet(SEEDED) || !ITEMS.length ? '' : ' pv-new');
   pill.id = 'pv-open';
   pill.setAttribute('aria-haspopup', 'dialog');
   pill.innerHTML = '<i aria-hidden="true"></i>미리 보기';
@@ -264,7 +186,10 @@
   if (!lsGet(SEEDED) && isEmpty()) {
     try { loadSample(); } catch (e) { /* 저장이 막힌 환경: 빈 화면으로 시작 */ }
     // 그 사이에 이미 달라진 점 목록을 열어 봤으면 다시 알리지 않는다
-    setTimeout(() => { if (pill.classList.contains('pv-new')) toast("미리 보기예요. 위의 '미리 보기'를 누르면 달라진 점을 볼 수 있어요.", { action: '달라진 점', onAction: openPanel }); }, 2600);
+    setTimeout(() => {
+      if (!ITEMS.length) return toast('미리 보기예요. 여기서 쓰는 기록은 실제 앱과 따로 저장돼요.');
+      if (pill.classList.contains('pv-new')) toast("미리 보기예요. 위의 '미리 보기'를 누르면 달라진 점을 볼 수 있어요.", { action: '달라진 점', onAction: openPanel });
+    }, 2600);
   }
   window.Preview = { open: openPanel, loadSample, showBack, items: ITEMS };
 })();
