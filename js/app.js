@@ -363,9 +363,24 @@
     return html;
   }
 
+  // 시험 '오늘 한 양'은 오늘 실제로 공부한 시간(홈 '오늘 공부')까지만 센다.
+  // 범위를 체크만 하고 공부 기록이 0분인데 '오늘 몫 완료'가 뜨지 않게.
+  //  pace.studied/checked: 마지막으로 그릴 때 쓴 공부 시간과 가장 많이 체크한 양 (공부 시간이 바뀌면 다시 그릴지 정한다)
+  const pace = { studied: null, checked: 0 };
+  function todayStudyMin() {
+    return Stats.minutesOn(store.get().sessions, now()) + (window.Stopwatch ? window.Stopwatch.todayMinutes() : 0);
+  }
+  function homePlan(p, ex, t) {
+    pace.studied = todayStudyMin();
+    const plan = Scope.timePlan(p, ex, t, pace.studied);
+    if (plan) pace.checked = Math.max(pace.checked, plan.todayChecked);
+    return plan;
+  }
+
   function renderHomeExams() {
     const st = store.get();
     const t = now();
+    pace.checked = 0;
     // 다가오는 시험(가까운 순) → 날짜 없는 시험 → 끝난 시험(최근 순)
     const tk = todayKey();
     const past = (e) => !!e.date && e.date < tk;
@@ -381,7 +396,7 @@
         <span class="exam-name">${esc(ex.name)}</span>${dd ? `<span class="badge${past(ex) ? ' zero' : ''}">${past(ex) ? '끝남 · ' + dd : dd}</span>` : ''}
         <span class="pawn-track" aria-label="진행률 ${p.pct}%">${pawnTrack(p.pct)}</span>
         <span class="exam-pct">${(() => {
-          const plan = Scope.timePlan(p, ex, t);
+          const plan = homePlan(p, ex, t);
           if (plan) return `${p.pct}% · 남은 ${Stats.formatMinutes(plan.left)}` + (plan.finished ? '' : plan.days > 0 ? ` · 오늘 ${plan.todayLeft ? Stats.formatMinutes(plan.todayLeft) + ' 더' : '몫 완료 ✓'}` : '') + (plan.behind && !plan.finished ? ` · <span class="overdue">밀림 ${Stats.formatMinutes(plan.behind)}</span>` : '');
           const pc = Scope.pace(p.total - p.done, ex.date, t);
           return `${p.done}/${p.total} · ${p.pct}%` + (pc && pc.days > 0 ? ` · 하루 ${pc.perDay}개` : '');
@@ -410,6 +425,8 @@
     const mg = Stats.monthGoal(st.settings.monthlyGoalMin || 0, Stats.lastNMonths(st.sessions, now(), 1)[0].minutes + live, now(), mins);
     $('#h-month-pace').hidden = !mg;
     if (mg) $('#h-month-pace').textContent = mg.done ? '이번 달 목표 달성 🎉' : mg.todayLeft ? `월 목표 페이스: 오늘 ${Stats.formatMinutes(mg.todayLeft)} 더` : '월 목표 페이스: 오늘 몫 완료 ✓';
+    // 공부 시간이 바뀌어 시험 '오늘 한 양'이 달라질 때만 시험 줄도 다시 (스톱워치가 1분마다 부른다)
+    if (pace.studied !== null && pace.studied !== mins && pace.checked > Math.min(pace.studied, mins)) { renderHomeExams(); renderHomeNext(); }
   }
 
   function renderHome() {
@@ -471,7 +488,7 @@
     if (!ex) return;
     const t = now();
     const p = Scope.examProgress(st.topics, ex.id);
-    const plan = Scope.timePlan(p, ex, t);
+    const plan = homePlan(p, ex, t);
     const pc = plan ? null : Scope.pace(p.total - p.done, ex.date, t);
     const quotaDone = plan && !plan.finished && plan.days > 0 && plan.todayLeft === 0;
     const quota = plan && !plan.finished && !quotaDone ? plan.todayLeft : 0;
@@ -496,7 +513,9 @@
         <button class="icon-btn next-play" data-next-focus="${esc(n.id)}" aria-label="${esc(n.title)} 타이머 시작" title="이 범위로 타이머 시작">${ic('play')}</button>
       </li>`;
     }).join('');
+    const unrecorded = plan && !plan.finished && plan.days > 0 ? plan.todayChecked - plan.todayDone : 0;
     $('#h-next-foot').innerHTML = quotaDone ? '오늘 몫을 다 했어요 🎉 더 하고 싶다면 위 범위를 이어서 해 보세요.'
+      : unrecorded > 0 ? `오늘 체크한 범위 중 ${Stats.formatMinutes(unrecorded)}은 공부 기록이 없어서 오늘 한 양에 넣지 않았어요. 타이머나 스톱워치로 재거나 <button class="btn link inline" type="button" data-log-open>직접 기록</button>하면 들어가요.`
       : !plan ? `항목마다 ${ic('timer')} 걸리는 시간을 적으면, 오늘 할 양에 딱 맞춰 골라 드려요.`
       : '과목을 번갈아 가며, 오늘 할 양만큼 골랐어요.';
   }

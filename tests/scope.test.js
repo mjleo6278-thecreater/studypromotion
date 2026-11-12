@@ -167,6 +167,31 @@ test('시험 시간 페이스: 하루 할 양, 밀린 양, 오늘 남은 양', (
   assert.strictEqual(dday.perDay, 60);
 });
 
+test('시험 오늘 한 양은 오늘 공부한 시간까지만 (공부 0분이면 오늘 몫 완료가 아님)', () => {
+  const now = new Date(2026, 10, 11, 19).getTime(); // 11/11, 시험 11/21 → 10일
+  const exam = { date: '2026-11-21', planStart: '2026-11-01', paceSnap: { day: '2026-11-11', left: 1200 } };
+  // 오늘 아침 남은 1200 → 오늘 할 양 120. 오늘 범위를 300분어치 체크함
+  const prog = { timeTotal: 1500, timeDone: 600, timeLeft: 900, pct: 40, noEst: 0 };
+  const zero = Scope.timePlan(prog, exam, now, 0);
+  assert.strictEqual(zero.todayQuota, 120);
+  assert.strictEqual(zero.todayChecked, 300);
+  assert.strictEqual(zero.todayDone, 0);
+  assert.strictEqual(zero.todayLeft, 120); // 공부 기록 0분 → 오늘 몫 완료 아님
+  const some = Scope.timePlan(prog, exam, now, 45);
+  assert.strictEqual(some.todayDone, 45);
+  assert.strictEqual(some.todayLeft, 75);
+  const enough = Scope.timePlan(prog, exam, now, 200);
+  assert.strictEqual(enough.todayDone, 200);
+  assert.strictEqual(enough.todayLeft, 0); // 공부도 했고 범위도 체크함 → 완료
+  // 공부만 하고 범위는 체크 안 함 → 오늘 한 양 0 (범위 기준)
+  const studyOnly = Scope.timePlan({ timeTotal: 1500, timeDone: 300, timeLeft: 1200, pct: 20, noEst: 0 }, exam, now, 180);
+  assert.strictEqual(studyOnly.todayDone, 0);
+  assert.strictEqual(studyOnly.todayLeft, 120);
+  // 공부 시간을 안 주면 예전처럼 체크한 범위 그대로, 밀린 양은 공부 시간과 상관없음
+  assert.strictEqual(Scope.timePlan(prog, exam, now).todayDone, 300);
+  assert.strictEqual(zero.behind, Scope.timePlan(prog, exam, now).behind);
+});
+
 test('계획 시작일과 아침 스냅샷 기록', () => {
   const exam = { date: '2026-11-21' };
   const now = new Date(2026, 10, 11, 9).getTime();

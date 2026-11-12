@@ -107,9 +107,12 @@
   /**
    * 시험 시간 페이스 (순수 함수)
    *  prog: examProgress 결과, exam: { date, planStart, paceSnap: {day, left} }
+   *  studiedMin: 오늘 실제로 공부한 시간(분, 홈 '오늘 공부'와 같은 값). 주면 '오늘 한 양'을 이 시간까지만 센다.
+   *   (범위를 체크만 하고 공부 기록이 0분이면 '오늘 몫 완료'가 되지 않게. 안 주면 체크한 범위 그대로)
    *  반환: 총·한·남은 시간, 하루 기본 페이스, 지금 필요한 페이스, 오늘 할 양, 밀린 양
+   *   todayChecked = 오늘 체크한 범위(분), todayDone = 그중 오늘 한 양으로 센 것
    */
-  function timePlan(prog, exam, now) {
+  function timePlan(prog, exam, now, studiedMin) {
     if (!exam || !prog.timeTotal) return null;
     const days = daysUntil(exam.date, now);
     if (days === null || isNaN(days)) return null;
@@ -123,13 +126,14 @@
     const expectedAtStart = (total * elapsed) / planDays;
     const doneAtStart = total - leftAtStart;
     const todayQuota = days <= 0 ? left : Math.ceil(leftAtStart / studyDays);
-    const todayDone = Math.max(0, leftAtStart - left);
+    const todayChecked = Math.max(0, leftAtStart - left);
+    const todayDone = studiedMin == null ? todayChecked : Math.min(todayChecked, Math.max(0, Math.floor(+studiedMin || 0)));
     const basePerDay = Math.ceil(total / planDays);
     return {
       days, total, done: prog.timeDone, left, pct: Math.min(left > 0 ? 99 : 100, Math.round((prog.timeDone / total) * 100)),
       basePerDay,
       perDay: days <= 0 ? left : Math.ceil(left / studyDays),
-      todayQuota, todayDone,
+      todayQuota, todayDone, todayChecked,
       todayLeft: Math.max(0, todayQuota - todayDone),
       behind: Math.max(0, Math.round(expectedAtStart - doneAtStart)),
       extraPerDay: Math.max(0, todayQuota - basePerDay),

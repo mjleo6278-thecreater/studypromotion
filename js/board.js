@@ -341,7 +341,7 @@
     $('#bb-dday').textContent = dd;
     $('#bb-dday').hidden = !dd;
     $('#bb-dday').classList.toggle('soon', !!ex && Scope.daysUntil(ex.date, Date.now()) !== null && Scope.daysUntil(ex.date, Date.now()) <= 7 && Scope.daysUntil(ex.date, Date.now()) >= 0);
-    const plan = ex ? Scope.timePlan(p, ex, Date.now()) : null;
+    const plan = ex ? Scope.timePlan(p, ex, Date.now(), studiedToday()) : null;
     const pc = ex && !plan ? Scope.pace(p.total - p.done, ex.date, Date.now()) : null;
     $('#bb-pace').textContent = plan ? (plan.finished ? '다 끝냈어요' : plan.days > 0 ? `하루 ${fm(plan.perDay)}씩` : `남은 ${fm(plan.left)}`) : pc ? (pc.days > 0 ? `하루 ${pc.perDay}개씩` : `남은 ${pc.perDay}개`) : '';
     $('#bb-pace').title = pc && pc.days > 0 ? `시험까지 ${pc.days}일, 남은 항목 ${p.total - p.done}개` : '';
@@ -364,6 +364,11 @@
       <span class="f-review">↻ 다시 보기 ${count('review')}</span>
       <label class="bl-toggle"><input type="checkbox" id="bl-only-left"${onlyLeft ? ' checked' : ''}> 남은 것만</label>` : '';
     return { p, plan, pc };
+  }
+
+  // 오늘 공부한 시간(분): 홈 '오늘 공부'와 같은 값 (기록 + 지금 재는 스톱워치). '오늘 한 양'은 이 시간까지만 센다
+  function studiedToday() {
+    return Stats.minutesOn(st().sessions, Date.now()) + (window.Stopwatch ? window.Stopwatch.todayMinutes() : 0);
   }
 
   // 시험 시간 페이스 띠
