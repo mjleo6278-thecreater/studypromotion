@@ -80,8 +80,30 @@
     });
   }
 
+  // 여러 선택지 중 하나를 고르는 창 (폰: 아래에서 올라오는 시트, 넓은 화면: 가운데 창). 고른 값을 돌려주고, 그냥 닫으면 undefined
+  // options: [{ value, label, hint, color }] — color를 주면 과목 색 점을 그린다 (''이면 빈 점)
+  function choose(title, options, opts) {
+    opts = opts || {};
+    const body = (opts.note ? `<p class="ch-note muted small">${esc(opts.note)}</p>` : '') +
+      '<div class="ui-opts ch-opts">' + options.map((o, i) =>
+        `<button type="button" class="ui-opt ch-opt${o.last ? ' ch-last' : ''}" data-ch="${i}">` +
+        (o.color !== undefined ? `<i class="sel-dot${o.color ? '' : ' none'}"${o.color ? ` style="background:${esc(o.color)}"` : ''}></i>` : '') +
+        `<span><b>${esc(o.label)}</b>${o.hint ? `<small>${esc(o.hint)}</small>` : ''}</span></button>`).join('') + '</div>';
+    return window.UI.openSheet({
+      title, body, cls: 'ui-choose' + (opts.cls ? ' ' + opts.cls : ''), focusSel: '.ch-opt',
+      onClick: (e, close) => { const b = e.target.closest('[data-ch]'); if (b) close(options[+b.dataset.ch].value); },
+      onKey: (e, box) => {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        e.preventDefault();
+        const list = [...box.querySelectorAll('.ch-opt')];
+        const n = list[Math.max(0, Math.min(list.length - 1, list.indexOf(document.activeElement) + (e.key === 'ArrowDown' ? 1 : -1)))];
+        if (n) n.focus();
+      },
+    });
+  }
+
   /* ---------- 라우팅 ---------- */
-  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'account', 'about'];
+  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'timetable', 'account', 'about'];
   let currentView = 'home';
 
   function go(view) {
@@ -658,16 +680,44 @@
       recordFocus(Math.round(elapsedMin), at, completed ? 'focus-' + Math.round(at) : null);
       if (completed) {
         if (opts.quiet) toast(`앱이 닫혀 있는 동안 집중 ${Stats.formatMinutes(elapsedMin)}이 끝나서 기록했어요`);
-        else { beep(); notify('집중 완료! 잠깐 쉬어요.'); toast(`${Stats.formatMinutes(elapsedMin)} 집중 기록 완료`); }
-        if (topicId) setTimeout(() => askTopicDone(topicId, label), opts.quiet ? 1200 : 500);
+        else { beep(); notify('집중 완료! 이어서 무엇을 할지 골라 주세요.'); toast(`${Stats.formatMinutes(elapsedMin)} 집중 기록 완료`); }
+        // 범위에서 시작했으면 끝냈는지 먼저 묻고, 그다음에 이어서 무엇을 할지 고른다 (앱이 닫혀 있는 동안 끝났으면 고르기는 건너뜀)
+        setTimeout(async () => {
+          if (topicId) await askTopicDone(topicId, label);
+          if (!opts.quiet) afterFocus(elapsedMin);
+        }, opts.quiet ? 1200 : 500);
       } else if (elapsedMin >= 1) toast(`${Stats.formatMinutes(elapsedMin)} 기록했어요`);
     } else if (completed && !opts.quiet) { beep(); notify('휴식 끝! 다시 집중해 볼까요?'); }
     timer.startedAt = 0;
-    const wasFocus = timer.mode === 'focus';
-    setMode(wasFocus ? 'break' : 'focus');
-    // 설정을 켜 두면 집중을 끝까지 마쳤을 때 휴식 타이머가 바로 돈다 (앱이 닫혀 있는 동안 끝났거나 건너뛴 경우는 그대로 멈춰 둠).
-    // 휴식이 끝난 뒤의 집중은 자동으로 시작하지 않는다: 자리에 없는데 공부 시간이 쌓이면 안 되니까.
-    if (wasFocus && completed && !opts.quiet && store.get().settings.autoBreak) startTimer();
+    setMode(timer.mode === 'focus' ? 'break' : 'focus');
+  }
+
+  // 집중을 끝까지 마치면 이어서 무엇을 할지 고른다.
+  // 고르기 전에는 아무것도 저절로 시작하지 않는다: 자리에 없는데 공부 시간이나 휴식 시간이 흘러가면 안 되니까.
+  let nextOpen = false;
+  const somethingRunning = () => timer.running || !!(window.Stopwatch && window.Stopwatch.running()) || !!(window.Lock && window.Lock.state);
+  async function afterFocus(min) {
+    if (nextOpen || somethingRunning()) return;
+    const set = store.get().settings;
+    const subj = timer.subjectId ? subjectById(timer.subjectId) : null;
+    nextOpen = true;
+    const pick = await choose(`집중 ${Stats.formatMinutes(min)} 끝! 이어서 무엇을 할까요?`, [
+      { value: 'sw', label: '스톱워치 켜고 계속 공부하기', hint: subj ? `${subj.name} 그대로, 시간 제한 없이 이어서 재요` : '시간 제한 없이 이어서 재요' },
+      { value: 'break', label: '휴식 타이머 시작하기', hint: `${set.breakMin}분` },
+      { value: 'again', label: '같은 타이머 다시 시작', hint: `집중 ${set.focusMin}분` },
+      { value: 'off', label: '그냥 끄기' },
+    ], { cls: 'next-sheet' });
+    nextOpen = false;
+    if (somethingRunning()) return; // 고르는 동안 다른 창에서 이미 무언가를 시작함
+    if (pick === 'sw' && window.Stopwatch) {
+      const keep = { label: timer.label, topicId: timer.topicId };
+      setMode('focus');
+      window.Stopwatch.showTab('sw');
+      go('timer');
+      window.Stopwatch.start(timer.subjectId || '', keep);
+    } else if (pick === 'break') { if (timer.mode !== 'break') setMode('break'); startTimer(); }
+    else if (pick === 'again') { setMode('focus'); startTimer(); }
+    else setMode('focus'); // 그냥 끄기 (창을 그냥 닫아도 같다)
   }
 
   // 집중 타이머가 돌거나 멈춰 있는 중이면 'focus'/'break', 아니면 null (스톱워치와 동시에 재지 않게)
@@ -1304,7 +1354,7 @@
   function timetableHTML(sessions, key) {
     const tl = Stats.dayTimeline(sessions, key);
     const fm = Stats.formatMinutes;
-    const share = `<button type="button" class="btn link tt-share" data-share-day="${key}">인증 이미지</button>`;
+    const share = `<span class="tt-links"><button type="button" class="btn link tt-share" data-tt-open="${key}">타임테이블</button><button type="button" class="btn link tt-share" data-share-day="${key}">인증 이미지</button></span>`;
     if (!tl.hours.length) return tl.untimed ? `<div class="tt-foot"><span class="muted small">직접 기록한 ${fm(tl.untimed)}은 공부한 시각이 없어 시간표에는 안 나와요.</span>${share}</div>` : '';
     const color = (sid) => { const sb = sid && subjectById(sid); return sb ? sb.color : 'var(--muted)'; };
     const from = hhmm(tl.start, key), to = hhmm(tl.end, key);
@@ -1473,15 +1523,53 @@
       $('#set-break').value = set.breakMin;
       $('#set-awake').checked = set.keepAwake !== false;
       $('#set-daystart').value = String(Math.max(0, Math.min(6, +set.dayStartHour || 0)));
-      $('#set-autobreak').checked = !!set.autoBreak;
     }
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.8';
-  const APP_DATE = '2026년 11월 11일';
+  const APP_VERSION = '2.9';
+  const APP_DATE = '2026년 11월 12일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
+  /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
+  const verSecs = $$('#about-news .ver');
+  function showVer(v) {
+    if (!verSecs.some((x) => x.dataset.ver === v)) v = verSecs.length ? verSecs[0].dataset.ver : '';
+    verSecs.forEach((x) => { x.hidden = x.dataset.ver !== v; });
+    $$('#ver-tabs [data-ver-tab]').forEach((b) => {
+      const on = b.dataset.verTab === v;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+  }
+  if (verSecs.length) {
+    $('#ver-tabs').innerHTML = verSecs.map((x, i) => `<button type="button" class="chip" role="tab" data-ver-tab="${esc(x.dataset.ver)}" aria-label="버전 ${esc(x.dataset.ver)}${i ? '' : ' (최신)'}">${esc(x.dataset.ver)}${i ? '' : '<span class="ver-new">최신</span>'}</button>`).join('');
+    verSecs.forEach((x) => {
+      x.setAttribute('role', 'tabpanel');
+      x.setAttribute('aria-label', `버전 ${x.dataset.ver}에서 달라진 점`);
+      x.insertAdjacentHTML('afterbegin', `<p class="ver-when"><b>버전 ${esc(x.dataset.ver)}</b><span class="muted"> · ${esc(x.dataset.date)} 업데이트</span></p>`);
+    });
+    $('#ver-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-ver-tab]'); if (b) showVer(b.dataset.verTab); });
+    $('#ver-tabs').addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const list = $$('#ver-tabs [data-ver-tab]');
+      const n = list[list.indexOf(document.activeElement) + (e.key === 'ArrowRight' ? 1 : -1)];
+      if (!n) return;
+      e.preventDefault();
+      showVer(n.dataset.verTab);
+      n.focus();
+    });
+    showVer(APP_VERSION);
+  }
+  // 업데이트 알림의 ‘달라진 점’: 앱 소개의 업데이트 소식으로 가서 이번 버전을 보여 준다
+  function openNews() {
+    go('about');
+    showVer(APP_VERSION);
+    const el = $('#news-panel');
+    if (el) el.scrollIntoView({ block: 'start' });
+  }
+
   function renderAbout() {
     $('#app-version').textContent = `버전 ${APP_VERSION} · ${APP_DATE}`;
     if (aboutTimer) return;
@@ -1525,7 +1613,6 @@
       st.settings.breakMin = clamp($('#set-break').value, 1, LEN_MAX.break, 5);
       st.settings.keepAwake = $('#set-awake').checked;
       st.settings.dayStartHour = clamp($('#set-daystart').value, 0, 6, 0);
-      st.settings.autoBreak = $('#set-autobreak').checked;
     });
     if (!store.get().settings.keepAwake) releaseAwake(); else if (timer.running) keepAwake();
     if (!timerBusy()) setMode(timer.mode); // 하던 타이머(일시정지 포함)는 그대로 두고, 새 시간은 다음 타이머부터
@@ -1568,7 +1655,8 @@
 
   /* ---------- 렌더 ---------- */
   function render() {
-    if (currentView === 'home') { renderHome(); if (window.Stopwatch) window.Stopwatch.render(); }
+    if (currentView === 'home') { renderHome(); if (window.Stopwatch) window.Stopwatch.render(); if (window.Timetable) window.Timetable.render(); }
+    else if (currentView === 'timetable') { if (window.Timetable) window.Timetable.render(); }
     else if (currentView === 'plan') renderPlan();
     else if (currentView === 'timer') { renderTimer(); if (window.Stopwatch) window.Stopwatch.render(); }
     else if (currentView === 'review') {
@@ -1658,7 +1746,7 @@
     try {
       if (sessionStorage.getItem('studypromotion.updated')) {
         sessionStorage.removeItem('studypromotion.updated');
-        setTimeout(() => toast('새 버전으로 업데이트했어요'), 600);
+        setTimeout(() => toast('새 버전으로 업데이트했어요', { action: '달라진 점', onAction: openNews }), 600);
       }
     } catch (e) { /* 무시 */ }
   }
@@ -1740,12 +1828,15 @@
     toast('테마 색: ' + ACCENTS[accent]);
   });
 
-  window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, uid, go, now, render, openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
+  window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone,
+    // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
+    timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null } : null),
+    openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   initHistory();
   go(location.hash.slice(1) || 'home');
 
   // 테스트/디버그용
-  window.__studypromotion = { store, timer, finishPhase, parseBulk };
+  window.__studypromotion = { store, timer, finishPhase, parseBulk, afterFocus };
 })();

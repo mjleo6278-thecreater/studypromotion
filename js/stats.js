@@ -176,36 +176,50 @@
    *  직접 기록은 언제 했는지 모르니 시간표에 넣지 않고 untimed(분)로 합만 낸다.
    *  반환: { hours: [{ hour, segs: [{ from, to, subjectId }] }], start, end, timed, untimed }
    *   hours는 처음 공부한 시부터 마지막 시까지, from/to는 그 시 안의 분(0~60), start/end는 시각(ms)
+   *  opts.live: 지금 재고 있는 구간 { from, to, subjectId } (아직 기록 전이지만 바로 칠한다, 조각에 live: true가 붙는다)
+   *  opts.full: 공부한 시간대만이 아니라 하루 전체 24줄 (타임테이블 화면, 하루 시작 시각부터)
    */
-  function dayTimeline(sessions, key) {
+  function dayTimeline(sessions, key, opts) {
+    opts = opts || {};
     const [y, m, d] = key.split('-').map(Number);
     const off = dayOffset();
     const d0 = new Date(y, m - 1, d).getTime() + off, d1 = new Date(y, m - 1, d + 1).getTime() + off;
     const segs = [];
     let untimed = 0, timed = 0, start = null, end = null;
-    for (const s of sessions) {
-      if (!(s.minutes > 0)) continue;
-      if (s.manual) { if (dayKey(s.endedAt) === key) untimed += s.minutes; continue; }
-      const from = Math.max(s.endedAt - s.minutes * 60000, d0), to = Math.min(s.endedAt, d1);
-      if (to <= from) continue;
+    const add = (a, b, subjectId, live) => {
+      const from = Math.max(a, d0), to = Math.min(b, d1);
+      if (!(to > from)) return;
       timed += (to - from) / 60000;
       start = start === null ? from : Math.min(start, from);
       end = end === null ? to : Math.max(end, to);
-      segs.push({ from, to, subjectId: s.subjectId || null });
+      const g = { from, to, subjectId: subjectId || null };
+      if (live) g.live = true;
+      segs.push(g);
+    };
+    for (const s of sessions) {
+      if (!(s.minutes > 0)) continue;
+      if (s.manual) { if (dayKey(s.endedAt) === key) untimed += s.minutes; continue; }
+      add(s.endedAt - s.minutes * 60000, s.endedAt, s.subjectId, false);
     }
+    if (opts.live) add(opts.live.from, opts.live.to, opts.live.subjectId, true);
     const hours = [];
-    if (segs.length) {
+    if (segs.length || opts.full) {
       segs.sort((a, b) => a.from - b.from);
       // 하루 시작 시각이 새벽이면 그날의 시간표가 다음 날 새벽까지 이어진다 (… 22시, 23시, 0시, 1시)
       const midnight = new Date(y, m - 1, d).getTime();
-      const h0 = Math.floor((start - midnight) / HOUR), h1 = Math.floor((end - 1 - midnight) / HOUR);
+      const h0 = opts.full ? Math.round(off / HOUR) : Math.floor((start - midnight) / HOUR);
+      const h1 = opts.full ? h0 + 23 : Math.floor((end - 1 - midnight) / HOUR);
       for (let h = h0; h <= h1; h++) {
         const t0 = new Date(y, m - 1, d, h).getTime(), t1 = new Date(y, m - 1, d, h + 1).getTime();
-        hours.push({ hour: h % 24, segs: segs.filter((g) => g.to > t0 && g.from < t1).map((g) => ({
-          from: Math.round(((Math.max(g.from, t0) - t0) / 60000) * 10) / 10,
-          to: Math.round(((Math.min(g.to, t1) - t0) / 60000) * 10) / 10,
-          subjectId: g.subjectId,
-        })) });
+        hours.push({ hour: h % 24, segs: segs.filter((g) => g.to > t0 && g.from < t1).map((g) => {
+          const o = {
+            from: Math.round(((Math.max(g.from, t0) - t0) / 60000) * 10) / 10,
+            to: Math.round(((Math.min(g.to, t1) - t0) / 60000) * 10) / 10,
+            subjectId: g.subjectId,
+          };
+          if (g.live) o.live = true;
+          return o;
+        }) });
       }
     }
     return { hours, start, end, timed: Math.round(timed), untimed };
