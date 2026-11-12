@@ -14,16 +14,21 @@
   const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
 
   // running: 재는 중, startAt: 시작 시각, subjectId: 재는 과목('' = 과목 없이), last: 마지막으로 잰 과목(null = 아직 없음)
+  // label: 무엇을 공부하는지(고른 할 일 이름 등), taskId: 고른 할 일, topicId: 이어서 재는 시험 범위 (없으면 null)
+  const str = (v) => (v == null || v === '' ? null : String(v));
   function read() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
       if (s && typeof s === 'object') {
         const running = !!s.running && +s.startAt > 0;
-        return { running, startAt: running ? +s.startAt : 0, subjectId: running ? String(s.subjectId || '') : '', last: s.last == null ? null : String(s.last) };
+        return { running, startAt: running ? +s.startAt : 0, subjectId: running ? String(s.subjectId || '') : '', last: s.last == null ? null : String(s.last),
+          label: running ? str(s.label) : null, taskId: running ? str(s.taskId) : null, topicId: running ? str(s.topicId) : null };
       }
     } catch (e) { /* 무시 */ }
-    return { running: false, startAt: 0, subjectId: '', last: null };
+    return { running: false, startAt: 0, subjectId: '', last: null, label: null, taskId: null, topicId: null };
   }
+  const idle = (last) => ({ running: false, startAt: 0, subjectId: '', last, label: null, taskId: null, topicId: null });
+  const run = (startAt, id, extra) => ({ running: true, startAt, subjectId: id, last: id, label: str(extra && extra.label), taskId: str(extra && extra.taskId), topicId: str(extra && extra.topicId) });
   function save() { try { localStorage.setItem(KEY, JSON.stringify(sw)); } catch (e) { /* 무시 */ } }
 
   let sw = read();
@@ -41,8 +46,9 @@
     sec = Math.max(0, Math.floor(sec));
     return pad(Math.floor(sec / 3600)) + ':' + pad(Math.floor((sec % 3600) / 60)) + ':' + pad(sec % 60);
   }
-  function dayStart(ts) { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); }
-  function nextDay(ts) { const d = new Date(ts); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime(); }
+  // 하루의 시작과 끝: 기본은 자정, 설정에서 하루 시작 시각을 새벽으로 옮겼으면 그 시각
+  function dayStart(ts) { const off = Stats.dayOffset(); const d = new Date(ts - off); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() + off; }
+  function nextDay(ts) { const off = Stats.dayOffset(); const d = new Date(ts - off); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() + off; }
   const secOf = (s) => (s.sec > 0 ? s.sec : (Number(s.minutes) || 0) * 60);
   const subjects = () => store.get().subjects || [];
   const subjectOf = (id) => subjects().find((s) => s.id === id) || null;
@@ -77,7 +83,8 @@
 
   /* ---------- 기록 ---------- */
   // startAt~end를 기록한다. 자정을 넘기면 날마다 나눠서 (하루 공부 시간이 맞게). 1분이 안 되는 조각은 버림. 기록한 초를 돌려줌
-  function recordRange(startAt, end, subjectId) {
+  function recordRange(startAt, end, subjectId, meta) {
+    meta = meta || {};
     let parts = [];
     for (let a = startAt; a < end;) {
       const b = Math.min(end, nextDay(a));
@@ -94,7 +101,7 @@
       for (const p of parts) {
         const id = 'sw-' + Math.round(p.a); // 같은 스톱워치를 두 창에서 멈춰도 한 번만
         if (st.sessions.some((x) => x.id === id)) continue;
-        st.sessions.push({ id, subjectId: sid, minutes: Math.max(1, Math.round(p.sec / 60)), sec: p.sec, endedAt: p.last ? p.b : p.b - 1, label: null, topicId: null, kind: 'stopwatch' });
+        st.sessions.push({ id, subjectId: sid, minutes: Math.max(1, Math.round(p.sec / 60)), sec: p.sec, endedAt: p.last ? p.b : p.b - 1, label: meta.label || null, topicId: meta.topicId || null, kind: 'stopwatch' });
       }
     });
     return parts.reduce((x, p) => x + p.sec, 0);
@@ -102,7 +109,7 @@
 
   // 지금까지 잰 시간을 기록. 너무 오래 켜져 있었으면 먼저 물어봄. 기록한 초(안 하기로 했으면 -1)
   async function finishRun(end) {
-    const startAt = sw.startAt, sid = sw.subjectId;
+    const startAt = sw.startAt, sid = sw.subjectId, meta = { label: sw.label, topicId: sw.topicId };
     const sec = Math.floor((end - startAt) / 1000);
     if (sec >= LONG_SEC) {
       busy = true;
@@ -113,14 +120,15 @@
         return -1;
       }
     }
-    return recordRange(startAt, end, sid);
+    return recordRange(startAt, end, sid, meta);
   }
 
   /* ---------- 시작·멈춤·과목 바꾸기 ---------- */
-  async function start(id) {
+  // extra: { label, taskId, topicId } 무엇을 공부하는지 (홈 ‘공부 시작하기’에서 고른 할 일, 집중 타이머에서 이어 온 범위)
+  async function start(id, extra) {
     id = id || '';
     if (busy || (window.Lock && window.Lock.state)) return;
-    if (sw.running) return sw.subjectId === id ? stop() : switchTo(id);
+    if (sw.running) return extra ? switchTo(id, extra) : sw.subjectId === id ? stop() : switchTo(id);
     const tb = App.timerBusy ? App.timerBusy() : null;
     if (tb === 'focus') {
       busy = true;
@@ -129,7 +137,7 @@
       if (!yes || sw.running) return;
     }
     if (tb) App.stopTimer();
-    sw = { running: true, startAt: now(), subjectId: id, last: id };
+    sw = run(now(), id, extra);
     save();
     begin();
     render();
@@ -137,22 +145,30 @@
 
   async function stop() {
     if (!sw.running || busy) return;
-    const sid = sw.subjectId;
+    const sid = sw.subjectId, label = sw.label, taskId = sw.taskId, topicId = sw.topicId;
     const sec = await finishRun(now());
-    sw = { running: false, startAt: 0, subjectId: '', last: sid };
+    sw = idle(sid);
     save();
     halt();
     render();
-    if (sec > 0) toast(`${nameOf(sid)} ${Stats.formatMinutes(sec / 60)} 기록했어요`);
-    else if (sec === 0) toast('1분이 안 돼서 기록하지 않았어요');
+    if (sec > 0) {
+      // 할 일을 골라서 시작했으면 끝냈는지 바로 표시할 수 있게
+      const task = taskId ? store.get().tasks.find((t) => t.id === taskId && !t.done) : null;
+      toast(`${nameOf(sid)}${label ? ' · ' + label : ''} ${Stats.formatMinutes(sec / 60)} 기록했어요`, task ? { action: '할 일 완료', onAction: () => finishTask(task.id) } : undefined);
+      if (topicId && App.askTopicDone) App.askTopicDone(topicId, label);
+    } else if (sec === 0) toast('1분이 안 돼서 기록하지 않았어요');
+  }
+  function finishTask(id) {
+    store.update((st) => { const t = st.tasks.find((x) => x.id === id); if (t && !t.done) { t.done = true; t.doneAt = now(); } });
+    toast('잘했어요! 할 일 하나 완료');
   }
 
   // 재는 중에 다른 과목을 누르면: 지금 과목을 기록하고 바로 새 과목으로
-  async function switchTo(id) {
+  async function switchTo(id, extra) {
     if (busy) return;
     const end = now(), old = sw.subjectId;
     const sec = await finishRun(end);
-    sw = { running: true, startAt: end, subjectId: id, last: id };
+    sw = run(end, id, extra);
     save();
     begin();
     render();
@@ -210,12 +226,15 @@
   function renderHomeLive() {
     const el = $('#h-sw-live');
     if (!el) return;
+    const startBtn = $('#h-start');
+    if (startBtn) startBtn.hidden = sw.running;
     el.hidden = !sw.running;
     if (!sw.running) { el.innerHTML = ''; return; }
     const s = subjectOf(sw.subjectId);
     el.innerHTML = `<i class="dot${s ? '' : ' none'}"${s ? ` style="background:${esc(s.color)}"` : ''}></i><span class="lv-txt"><span class="lv-name">${esc(nameOf(sw.subjectId))}</span><span class="lv-state">재는 중</span></span><b>${shortClock(runSec(now()))}</b>`;
-    el.setAttribute('aria-label', `스톱워치: ${nameOf(sw.subjectId)} 재는 중, 눌러서 스톱워치 열기`);
-    el.title = `${nameOf(sw.subjectId)} 재는 중 · 눌러서 스톱워치 열기`;
+    const what = nameOf(sw.subjectId) + (sw.label ? ' · ' + sw.label : '');
+    el.setAttribute('aria-label', `스톱워치: ${what} 재는 중, 눌러서 스톱워치 열기`);
+    el.title = `${what} 재는 중 · 눌러서 스톱워치 열기`;
   }
 
   function renderTabs() {
@@ -240,6 +259,8 @@
     renderTabs();
     navDot();
     if (App.view === 'home') { renderHomeLive(); homeMin = -1; if (App.renderHomeToday) App.renderHomeToday(); }
+    // 시작·멈춤이 타임테이블에도 바로 보이게 (재는 중 구간이 생기거나 기록된 칸으로 바뀐다)
+    if (window.Timetable && (App.view === 'home' || App.view === 'timetable')) window.Timetable.render();
     if (App.view !== 'timer' || tab !== 'sw') return;
     countBase();
     const list = subjects();
@@ -253,14 +274,14 @@
     $('#sw-now').hidden = !sw.running;
     $('#sw-now-dot').style.background = s ? s.color : '';
     $('#sw-now-dot').classList.toggle('none', !s);
-    $('#sw-now-name').textContent = nameOf(sw.subjectId);
+    $('#sw-now-name').textContent = nameOf(sw.subjectId) + (sw.label ? ' · ' + sw.label : '');
     paint(now());
   }
 
   // 1초마다 바뀌는 숫자만 고친다
   function paint(t) {
     if (base.day !== Stats.dayKey(t)) countBase(); // 자정이 지나면 오늘 기록을 다시 셈
-    const d = new Date(t);
+    const d = new Date(t - Stats.dayOffset());
     $('#sw-date').textContent = `${d.getMonth() + 1}월 ${d.getDate()}일 ${DAYS[d.getDay()]}요일`;
     const today = runTodaySec(t);
     $('#sw-total').textContent = clock(base.total + today);
@@ -288,6 +309,49 @@
     showTab(tab === 'sw' ? 'focus' : 'sw');
     $(`[data-ttab="${tab}"]`).focus();
   });
+  /* ---------- 홈 ‘공부 시작하기’: 과목 → 할 일 → 스톱워치 ---------- */
+  function taskHint(t) {
+    const parts = [];
+    if (t.due) { const tk = App.todayKey(); parts.push(t.due < tk ? '기한 지남' : t.due === tk ? '오늘까지' : `${+t.due.slice(5, 7)}/${+t.due.slice(8)}까지`); }
+    if (t.estimateMin) parts.push(Stats.formatMinutes(t.estimateMin));
+    return parts.join(' · ');
+  }
+  // 그 과목의 아직 안 끝낸 할 일 (마감이 빠른 순, 마감 없는 것은 뒤)
+  function openTasks(sid) {
+    return store.get().tasks.filter((t) => !t.done && (t.subjectId && subjectOf(t.subjectId) ? t.subjectId : '') === sid)
+      .sort((a, b) => { const ad = a.due || '9999', bd = b.due || '9999'; return ad !== bd ? (ad < bd ? -1 : 1) : a.createdAt - b.createdAt; });
+  }
+  let flowOpen = false;
+  async function startFlow() {
+    if (flowOpen || busy || sw.running || (window.Lock && window.Lock.state) || !App.choose) return;
+    flowOpen = true;
+    try {
+      const list = subjects();
+      let sid = '';
+      if (list.length) {
+        sid = await App.choose('어떤 과목을 공부할까요?',
+          list.map((s) => ({ value: s.id, label: s.name, color: s.color })).concat([{ value: '', label: '과목 없이', color: '' }]), { cls: 'start-sheet' });
+        if (sid === undefined) return;
+      }
+      const tasks = openTasks(sid);
+      let extra;
+      if (tasks.length) {
+        const pick = await App.choose(sid ? `${nameOf(sid)} · 어떤 할 일을 할까요?` : '어떤 할 일을 할까요?',
+          tasks.map((t) => ({ value: t.id, label: t.title, hint: taskHint(t) })).concat([{ value: '', label: sid ? `할 일 없이 ${nameOf(sid)}만 공부하기` : '할 일 없이 시작하기', last: true }]),
+          { cls: 'start-sheet', note: '할 일에 없는 공부라면 맨 아래를 고르세요.' });
+        if (pick === undefined) return;
+        const t = pick && tasks.find((x) => x.id === pick);
+        if (t) extra = { label: t.title, taskId: t.id };
+      }
+      if (sw.running) return; // 고르는 동안 다른 창에서 이미 시작함
+      showTab('sw');
+      App.go('timer');
+      await start(sid, extra);
+    } finally { flowOpen = false; }
+  }
+  const homeStart = $('#h-start');
+  if (homeStart) homeStart.addEventListener('click', () => startFlow());
+
   $('#sw-main').addEventListener('click', () => toggle());
   const homeLive = $('#h-sw-live');
   if (homeLive) homeLive.addEventListener('click', () => { showTab('sw'); App.go('timer'); });
@@ -314,7 +378,10 @@
   // 오늘(자정 이후) 재고 있는 시간(분). 홈 ‘오늘 공부’에 더한다
   const todayMinutes = () => sw.running ? Math.floor(runTodaySec(now()) / 60) : 0;
 
-  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: () => tab, showTab, render, todayMinutes };
+  // 지금 재고 있는 구간 (타임테이블이 실시간으로 그린다). 재는 중이 아니면 null
+  const live = () => (sw.running ? { from: sw.startAt, to: now(), subjectId: sw.subjectId && subjectOf(sw.subjectId) ? sw.subjectId : null, label: sw.label } : null);
+
+  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: () => tab, showTab, render, todayMinutes, live, startFlow };
   if (sw.running) begin();
   render();
 })();

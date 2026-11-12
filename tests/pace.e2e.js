@@ -57,6 +57,19 @@ const server = http.createServer((req, res) => {
   await page.click('#time-form button[type=submit]');
   assert(/50% · 남은 1시간/.test(await page.textContent('[data-time="a"]')), '항목 칩에 남은 시간');
   assert(/29% · 남은 2시간 30분/.test(await page.textContent('#board-cards .bcard-prog')), '카드 진행률은 시간 비율 (60/210)');
+  // 범위만 체크하고 공부 기록이 없으면 오늘 몫 완료가 아님 (홈 '오늘 공부' 0분인데 완료로 뜨던 오류)
+  assert(/오늘 할 양 21분 남음/.test(await page.textContent('#board-pace')), '공부 기록 0분이면 오늘 몫 그대로 (' + (await page.textContent('#board-pace')).trim().replace(/\s+/g, ' ') + ')');
+  await page.goto(base + '#home');
+  assert(/오늘 21분 더/.test(await page.textContent('#h-exams')) && !/몫 완료/.test(await page.textContent('#h-exams')), '홈 시험 준비도 오늘 몫 남음');
+  assert(/오늘 21분 더/.test(await page.textContent('#h-next-sub')), '홈 오늘 할 범위도 오늘 몫 남음');
+  assert(/공부 기록이 없어서/.test(await page.textContent('#h-next-foot')), '체크만 한 범위는 기록이 없어서 안 셌다고 알려 줌');
+  // 10분 공부 → 10분만 셈
+  await page.evaluate(() => App.store.update((s) => s.sessions.push({ id: 'p1', subjectId: null, minutes: 10, endedAt: Date.now() })));
+  assert(/오늘 11분 더/.test(await page.textContent('#h-exams')), '공부한 10분만큼만 오늘 한 양 (' + (await page.textContent('#h-exams')).trim().replace(/\s+/g, ' ') + ')');
+  // 30분 공부 → 오늘 몫 채움
+  await page.evaluate(() => App.store.update((s) => s.sessions.push({ id: 'p2', subjectId: null, minutes: 20, endedAt: Date.now() })));
+  assert(/몫 완료/.test(await page.textContent('#h-exams')) && /오늘 몫 완료/.test(await page.textContent('#h-next-sub')), '홈: 공부 30분 + 범위 체크 → 오늘 몫 완료');
+  await page.goto(base + '#board');
   assert(/오늘 할 양 완료/.test(await page.textContent('#board-pace')), '오늘 몫 채움');
   await page.click('#bp-toggle');
   const grid = await page.textContent('.bp-grid');

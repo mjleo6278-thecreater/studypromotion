@@ -5,6 +5,10 @@
   let storage = null;
   try { storage = window.localStorage; storage.getItem('x'); } catch (e) { storage = null; }
   const store = StoreLib.createStore(storage);
+  // 하루 시작 시각(설정)을 날짜 계산에 알려 준다. 기록이 바뀔 때마다(가져오기·계정 동기화 포함) 다른 화면이 그려지기 전에 맞춘다
+  const applyDayStart = () => Stats.setDayStart(store.get().settings.dayStartHour);
+  applyDayStart();
+  store.subscribe(applyDayStart);
   const uid = StoreLib.uid;
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -16,6 +20,7 @@
   // 선 아이콘 (index.html 맨 위 아이콘 묶음의 기호를 가져다 쓴다)
   const ic = (name, cls) => `<svg class="ic${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
   const todayKey = () => Stats.dayKey(now());
+  const dayNow = () => now() - Stats.dayOffset(); // 오늘이 며칠·몇 월인지 볼 때 쓰는 시각 (하루 시작 시각 전의 새벽은 전날)
 
   // opts.action / opts.onAction: 알림 옆에 '되돌리기' 같은 버튼 (5초 동안)
   function toast(msg, opts) {
@@ -47,24 +52,58 @@
   }
 
   // 브라우저 confirm 대신 쓰는 확인 창 (임베드 환경에서도 동작)
+  // opts.ok / opts.cancel: 버튼에 적을 말 (무엇을 하는 버튼인지 그대로 적는다)
+  // opts.danger: 지우는 일처럼 되돌리기 어려운 동작 → 빨간 버튼, 처음 초점은 '취소'에 (Enter로 실수하지 않게)
+  // opts.alt: 세 번째 선택지. 누르면 'alt'를 돌려준다
+  // opts.mustChoose: Esc·뒤로 가기로 닫히지 않고 버튼을 골라야 한다
   function ask(message, opts) {
     opts = opts || {};
     return new Promise((resolve) => {
       const dlg = $('#ask');
+      const ok = $('#ask-ok'), cancel = $('#ask-cancel'), alt = $('#ask-alt');
       $('#ask-msg').textContent = message;
-      $('#ask-ok').textContent = opts.ok || '확인';
-      $('#ask-cancel').textContent = opts.cancel || '취소';
+      ok.textContent = opts.ok || '확인';
+      ok.classList.toggle('danger-fill', !!opts.danger);
+      ok.classList.toggle('primary', !opts.danger);
+      cancel.textContent = opts.cancel || '취소';
+      alt.hidden = !opts.alt;
+      alt.textContent = opts.alt || '';
+      dlg.classList.toggle('three', !!opts.alt);
+      dlg.dataset.mustChoose = opts.mustChoose ? '1' : '';
       dlg.hidden = false;
-      $('#ask-ok').focus();
-      const done = (v) => { dlg.hidden = true; $('#ask-ok').onclick = $('#ask-cancel').onclick = dlg.onkeydown = null; resolve(v); };
-      $('#ask-ok').onclick = () => done(true);
-      $('#ask-cancel').onclick = () => done(false);
-      dlg.onkeydown = (ev) => { if (ev.key === 'Escape') done(false); };
+      (opts.danger ? cancel : ok).focus();
+      const done = (v) => { dlg.hidden = true; ok.onclick = cancel.onclick = alt.onclick = dlg.onkeydown = null; resolve(v); };
+      ok.onclick = () => done(true);
+      cancel.onclick = () => done(false);
+      alt.onclick = () => done('alt');
+      dlg.onkeydown = (ev) => { if (ev.key === 'Escape' && !opts.mustChoose) done(false); };
+    });
+  }
+
+  // 여러 선택지 중 하나를 고르는 창 (폰: 아래에서 올라오는 시트, 넓은 화면: 가운데 창). 고른 값을 돌려주고, 그냥 닫으면 undefined
+  // options: [{ value, label, hint, color }] — color를 주면 과목 색 점을 그린다 (''이면 빈 점)
+  function choose(title, options, opts) {
+    opts = opts || {};
+    const body = (opts.note ? `<p class="ch-note muted small">${esc(opts.note)}</p>` : '') +
+      '<div class="ui-opts ch-opts">' + options.map((o, i) =>
+        `<button type="button" class="ui-opt ch-opt${o.last ? ' ch-last' : ''}" data-ch="${i}">` +
+        (o.color !== undefined ? `<i class="sel-dot${o.color ? '' : ' none'}"${o.color ? ` style="background:${esc(o.color)}"` : ''}></i>` : '') +
+        `<span><b>${esc(o.label)}</b>${o.hint ? `<small>${esc(o.hint)}</small>` : ''}</span></button>`).join('') + '</div>';
+    return window.UI.openSheet({
+      title, body, cls: 'ui-choose' + (opts.cls ? ' ' + opts.cls : ''), focusSel: '.ch-opt',
+      onClick: (e, close) => { const b = e.target.closest('[data-ch]'); if (b) close(options[+b.dataset.ch].value); },
+      onKey: (e, box) => {
+        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+        e.preventDefault();
+        const list = [...box.querySelectorAll('.ch-opt')];
+        const n = list[Math.max(0, Math.min(list.length - 1, list.indexOf(document.activeElement) + (e.key === 'ArrowDown' ? 1 : -1)))];
+        if (n) n.focus();
+      },
     });
   }
 
   /* ---------- 라우팅 ---------- */
-  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'account', 'about'];
+  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'timetable', 'account', 'about'];
   let currentView = 'home';
 
   function go(view) {
@@ -79,7 +118,7 @@
       else if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
     });
     document.body.classList.toggle('board-mode', view === 'board');
-    if (location.hash !== '#' + view) history.replaceState(null, '', '#' + view);
+    if (location.hash !== '#' + view) { try { history.replaceState(history.state, '', '#' + view); } catch (e) { /* 방문 기록을 못 쓰는 환경 */ } }
     if (prev === 'about' && view !== 'about') stopAboutTrack();
     render();
     window.scrollTo(0, 0);
@@ -92,6 +131,57 @@
     if (link) { e.preventDefault(); go(link.dataset.go); }
   });
   window.addEventListener('hashchange', () => go(location.hash.slice(1)));
+
+  /* ---------- 휴대폰 '뒤로' 버튼 ----------
+     열린 창이 있으면 그 창만 닫고, 없으면 홈으로 가고, 홈에서는 앱을 나간다(설치한 앱은 한 번 더 눌러야 닫힘).
+     방문 기록 맨 아래에 '바닥' 칸을 하나 깔고 그 위에 지금 화면을 올려 둔다. '뒤로'를 누르면 바닥으로 내려오므로, 그때 할 일을 정하고 다시 올라온다.
+     화면을 옮길 때는 지금처럼 맨 위 칸의 주소만 바꾸므로 방문 기록이 쌓이지 않는다. */
+  // 맨 위에 열려 있는 창(확인 창·선택 시트·메뉴·입력 창·열어 둔 덱)을 하나 닫는다. 닫을 게 있었으면 true
+  function closeTopOverlay() {
+    const askDlg = $('#ask');
+    if (!askDlg.hidden) { if (!askDlg.dataset.mustChoose) $('#ask-cancel').click(); return true; }
+    if (document.querySelector('.ui-back:not(.out)') && window.UI) { window.UI.closeSheet(); return true; }
+    const menu = $('#pop-menu');
+    if (menu && !menu.hidden) { menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true; } // 메뉴는 Esc로 닫히게 돼 있다
+    const dlg = $$('.ask-backdrop:not([hidden])').pop();
+    if (dlg) {
+      const btn = dlg.querySelector('[id$="-cancel"], [id$="-close"]');
+      if (btn) btn.click(); else dlg.hidden = true;
+      return true;
+    }
+    if (currentView === 'review' && openDeckId) { $('#deck-back').click(); return true; }
+    return false;
+  }
+  const isInstalled = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };
+  const pushTop = () => { try { history.pushState({ sp: 'top' }, '', '#' + currentView); } catch (e) { /* 무시 */ } };
+  let exitTimer = null;
+  function onBack() {
+    if (closeTopOverlay()) return pushTop();
+    if (currentView !== 'home') { pushTop(); return go('home'); }
+    if (!isInstalled()) {
+      // 브라우저 탭: 평소처럼 이전 페이지로. 돌아갈 곳이 없어 그대로 남았으면 다시 칸을 올려 둔다
+      try { history.back(); } catch (e) { /* 무시 */ }
+      exitTimer = setTimeout(() => { if (history.state && history.state.sp === 'base') pushTop(); }, 400);
+      return;
+    }
+    toast('한 번 더 누르면 앱이 닫혀요');
+    exitTimer = setTimeout(pushTop, 2000);
+  }
+  window.addEventListener('popstate', (e) => {
+    if (window.Lock && window.Lock.state) return; // 잠금 중에는 잠금 화면이 '뒤로'를 막는다
+    clearTimeout(exitTimer);
+    const st = e.state;
+    if (st && st.sp === 'base') return onBack();
+    // 잠금이 끝난 뒤 남은 칸에서 내려온 경우: 바닥까지 마저 내려가 '뒤로' 한 번으로 처리한다
+    if (st && st.sp === 'top') { try { history.back(); } catch (err) { /* 무시 */ } }
+  });
+  function initHistory() {
+    try {
+      if (history.state && (history.state.sp === 'top' || history.state.lock)) return; // 새로 고침: 이미 깔려 있음
+      history.replaceState({ sp: 'base' }, '', location.href);
+      history.pushState({ sp: 'top' }, '', location.href);
+    } catch (e) { /* 방문 기록을 못 쓰는 환경(파일로 열기 등)에서는 예전처럼 동작 */ }
+  }
 
   /* ---------- 할 일 ---------- */
   let taskFilter = 'open';
@@ -250,7 +340,7 @@
     if (!b) return;
     const id = b.dataset.delSubject;
     const s = subjectById(id);
-    if (!(await ask(`'${s.name}' 과목을 삭제할까요? 할 일과 기록은 '과목 없음'으로 남습니다.`))) return;
+    if (!(await ask(`'${s.name}' 과목을 삭제할까요? 할 일과 기록은 '과목 없음'으로 남습니다.`, { ok: '삭제', danger: true }))) return;
     store.update((st) => {
       st.subjects = st.subjects.filter((x) => x.id !== id);
       st.tasks.forEach((t) => { if (t.subjectId === id) t.subjectId = null; });
@@ -295,9 +385,24 @@
     return html;
   }
 
+  // 시험 '오늘 한 양'은 오늘 실제로 공부한 시간(홈 '오늘 공부')까지만 센다.
+  // 범위를 체크만 하고 공부 기록이 0분인데 '오늘 몫 완료'가 뜨지 않게.
+  //  pace.studied/checked: 마지막으로 그릴 때 쓴 공부 시간과 가장 많이 체크한 양 (공부 시간이 바뀌면 다시 그릴지 정한다)
+  const pace = { studied: null, checked: 0 };
+  function todayStudyMin() {
+    return Stats.minutesOn(store.get().sessions, now()) + (window.Stopwatch ? window.Stopwatch.todayMinutes() : 0);
+  }
+  function homePlan(p, ex, t) {
+    pace.studied = todayStudyMin();
+    const plan = Scope.timePlan(p, ex, t, pace.studied);
+    if (plan) pace.checked = Math.max(pace.checked, plan.todayChecked);
+    return plan;
+  }
+
   function renderHomeExams() {
     const st = store.get();
     const t = now();
+    pace.checked = 0;
     // 다가오는 시험(가까운 순) → 날짜 없는 시험 → 끝난 시험(최근 순)
     const tk = todayKey();
     const past = (e) => !!e.date && e.date < tk;
@@ -313,7 +418,7 @@
         <span class="exam-name">${esc(ex.name)}</span>${dd ? `<span class="badge${past(ex) ? ' zero' : ''}">${past(ex) ? '끝남 · ' + dd : dd}</span>` : ''}
         <span class="pawn-track" aria-label="진행률 ${p.pct}%">${pawnTrack(p.pct)}</span>
         <span class="exam-pct">${(() => {
-          const plan = Scope.timePlan(p, ex, t);
+          const plan = homePlan(p, ex, t);
           if (plan) return `${p.pct}% · 남은 ${Stats.formatMinutes(plan.left)}` + (plan.finished ? '' : plan.days > 0 ? ` · 오늘 ${plan.todayLeft ? Stats.formatMinutes(plan.todayLeft) + ' 더' : '몫 완료 ✓'}` : '') + (plan.behind && !plan.finished ? ` · <span class="overdue">밀림 ${Stats.formatMinutes(plan.behind)}</span>` : '');
           const pc = Scope.pace(p.total - p.done, ex.date, t);
           return `${p.done}/${p.total} · ${p.pct}%` + (pc && pc.days > 0 ? ` · 하루 ${pc.perDay}개` : '');
@@ -342,6 +447,8 @@
     const mg = Stats.monthGoal(st.settings.monthlyGoalMin || 0, Stats.lastNMonths(st.sessions, now(), 1)[0].minutes + live, now(), mins);
     $('#h-month-pace').hidden = !mg;
     if (mg) $('#h-month-pace').textContent = mg.done ? '이번 달 목표 달성 🎉' : mg.todayLeft ? `월 목표 페이스: 오늘 ${Stats.formatMinutes(mg.todayLeft)} 더` : '월 목표 페이스: 오늘 몫 완료 ✓';
+    // 공부 시간이 바뀌어 시험 '오늘 한 양'이 달라질 때만 시험 줄도 다시 (스톱워치가 1분마다 부른다)
+    if (pace.studied !== null && pace.studied !== mins && pace.checked > Math.min(pace.studied, mins)) { renderHomeExams(); renderHomeNext(); }
   }
 
   function renderHome() {
@@ -403,7 +510,7 @@
     if (!ex) return;
     const t = now();
     const p = Scope.examProgress(st.topics, ex.id);
-    const plan = Scope.timePlan(p, ex, t);
+    const plan = homePlan(p, ex, t);
     const pc = plan ? null : Scope.pace(p.total - p.done, ex.date, t);
     const quotaDone = plan && !plan.finished && plan.days > 0 && plan.todayLeft === 0;
     const quota = plan && !plan.finished && !quotaDone ? plan.todayLeft : 0;
@@ -428,7 +535,9 @@
         <button class="icon-btn next-play" data-next-focus="${esc(n.id)}" aria-label="${esc(n.title)} 타이머 시작" title="이 범위로 타이머 시작">${ic('play')}</button>
       </li>`;
     }).join('');
+    const unrecorded = plan && !plan.finished && plan.days > 0 ? plan.todayChecked - plan.todayDone : 0;
     $('#h-next-foot').innerHTML = quotaDone ? '오늘 몫을 다 했어요 🎉 더 하고 싶다면 위 범위를 이어서 해 보세요.'
+      : unrecorded > 0 ? `오늘 체크한 범위 중 ${Stats.formatMinutes(unrecorded)}은 공부 기록이 없어서 오늘 한 양에 넣지 않았어요. 타이머나 스톱워치로 재거나 <button class="btn link inline" type="button" data-log-open>직접 기록</button>하면 들어가요.`
       : !plan ? `항목마다 ${ic('timer')} 걸리는 시간을 적으면, 오늘 할 양에 딱 맞춰 골라 드려요.`
       : '과목을 번갈아 가며, 오늘 할 양만큼 골랐어요.';
   }
@@ -571,12 +680,44 @@
       recordFocus(Math.round(elapsedMin), at, completed ? 'focus-' + Math.round(at) : null);
       if (completed) {
         if (opts.quiet) toast(`앱이 닫혀 있는 동안 집중 ${Stats.formatMinutes(elapsedMin)}이 끝나서 기록했어요`);
-        else { beep(); notify('집중 완료! 잠깐 쉬어요.'); toast(`${Stats.formatMinutes(elapsedMin)} 집중 기록 완료`); }
-        if (topicId) setTimeout(() => askTopicDone(topicId, label), opts.quiet ? 1200 : 500);
+        else { beep(); notify('집중 완료! 이어서 무엇을 할지 골라 주세요.'); if (topicId) toast(`${Stats.formatMinutes(elapsedMin)} 집중 기록 완료`); } // 고르는 창에 ‘기록했어요’가 적혀 있어서, 알림은 범위를 먼저 물을 때만
+        // 범위에서 시작했으면 끝냈는지 먼저 묻고, 그다음에 이어서 무엇을 할지 고른다 (앱이 닫혀 있는 동안 끝났으면 고르기는 건너뜀)
+        setTimeout(async () => {
+          if (topicId) await askTopicDone(topicId, label);
+          if (!opts.quiet) afterFocus(elapsedMin);
+        }, opts.quiet ? 1200 : 500);
       } else if (elapsedMin >= 1) toast(`${Stats.formatMinutes(elapsedMin)} 기록했어요`);
     } else if (completed && !opts.quiet) { beep(); notify('휴식 끝! 다시 집중해 볼까요?'); }
     timer.startedAt = 0;
     setMode(timer.mode === 'focus' ? 'break' : 'focus');
+  }
+
+  // 집중을 끝까지 마치면 이어서 무엇을 할지 고른다.
+  // 고르기 전에는 아무것도 저절로 시작하지 않는다: 자리에 없는데 공부 시간이나 휴식 시간이 흘러가면 안 되니까.
+  let nextOpen = false;
+  const somethingRunning = () => timer.running || !!(window.Stopwatch && window.Stopwatch.running()) || !!(window.Lock && window.Lock.state);
+  async function afterFocus(min) {
+    if (nextOpen || somethingRunning()) return toast(`${Stats.formatMinutes(min)} 집중 기록 완료`);
+    const set = store.get().settings;
+    const subj = timer.subjectId ? subjectById(timer.subjectId) : null;
+    nextOpen = true;
+    const pick = await choose(`집중 ${Stats.formatMinutes(min)} 끝! 이어서 무엇을 할까요?`, [
+      { value: 'sw', label: '스톱워치 켜고 계속 공부하기', hint: subj ? `${subj.name} 그대로, 시간 제한 없이 이어서 재요` : '시간 제한 없이 이어서 재요' },
+      { value: 'break', label: '휴식 타이머 시작하기', hint: `${set.breakMin}분` },
+      { value: 'again', label: '같은 타이머 다시 시작', hint: `집중 ${set.focusMin}분` },
+      { value: 'off', label: '그냥 끄기' },
+    ], { cls: 'next-sheet', note: `집중한 ${Stats.formatMinutes(min)}은 기록했어요.` });
+    nextOpen = false;
+    if (somethingRunning()) return; // 고르는 동안 다른 창에서 이미 무언가를 시작함
+    if (pick === 'sw' && window.Stopwatch) {
+      const keep = { label: timer.label, topicId: timer.topicId };
+      setMode('focus');
+      window.Stopwatch.showTab('sw');
+      go('timer');
+      window.Stopwatch.start(timer.subjectId || '', keep);
+    } else if (pick === 'break') { if (timer.mode !== 'break') setMode('break'); startTimer(); }
+    else if (pick === 'again') { setMode('focus'); startTimer(); }
+    else setMode('focus'); // 그냥 끄기 (창을 그냥 닫아도 같다)
   }
 
   // 집중 타이머가 돌거나 멈춰 있는 중이면 'focus'/'break', 아니면 null (스톱워치와 동시에 재지 않게)
@@ -784,7 +925,19 @@
     commitLenEdit(); // 분을 적다가 바로 ‘시작’을 눌러도 적은 시간으로
     startTimer();
   });
-  $('#timer-reset').addEventListener('click', () => { timer.startedAt = 0; setMode(timer.mode); });
+  // 초기화: 1분 넘게 집중했으면 그 시간을 버리기 전에 기록할지 물어본다
+  const focusedMin = () => Math.floor((timer.total - (timer.running ? Math.max(0, Math.ceil((timer.endAt - now()) / 1000)) : timer.remaining)) / 60);
+  $('#timer-reset').addEventListener('click', async () => {
+    if (timer.mode === 'focus' && timerBusy() && focusedMin() >= 1) {
+      const pick = await ask(`지금까지 집중한 ${Stats.formatMinutes(focusedMin())}을 기록할까요?`, { ok: '기록하고 초기화', alt: '기록 없이 초기화', cancel: '계속하기' });
+      if (!pick) return;
+      if (timer.mode !== 'focus' || !timerBusy()) return; // 묻는 동안 타이머가 끝나서 이미 기록됨
+      const min = focusedMin();
+      if (pick === true && min >= 1) { recordFocus(min, now()); toast(`${Stats.formatMinutes(min)} 기록했어요`); }
+    }
+    timer.startedAt = 0;
+    setMode(timer.mode);
+  });
   $('#timer-skip').addEventListener('click', () => finishPhase(false));
   $('#timer-subject').addEventListener('change', (e) => { timer.subjectId = e.target.value; saveTimer(); });
   $('#len-chips').addEventListener('click', (e) => {
@@ -812,7 +965,7 @@
   $$('.mode-switch [data-mode]').forEach((b) => b.addEventListener('click', async () => {
     const to = b.dataset.mode;
     if (to === timer.mode) return; // 지금 모드를 다시 눌러도 하던 타이머가 처음으로 돌아가지 않게
-    if (timer.running && !(await ask('진행 중인 타이머를 멈추고 바꿀까요?'))) return;
+    if (timer.running && !(await ask('진행 중인 타이머를 멈추고 바꿀까요?', { ok: '멈추고 바꾸기' }))) return;
     // 집중하다가 휴식으로 바꾸면 그때까지 한 시간은 ‘건너뛰기’처럼 기록한다 (말없이 사라지지 않게)
     if (timer.mode === 'focus' && timerBusy()) {
       if (timer.running) timer.remaining = Math.max(0, Math.ceil((timer.endAt - now()) / 1000));
@@ -874,7 +1027,7 @@
           <input name="back" value="${esc(b)}" required maxlength="500" aria-label="뒷면 (정답)" autocomplete="off">
           <span class="card-edit-actions"><button class="btn sm" type="button" data-card-cancel>취소</button><button class="btn primary sm" type="submit">저장</button></span></form></li>`;
       }
-      const next = SRS.isDue(c, t) ? '복습 대기' : `${Stats.dayKey(c.due).slice(5).replace('-', '/')} 복습`;
+      const next = SRS.isDue(c, t) ? '복습 대기' : `${Stats.dateKey(c.due).slice(5).replace('-', '/')} 복습`;
       return `<li class="card-row" data-card="${esc(c.id)}"><span>${esc(c.front)}</span><span class="muted-text">${esc(c.back)}</span><span class="muted">${next}</span><button class="icon-btn card-edit-btn" aria-label="카드 고치기" title="고치기">${ic('edit')}</button><button class="icon-btn card-del" aria-label="카드 삭제" title="삭제">${ic('x')}</button></li>`;
     }).join('') || '<li class="empty">카드를 추가해 보세요.</li>';
     if (draft && draft.focus) { const el = $('#card-list .card-edit [name="' + draft.focus + '"]'); if (el) el.focus(); }
@@ -904,7 +1057,7 @@
   $('#deck-back').addEventListener('click', () => { openDeckId = null; editingCardId = null; showReviewPane('home'); renderDecks(); });
   $('#deck-delete').addEventListener('click', async () => {
     const d = store.get().decks.find((x) => x.id === openDeckId);
-    if (!d || !(await ask(`'${d.name}' 덱과 카드 ${deckCards(d.id).length}장을 삭제할까요?`))) return;
+    if (!d || !(await ask(`'${d.name}' 덱과 카드 ${deckCards(d.id).length}장을 삭제할까요?`, { ok: '삭제', danger: true }))) return;
     store.update((st) => {
       st.decks = st.decks.filter((x) => x.id !== d.id);
       st.cards = st.cards.filter((c) => c.deckId !== d.id);
@@ -1072,7 +1225,13 @@
     const days = Stats.lastNDays(st.sessions, now(), 7);
     const max = Math.max(60, ...days.map((d) => d.minutes));
     const total = days.reduce((a, d) => a + d.minutes, 0);
+    // 그 전 7일과 비교 (전에도 기록이 있을 때만)
+    const prev7 = Stats.lastNDays(st.sessions, Stats.addDays(now(), -7), 7).reduce((a, d) => a + d.minutes, 0);
+    const wDiff = total - prev7;
     $('#week-total').textContent = `합계 ${Stats.formatMinutes(total)} · 하루 평균 ${Stats.formatMinutes(total / 7)}`;
+    $('#week-compare').hidden = !prev7;
+    $('#week-compare').textContent = !prev7 ? '' : wDiff === 0 ? '그 전 7일과 같아요' : `그 전 7일보다 ${Stats.formatMinutes(Math.abs(wDiff))} ${wDiff > 0 ? '더 했어요' : '덜 했어요'}`;
+    $('#week-compare').classList.toggle('up', wDiff > 0);
     $('#week-chart').innerHTML = days.map((d, i) => `<div class="wc-col${i === 6 ? ' today' : ''}">
       <div class="wc-val">${d.minutes ? Stats.formatMinutes(d.minutes) : ''}</div>
       <div class="wc-bar${d.minutes ? '' : ' zero'}" style="height:${Math.round((d.minutes / max) * 130)}px" title="${d.key} ${Stats.formatMinutes(d.minutes)}"></div>
@@ -1081,7 +1240,7 @@
     const months = Stats.lastNMonths(st.sessions, now(), 6);
     const cur = months[5], prev = months[4];
     $('#month-total').textContent = Stats.formatMinutes(cur.minutes);
-    const daysInMonthSoFar = new Date(now()).getDate();
+    const daysInMonthSoFar = new Date(dayNow()).getDate();
     $('#month-sub').textContent = `${cur.month}월 합계 · 공부한 날 ${cur.days}일 / ${daysInMonthSoFar}일` + (cur.days ? ` · 공부한 날 평균 ${Stats.formatMinutes(cur.minutes / cur.days)}` : '');
     const diff = cur.minutes - prev.minutes;
     $('#month-compare').textContent = prev.minutes || cur.minutes
@@ -1106,7 +1265,7 @@
       $('#mg-need').textContent = Stats.formatMinutes(g.todayQuota);
       $('#mg-need-sub').textContent = `남은 ${g.daysLeft}일 기준`;
       $('#mg-base').textContent = Stats.formatMinutes(g.basePerDay);
-      $('#mg-base-sub').textContent = `목표÷${new Date(new Date(now()).getFullYear(), new Date(now()).getMonth() + 1, 0).getDate()}일`;
+      $('#mg-base-sub').textContent = `목표÷${new Date(new Date(dayNow()).getFullYear(), new Date(dayNow()).getMonth() + 1, 0).getDate()}일`;
     }
     const mMax = Math.max(60, goalMin, ...months.map((m) => m.minutes));
     $('#month-chart').innerHTML = months.map((m, i) => `<div class="wc-col${i === 5 ? ' today' : ''}">
@@ -1116,8 +1275,8 @@
 
     renderCalendar();
     // 과목별 공부 시간: 최근 7일 / 이번 달 / 전체
-    const d0 = new Date(now()); d0.setHours(0, 0, 0, 0);
-    const since = subjPeriod === 'week' ? Stats.addDays(d0.getTime(), -6) : subjPeriod === 'month' ? new Date(d0.getFullYear(), d0.getMonth(), 1).getTime() : 0;
+    const d0 = new Date(dayNow()); d0.setHours(0, 0, 0, 0);
+    const since = (subjPeriod === 'week' ? Stats.addDays(d0.getTime(), -6) : subjPeriod === 'month' ? new Date(d0.getFullYear(), d0.getMonth(), 1).getTime() : 0) + (subjPeriod === 'all' ? 0 : Stats.dayOffset());
     $$('#subj-period [data-period]').forEach((b) => { const on = b.dataset.period === subjPeriod; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
     const by = Stats.minutesBySubject(st.sessions.filter((x) => x.endedAt >= since));
     const rows = Object.keys(by).map((k) => {
@@ -1160,7 +1319,7 @@
   const WEEK = ['일', '월', '화', '수', '목', '금', '토'];
   function renderCalendar() {
     const st = store.get();
-    const t = new Date(now());
+    const t = new Date(dayNow());
     const [y, m] = calYM || [t.getFullYear(), t.getMonth()];
     const cal = Stats.monthCalendar(st.sessions, y, m);
     const tk = todayKey();
@@ -1189,12 +1348,13 @@
   // 하루 시간표: 한 줄이 한 시간, 한 칸이 10분 (스터디 플래너처럼). 과목 색으로 칠한다
   function hhmm(t, key) {
     const d = new Date(t);
-    return (Stats.dayKey(t) === key ? d.getHours() : 24) + ':' + String(d.getMinutes()).padStart(2, '0');
+    // 자정에 끝난 기록은 '24:00'으로. 하루 시작 시각을 새벽으로 옮겼으면 그 시각 그대로(예: 4:00)
+    return (Stats.dayKey(t) === key || Stats.dayOffset() ? d.getHours() : 24) + ':' + String(d.getMinutes()).padStart(2, '0');
   }
   function timetableHTML(sessions, key) {
     const tl = Stats.dayTimeline(sessions, key);
     const fm = Stats.formatMinutes;
-    const share = `<button type="button" class="btn link tt-share" data-share-day="${key}">인증 이미지</button>`;
+    const share = `<span class="tt-links"><button type="button" class="btn link tt-share" data-tt-open="${key}">타임테이블</button><button type="button" class="btn link tt-share" data-share-day="${key}">인증 이미지</button></span>`;
     if (!tl.hours.length) return tl.untimed ? `<div class="tt-foot"><span class="muted small">직접 기록한 ${fm(tl.untimed)}은 공부한 시각이 없어 시간표에는 안 나와요.</span>${share}</div>` : '';
     const color = (sid) => { const sb = sid && subjectById(sid); return sb ? sb.color : 'var(--muted)'; };
     const from = hhmm(tl.start, key), to = hhmm(tl.end, key);
@@ -1277,7 +1437,7 @@
     try { await navigator.share({ files: [shareFile], title: '스터디 프로모션 · 공부 인증' }); } catch (e) { /* 취소하면 그대로 */ }
   });
   function shiftCalendar(delta) {
-    const t = new Date(now());
+    const t = new Date(dayNow());
     const [y, m] = calYM || [t.getFullYear(), t.getMonth()];
     const d = new Date(y, m + delta, 1);
     calYM = d.getFullYear() === t.getFullYear() && d.getMonth() === t.getMonth() ? null : [d.getFullYear(), d.getMonth()];
@@ -1362,14 +1522,54 @@
       $('#set-focus').value = set.focusMin;
       $('#set-break').value = set.breakMin;
       $('#set-awake').checked = set.keepAwake !== false;
+      $('#set-daystart').value = String(Math.max(0, Math.min(6, +set.dayStartHour || 0)));
     }
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.8';
-  const APP_DATE = '2026년 11월 11일';
+  const APP_VERSION = '2.9';
+  const APP_DATE = '2026년 11월 12일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
+  /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
+  const verSecs = $$('#about-news .ver');
+  function showVer(v) {
+    if (!verSecs.some((x) => x.dataset.ver === v)) v = verSecs.length ? verSecs[0].dataset.ver : '';
+    verSecs.forEach((x) => { x.hidden = x.dataset.ver !== v; });
+    $$('#ver-tabs [data-ver-tab]').forEach((b) => {
+      const on = b.dataset.verTab === v;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    });
+  }
+  if (verSecs.length) {
+    $('#ver-tabs').innerHTML = verSecs.map((x, i) => `<button type="button" class="chip" role="tab" data-ver-tab="${esc(x.dataset.ver)}" aria-label="버전 ${esc(x.dataset.ver)}${i ? '' : ' (최신)'}">${esc(x.dataset.ver)}${i ? '' : '<span class="ver-new">최신</span>'}</button>`).join('');
+    verSecs.forEach((x) => {
+      x.setAttribute('role', 'tabpanel');
+      x.setAttribute('aria-label', `버전 ${x.dataset.ver}에서 달라진 점`);
+      x.insertAdjacentHTML('afterbegin', `<p class="ver-when"><b>버전 ${esc(x.dataset.ver)}</b><span class="muted"> · ${esc(x.dataset.date)} 업데이트</span></p>`);
+    });
+    $('#ver-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-ver-tab]'); if (b) showVer(b.dataset.verTab); });
+    $('#ver-tabs').addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      const list = $$('#ver-tabs [data-ver-tab]');
+      const n = list[list.indexOf(document.activeElement) + (e.key === 'ArrowRight' ? 1 : -1)];
+      if (!n) return;
+      e.preventDefault();
+      showVer(n.dataset.verTab);
+      n.focus();
+    });
+    showVer(APP_VERSION);
+  }
+  // 업데이트 알림의 ‘달라진 점’: 앱 소개의 업데이트 소식으로 가서 이번 버전을 보여 준다
+  function openNews() {
+    go('about');
+    showVer(APP_VERSION);
+    const el = $('#news-panel');
+    if (el) el.scrollIntoView({ block: 'start' });
+  }
+
   function renderAbout() {
     $('#app-version').textContent = `버전 ${APP_VERSION} · ${APP_DATE}`;
     if (aboutTimer) return;
@@ -1412,6 +1612,7 @@
       st.settings.focusMin = clamp($('#set-focus').value, 1, LEN_MAX.focus, 25);
       st.settings.breakMin = clamp($('#set-break').value, 1, LEN_MAX.break, 5);
       st.settings.keepAwake = $('#set-awake').checked;
+      st.settings.dayStartHour = clamp($('#set-daystart').value, 0, 6, 0);
     });
     if (!store.get().settings.keepAwake) releaseAwake(); else if (timer.running) keepAwake();
     if (!timerBusy()) setMode(timer.mode); // 하던 타이머(일시정지 포함)는 그대로 두고, 새 시간은 다음 타이머부터
@@ -1424,7 +1625,7 @@
     const blob = new Blob([store.exportJSON()], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `studypromotion-backup-${todayKey()}.json`;
+    a.download = `studypromotion-backup-${Stats.dateKey(now())}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
@@ -1435,7 +1636,7 @@
     const reader = new FileReader();
     reader.onload = async () => {
       try {
-        if (!(await ask('지금 데이터를 백업 파일 내용으로 바꿀까요?'))) { e.target.value = ''; return; }
+        if (!(await ask('지금 기록을 백업 파일 내용으로 바꿀까요?\n지금 기록은 자동 백업에 남겨 둬요.', { ok: '백업 파일로 바꾸기', danger: true }))) { e.target.value = ''; return; }
         store.importJSON(reader.result);
         setMode('focus');
         toast('백업을 불러왔어요');
@@ -1446,7 +1647,7 @@
   });
 
   $('#reset-btn').addEventListener('click', async () => {
-    if (!(await ask('모든 할 일, 기록, 카드가 삭제됩니다. 계속할까요?'))) return;
+    if (!(await ask('모든 할 일, 기록, 카드가 삭제됩니다. 계속할까요?', { ok: '모두 삭제', danger: true }))) return;
     store.reset();
     setMode('focus');
     toast('초기화했어요');
@@ -1454,7 +1655,8 @@
 
   /* ---------- 렌더 ---------- */
   function render() {
-    if (currentView === 'home') { renderHome(); if (window.Stopwatch) window.Stopwatch.render(); }
+    if (currentView === 'home') { renderHome(); if (window.Stopwatch) window.Stopwatch.render(); if (window.Timetable) window.Timetable.render(); }
+    else if (currentView === 'timetable') { if (window.Timetable) window.Timetable.render(); }
     else if (currentView === 'plan') renderPlan();
     else if (currentView === 'timer') { renderTimer(); if (window.Stopwatch) window.Stopwatch.render(); }
     else if (currentView === 'review') {
@@ -1544,7 +1746,7 @@
     try {
       if (sessionStorage.getItem('studypromotion.updated')) {
         sessionStorage.removeItem('studypromotion.updated');
-        setTimeout(() => toast('새 버전으로 업데이트했어요'), 600);
+        setTimeout(() => toast('새 버전으로 업데이트했어요', { action: '달라진 점', onAction: openNews }), 600);
       }
     } catch (e) { /* 무시 */ }
   }
@@ -1626,11 +1828,15 @@
     toast('테마 색: ' + ACCENTS[accent]);
   });
 
-  window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, uid, go, now, render, openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
+  window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone,
+    // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
+    timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null } : null),
+    openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
+  initHistory();
   go(location.hash.slice(1) || 'home');
 
   // 테스트/디버그용
-  window.__studypromotion = { store, timer, finishPhase, parseBulk };
+  window.__studypromotion = { store, timer, finishPhase, parseBulk, afterFocus };
 })();

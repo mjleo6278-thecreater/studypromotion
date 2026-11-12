@@ -101,7 +101,7 @@
     const swOn = !!(window.Stopwatch && window.Stopwatch.running());
     const tm = App.timerBusy ? App.timerBusy() : null;
     const note = (swOn ? '\n재고 있던 스톱워치는 멈추고 지금까지를 기록해요.' : '') + (tm === 'focus' ? '\n진행 중인 집중 타이머는 멈추고 지금까지를 기록해요.' : '');
-    if (!(await ask(`${Stats.formatMinutes(mins)} 동안 잠글까요?${subName ? `\n과목: ${subName}` : ''}${note}\n\n중간에 그만두려면 3초 길게 눌러야 해요.`))) return;
+    if (!(await ask(`${Stats.formatMinutes(mins)} 동안 잠글까요?${subName ? `\n과목: ${subName}` : ''}${note}\n\n중간에 그만두려면 3초 길게 눌러야 해요.`, { ok: '잠그기' }))) return;
     if (swOn) await window.Stopwatch.stop();
     if (App.timerBusy && App.timerBusy()) App.stopTimer();
     const t = Date.now();
@@ -198,7 +198,7 @@
     quit.classList.remove('holding');
     if (!lock) return;
     const left = Math.ceil((lock.endAt - Date.now()) / 60000);
-    if (await ask(`아직 ${Stats.formatMinutes(left)} 남았어요. 정말 그만둘까요?`)) { if (lock) finish(false); }
+    if (await ask(`아직 ${Stats.formatMinutes(left)} 남았어요. 정말 그만둘까요?`, { ok: '그만두기', cancel: '계속하기', danger: true })) { if (lock) finish(false); }
   }, 3000); };
   const holdEnd = () => { clearTimeout(holdT); quit.classList.remove('holding'); };
   quit.addEventListener('pointerdown', holdStart);

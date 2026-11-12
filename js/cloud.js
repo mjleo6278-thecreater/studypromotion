@@ -189,7 +189,7 @@
       let action = decide(meta, remote, localEmpty());
       if (action === 'ask') {
         const when = new Date(remote.updatedAt).toLocaleString('ko-KR');
-        const useRemote = await ask(`이 계정에 저장된 기록이 있어요 (${when}).\n계정의 기록을 이 기기로 불러올까요?\n\n취소를 누르면 이 기기의 기록을 계정에 올려요.`);
+        const useRemote = await ask(`이 계정에 저장된 기록이 있어요 (${when}).\n어느 쪽 기록을 쓸까요?\n\n고르지 않은 쪽은 이 기기의 자동 백업에 남겨 둬요.`, { ok: '계정 기록 불러오기', cancel: '이 기기 기록 올리기', mustChoose: true });
         action = useRemote ? 'download' : 'upload';
         // 계정에 있던 기록을 이 기기 기록으로 덮기 전에 이 기기에 사본을 남긴다
         if (!useRemote && App.backup && remote.data) await App.backup.add(remote.data, 'cloud-remote');
@@ -261,7 +261,7 @@
   });
   $('#acc-sync').addEventListener('click', () => syncNow(true));
   $('#acc-logout').addEventListener('click', async () => {
-    if (!(await ask('로그아웃할까요? 계정에 저장된 기록은 그대로 남고, 이 기기의 기록도 지워지지 않아요.'))) return;
+    if (!(await ask('로그아웃할까요? 계정에 저장된 기록은 그대로 남고, 이 기기의 기록도 지워지지 않아요.', { ok: '로그아웃' }))) return;
     // 아직 계정에 올리지 못한 변경이 있으면 로그아웃 전에 마저 올린다 (올리는 도중에 로그아웃되면 저장이 실패할 수 있다)
     clearTimeout(pushTimer);
     if (user && meta.dirty && !busy && navigator.onLine !== false) {

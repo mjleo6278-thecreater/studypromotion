@@ -12,10 +12,12 @@
     );
   }
 
+  // 그날이 시작된 시각. 하루 시작 시각(설정)이 새벽 4시면 새벽 1시는 아직 전날이다
   function startOfDay(ts) {
-    const d = new Date(ts);
+    const off = root.__spDayStartMs || 0;
+    const d = new Date(ts - off);
     d.setHours(0, 0, 0, 0);
-    return d.getTime();
+    return d.getTime() + off;
   }
 
   /**

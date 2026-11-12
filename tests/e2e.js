@@ -50,6 +50,11 @@ const shotDir = process.argv[2];
   await page.waitForTimeout(400);
   assert((await page.textContent('#timer-mode')) === '휴식', '집중 완료 후 휴식 전환');
   assert((await page.textContent('#timer-today')).includes('1회'), '오늘 집중 1회 기록');
+  // 집중이 끝나면 이어서 무엇을 할지 고르는 창이 뜬다 (v2.9) → 그냥 끄기
+  await page.waitForSelector('.ui-back.in .next-sheet');
+  await page.click('.ui-back.in .next-sheet .ch-opt >> nth=3');
+  await page.waitForTimeout(300);
+  assert((await page.locator('.ui-back.in').count()) === 0 && (await page.textContent('#timer-time')) === '01:00', "집중이 끝나면 고르는 창이 뜨고, '그냥 끄기'를 누르면 닫힘");
 
   // 복습: 덱, 일괄 추가, 복습
   await page.click('[data-view=review]');

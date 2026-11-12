@@ -1524,3 +1524,80 @@ input[type="search"]::-webkit-search-cancel-button {
 .simple-list li.empty { display: block; }
 /* 보드 보기에서 과목이 없을 때의 안내 상자: 휴대폰 화면 밖으로 잘리지 않게 */
 @media (max-width: 720px) { .board-hint { left: 24px; top: 24px; width: min(360px, calc(100vw - 90px)); } }
+
+/* ===== v2.9: 확인 창을 더 분명하게 =====
+   지우는 일처럼 되돌리기 어려운 동작은 빨간 버튼으로, 선택지가 셋이면 세로로 쌓아 긴 글자도 잘리지 않게 */
+.btn.danger-fill { background: #c8463b; border-color: #c8463b; color: #fff; font-weight: 600; }
+@media (hover: hover) { .btn.danger-fill:hover { background: #b23c32; border-color: #b23c32; } }
+#ask.three .ask-actions { flex-direction: column-reverse; align-items: stretch; }
+#ask .ask-actions .btn { white-space: normal; }
+@media (max-width: 400px) {
+  #ask .ask-actions { flex-wrap: wrap; }
+  #ask .ask-actions .btn { flex: 1 1 auto; }
+}
+
+/* ===== v2.9: 하루 시작 시각 설정 칸 ===== */
+.settings .field.full { grid-column: 1 / -1; }
+.settings .field.full small { font-size: 12px; line-height: 1.5; }
+
+/* ===== v2.9: 최근 7일을 그 전 7일과 비교한 한 줄 ===== */
+.week-compare { margin: 10px 0 0; text-align: right; }
+.week-compare.up { color: var(--accent-text, var(--accent)); }
+
+/* ===== v2.9: 고르는 창 (집중이 끝난 뒤 무엇을 할지, 공부 시작하기의 과목·할 일) =====
+   선택지마다 큰 글씨 한 줄과 작은 설명 한 줄. 맨 아래 ‘할 일 없이 과목만’은 목록이 길어도 늘 보이게 붙여 둔다 */
+.ui-choose .ch-note { margin: 0 12px 6px; }
+.ch-opt span { display: flex; flex-direction: column; gap: 2px; }
+.ch-opt b { font-weight: 600; }
+.ch-opt small { font-size: 12.5px; font-weight: 400; color: var(--muted); }
+.ch-opt .sel-dot { width: 12px; height: 12px; }
+.sel-dot.none { background: none; box-shadow: inset 0 0 0 1.5px var(--muted); }
+.ch-opt.ch-last { position: sticky; bottom: 0; margin-top: 4px; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; background: var(--surface); color: var(--accent-text, var(--accent)); }
+.ch-opt.ch-last:focus-visible { background: var(--bg); }
+@media (hover: hover) { .ch-opt.ch-last:hover { background: var(--bg); } }
+
+/* ===== v2.9: 홈 ‘오늘 공부’ 칸의 공부 시작하기 (재는 중이면 이 자리에 재는 중 표시가 나온다) ===== */
+.stat-start { display: flex; align-items: center; justify-content: center; gap: 4px; box-sizing: border-box; width: 0; min-width: 100%; margin-top: 8px; padding: 6px 8px; border-radius: 999px; font-size: 13px; white-space: nowrap; }
+.stat-start[hidden] { display: none; }
+.stat-start .ic { width: 14px; height: 14px; vertical-align: 0; }
+
+/* ===== v2.9: 타임테이블 =====
+   홈: 오늘 하루를 한 줄로 (왼쪽 끝 = 하루의 시작, 오른쪽 끝 = 하루의 끝, 세로줄 = 한 시간) */
+.day-strip { display: block; color: inherit; text-decoration: none; border-radius: 6px; }
+.day-strip:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.ds-bar { position: relative; display: block; height: 22px; border-radius: 6px; background: var(--bg); overflow: hidden; }
+.ds-bar::after { content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to right, var(--surface) 1px, transparent 1px) 0 0 / calc(100% / 24) 100%; }
+.ds-bar i { position: absolute; top: 0; bottom: 0; min-width: 2px; }
+.ds-now, .tt-now { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text); z-index: 1; }
+.ds-ticks { display: flex; justify-content: space-between; margin-top: 4px; font-size: 10px; line-height: 1; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tt-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 13px; }
+.tt-legend[hidden] { display: none; }
+.tt-chip { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+.tt-chip b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.tt-chip .dot { margin: 0; flex: none; }
+.tt-empty { margin: 8px 0 0; }
+.tt-home .panel-head { margin-bottom: 10px; }
+/* 타임테이블 화면: 하루 전체 (한 줄 = 한 시간, 한 칸 = 10분) */
+.ttv-panel .panel-head { margin-bottom: 8px; }
+.ttv-nav #ttv-title { min-width: 9em; text-align: center; }
+.ttv-sum { margin: 0; font-size: 14px; word-break: keep-all; }
+.ttv-sum b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.tt.tt-full { gap: 2px; margin-top: 12px; }
+.tt-full .tt-row { grid-template-columns: 22px 1fr; }
+.tt-full .tt-bar { height: 20px; border-radius: 4px; background: var(--bg); }
+.tt-full .tt-bar::after { background: linear-gradient(to right, var(--surface) 2px, transparent 2px) -1px 0 / calc(100% / 6) 100%; }
+.tt-full .tt-row.now .tt-h { color: var(--text); font-weight: 700; }
+.ttv-panel .tt-foot { margin-top: 10px; }
+.tt-links { display: inline-flex; gap: 12px; flex: none; }
+.sl-tag.on { border-color: transparent; background: var(--accent-soft); color: var(--accent-text, var(--accent)); }
+@media (prefers-reduced-motion: no-preference) { .tt-bar i.live, .ds-bar i.live { animation: sw-pulse 1.6s ease-in-out infinite; } }
+
+/* ===== v2.9: 업데이트 소식을 버전별로 ===== */
+.ver-help { margin: -4px 0 10px; }
+.ver-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.ver-tabs .chip { flex: none; font-variant-numeric: tabular-nums; }
+.ver-new { margin-left: 5px; font-size: 11px; font-weight: 600; opacity: .75; }
+.ver[hidden] { display: none; }
+.ver-when { margin: 12px 0 0; font-size: 14px; }
+.ver .news { margin-top: 6px; }

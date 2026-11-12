@@ -129,7 +129,7 @@
 
   // 4) 하루에 한 번 (앱을 처음 열 때. 아직 기록이 없으면 기록이 생긴 뒤에)
   function daily() {
-    const day = Stats.dayKey(Date.now());
+    const day = Stats.dateKey(Date.now());
     if (lsGet(DAY_KEY) === day) return;
     add(savedText(), 'daily').then((ok) => { if (ok) lsSet(DAY_KEY, day); });
   }
@@ -137,7 +137,7 @@
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') daily(); });
   let dailyTimer = null;
   store.subscribe(() => {
-    if (lsGet(DAY_KEY) === Stats.dayKey(Date.now())) return;
+    if (lsGet(DAY_KEY) === Stats.dateKey(Date.now())) return;
     clearTimeout(dailyTimer);
     dailyTimer = setTimeout(daily, 4000);
   });
@@ -191,7 +191,7 @@
     if (f) {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([snap.text], { type: 'application/json' }));
-      a.download = `studypromotion-autobackup-${Stats.dayKey(snap.at)}.json`;
+      a.download = `studypromotion-autobackup-${Stats.dateKey(snap.at)}.json`;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(() => URL.revokeObjectURL(a.href), 1000);
       return;
