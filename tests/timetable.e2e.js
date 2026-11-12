@@ -309,7 +309,7 @@ const SW = 'studypromotion.stopwatch';
   assert(/버전 2\.9/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
   const shown = () => page.$$eval('#about-news .ver', (els) => els.filter((e) => !e.hidden && e.offsetParent !== null).map((e) => ({ v: e.dataset.ver, when: e.querySelector('.ver-when').textContent, n: e.querySelectorAll('.news li').length })));
   let sh = await shown();
-  assert(sh.length === 1 && sh[0].v === '2.9' && /버전 2\.9 · 2026년 11월 12일 업데이트/.test(sh[0].when) && sh[0].n >= 5, '고른 버전의 내용만 보이고, 업데이트한 날이 적혀 있음: ' + sh[0].when);
+  assert(sh.length === 1 && sh[0].v === '2.9' && /버전 2\.9 · 2026년 11월 13일 업데이트/.test(sh[0].when) && sh[0].n >= 5, '고른 버전의 내용만 보이고, 업데이트한 날이 적혀 있음: ' + sh[0].when);
   assert(/타임테이블/.test(await page.textContent('#about-news .ver:not([hidden])')) && /공부 시작하기/.test(await page.textContent('#about-news .ver:not([hidden])')), '2.9 소식에 타임테이블과 공부 시작하기');
   await page.tap('#ver-tabs [data-ver-tab="2.7"]');
   sh = await shown();
