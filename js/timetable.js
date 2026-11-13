@@ -1,6 +1,7 @@
 /* 타임테이블: 공부한 시간이 하루 시간표에 과목 색으로 칠해진다 (한 줄 = 한 시간, 한 칸 = 10분).
    스톱워치나 집중 타이머로 공부하는 동안에는 지금 재는 구간도 바로 칠한다.
-   홈에는 오늘 하루를 한 줄로 줄인 띠가, 타임테이블 화면에는 날짜별 시간표와 그날의 기록이 나온다. */
+   홈에는 오늘 하루를 한 줄로 줄인 띠가, 타임테이블 화면에는 날짜별 시간표와 그날의 기록이 나온다.
+   기록하지 못한 공부는 ‘＋ 공부 시간 추가’나 시간표 칸을 눌러 몇 시부터 몇 시까지 직접 적을 수 있다 (app.js의 직접 기록 창). */
 (function () {
   'use strict';
   const App = window.App;
@@ -82,7 +83,7 @@
     const rows = d.tl.hours.map((h, i) => {
       if (i < first) return '';
       const nowMark = i === nowRow ? `<em class="tt-now" style="left:${(((t - d.d0) / 60000 - i * 60) / 60 * 100).toFixed(2)}%"></em>` : '';
-      return `<div class="tt-row${i === nowRow ? ' now' : ''}"><span class="tt-h">${h.hour}</span><div class="tt-bar">${h.segs.map((g) => segHTML(g, (g.from / 60) * 100, ((g.to - g.from) / 60) * 100)).join('')}${nowMark}</div></div>`;
+      return `<div class="tt-row${i === nowRow ? ' now' : ''}" data-tt-row="${i}"><span class="tt-h">${h.hour}</span><div class="tt-bar">${h.segs.map((g) => segHTML(g, (g.from / 60) * 100, ((g.to - g.from) / 60) * 100)).join('')}${nowMark}</div></div>`;
     }).join('');
     const label = d.tl.start !== null ? `${hm(d.tl.start)}부터 ${hmEnd(d.tl.end, key)}까지, 공부 ${fm(d.tl.timed)}` : '공부 기록 없음';
     return `<div class="tt tt-full" role="img" aria-label="타임테이블: ${label}">` +
@@ -91,11 +92,11 @@
 
   function listHTML(d, key) {
     if (!d.list.length && !d.live) return '<li class="empty">이날은 공부 기록이 없어요.</li>';
-    const rows = d.list.map((s) => ({ s, from: s.manual ? Infinity : s.endedAt - s.minutes * 60000 })).sort((a, b) => a.from - b.from).map(({ s, from }) => {
+    const rows = d.list.map((s) => { const sp = Stats.sessionSpan(s); return { s, sp, from: sp ? sp[0] : Infinity }; }).sort((a, b) => a.from - b.from).map(({ s, sp, from }) => {
       const sub = subjectOf(s.subjectId);
       let label = s.manual && s.label === '직접 기록' ? '' : s.label;
       if (label && sub && label.startsWith(sub.name + ' · ')) label = label.slice(sub.name.length + 3);
-      const when = s.manual ? '시각 없음' : `${hm(Math.max(from, d.d0))} ~ ${hmEnd(s.endedAt, key)}`;
+      const when = !sp ? '시각 없음' : `${hm(Math.max(from, d.d0))} ~ ${hmEnd(Math.min(sp[1], d.d1), key)}`;
       return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.manual ? ' <span class="sl-tag">직접</span>' : s.kind === 'stopwatch' ? ' <span class="sl-tag">스톱워치</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>` +
         `<span class="muted sl-when">${when} · ${fm(s.minutes)}</span>` +
         `<button class="icon-btn" data-tt-del="${esc(s.id)}" aria-label="이 기록 삭제" title="기록 삭제">${ic('x')}</button></li>`;
@@ -122,7 +123,7 @@
     $('#ttv-legend').innerHTML = legendHTML(d.subjects);
     $('#ttv-legend').hidden = !d.subjects.length;
     $('#ttv-grid').innerHTML = gridHTML(d, key);
-    $('#ttv-foot').innerHTML = `<span class="muted small">${d.tl.untimed ? `직접 기록한 ${fm(d.tl.untimed)}은 공부한 시각이 없어 칸에는 안 칠해져요.` : '한 줄이 한 시간, 한 칸이 10분이에요.'}</span>` +
+    $('#ttv-foot').innerHTML = `<span class="muted small">${d.tl.untimed ? `시간만 적은 직접 기록 ${fm(d.tl.untimed)}은 공부한 시각이 없어 칸에는 안 칠해져요.` : '한 줄이 한 시간, 한 칸이 10분이에요.'} 기록하지 못한 공부는 그 시각의 칸을 눌러 추가할 수 있어요.</span>` +
       (d.list.length ? `<button type="button" class="btn link tt-share" data-tt-share="${key}">인증 이미지</button>` : '');
     if (!tick) $('#ttv-list').innerHTML = listHTML(d, key);
   }
@@ -142,6 +143,18 @@
   $('#ttv-prev').addEventListener('click', () => { pick = shiftKey(viewKey(), -1); renderView(); });
   $('#ttv-next').addEventListener('click', () => { const k = shiftKey(viewKey(), 1); pick = k < today() ? k : null; renderView(); });
   $('#ttv-today').addEventListener('click', () => { pick = null; renderView(); });
+  // 시간표 칸을 누르면 그 10분 칸부터 공부 시간을 적는 창 (지나간 시간만)
+  $('#ttv-grid').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-tt-row]');
+    if (!row || !App.openLog) return;
+    const bar = row.querySelector('.tt-bar');
+    const r = bar.getBoundingClientRect();
+    const slot = e.target.closest('.tt-bar') ? Math.max(0, Math.min(5, Math.floor(((e.clientX - r.left) / r.width) * 6))) : 0;
+    const key = viewKey();
+    const start = dayRange(key)[0] + (+row.dataset.ttRow * 60 + slot * 10) * 60000;
+    if (start >= now() - 60000) { toast('아직 오지 않은 시간이에요. 지나간 시간에만 공부를 추가할 수 있어요'); return; }
+    App.openLog({ mode: 'time', day: key, start });
+  });
   $('#ttv-foot').addEventListener('click', (e) => { const b = e.target.closest('[data-tt-share]'); if (b && App.openShare) App.openShare(b.dataset.ttShare); });
   $('#ttv-list').addEventListener('click', (e) => {
     const b = e.target.closest('[data-tt-del]');

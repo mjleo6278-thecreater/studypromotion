@@ -148,3 +148,30 @@ test('타임테이블: 하루 시작 시각이 새벽 4시면 4시부터 다음 
   assert.deepStrictEqual(tl.hours[20].segs, [{ from: 0, to: 60, subjectId: 'b' }]);
   assert.strictEqual(tl.timed, 90);
 }));
+
+// 타임테이블에 직접 추가 (v2.10): 시각을 적은 직접 기록(manual + startAt)은 칸에 칠하고, 시간만 적은 것은 예전처럼 따로
+test('기록이 차지하는 시각(sessionSpan): 타이머·스톱워치는 끝에서 거꾸로, 시각을 적은 직접 기록은 시작부터, 시간만 적은 것은 없음', () => {
+  assert.deepStrictEqual(Stats.sessionSpan({ minutes: 50, endedAt: at(9, 9, 55) }), [at(9, 9, 5), at(9, 9, 55)]);
+  assert.deepStrictEqual(Stats.sessionSpan({ minutes: 50, endedAt: at(9, 9, 55), kind: 'stopwatch', sec: 3000 }), [at(9, 9, 5), at(9, 9, 55)]);
+  assert.deepStrictEqual(Stats.sessionSpan({ minutes: 90, startAt: at(9, 14, 0), endedAt: at(9, 15, 30), manual: true }), [at(9, 14, 0), at(9, 15, 30)]);
+  // 하루 끝에 딱 맞춰 끝난 직접 기록: endedAt은 1ms 당겨 그날에 넣었지만 칸은 24시까지
+  assert.deepStrictEqual(Stats.sessionSpan({ minutes: 60, startAt: at(9, 23, 0), endedAt: at(10, 0, 0) - 1, manual: true }), [at(9, 23, 0), at(10, 0, 0)]);
+  assert.strictEqual(Stats.sessionSpan({ minutes: 30, endedAt: at(9, 21, 0), manual: true }), null);
+  assert.strictEqual(Stats.sessionSpan({ minutes: 0, endedAt: at(9, 21, 0) }), null);
+});
+
+test('타임테이블: 시각을 적은 직접 기록은 그 시간에 칠하고, 시간만 적은 직접 기록은 untimed로', () => {
+  const sessions = [
+    { minutes: 90, startAt: at(9, 14, 0), endedAt: at(9, 15, 30), manual: true, subjectId: 'eng' },
+    { minutes: 30, endedAt: at(9, 21, 0), manual: true, subjectId: 'kor' },
+    { minutes: 60, startAt: at(9, 23, 0), endedAt: at(10, 0, 0) - 1, manual: true, subjectId: 'math' },
+  ];
+  const tl = Stats.dayTimeline(sessions, '2026-11-09', { full: true });
+  assert.deepStrictEqual(tl.hours[14].segs, [{ from: 0, to: 60, subjectId: 'eng' }]);
+  assert.deepStrictEqual(tl.hours[15].segs, [{ from: 0, to: 30, subjectId: 'eng' }]);
+  assert.deepStrictEqual(tl.hours[23].segs, [{ from: 0, to: 60, subjectId: 'math' }]);
+  assert.deepStrictEqual([tl.timed, tl.untimed, tl.start, tl.end], [150, 30, at(9, 14, 0), at(10, 0, 0)]);
+  assert.strictEqual(Stats.dayTimeline(sessions, '2026-11-10', { full: true }).timed, 0); // 다음 날로 번지지 않음
+  // 하루 공부 시간(분)은 예전처럼 endedAt의 날짜로 센다
+  assert.strictEqual(Stats.minutesOn(sessions, at(9, 12, 0)), 180);
+});

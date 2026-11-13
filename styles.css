@@ -1601,3 +1601,25 @@ input[type="search"]::-webkit-search-cancel-button {
 .ver[hidden] { display: none; }
 .ver-when { margin: 12px 0 0; font-size: 14px; }
 .ver .news { margin-top: 6px; }
+
+/* ===== v2.10: 공부 시작하기의 ‘할 일’ ‘범위’ 묶음 제목 ===== */
+.ch-head { margin: 0; }
+.ch-head small { font-weight: 400; margin-left: 4px; }
+.ch-opts .ch-head:not(:first-child) { margin-top: 6px; }
+
+/* ===== v2.10: 공부 시간 직접 기록 — ‘몇 시부터 몇 시까지’로 적으면 타임테이블 칸에 칠해진다 ===== */
+#log-dlg .ask-box { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+.log-mode { display: flex; width: 100%; box-sizing: border-box; margin: 4px 0 12px; }
+.log-mode .seg-btn { flex: 1 1 0; justify-content: center; padding: 7px 6px; font-size: 13.5px; }
+.ask-box #log-desc { margin: 0 0 12px; }
+.log-clock { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.log-clock[hidden], #log-dur[hidden] { display: none; }
+.clock-input { gap: 4px; }
+.clock-input input { width: 0; flex: 1 1 0; min-width: 0; text-align: center; font-variant-numeric: tabular-nums; }
+.clock-input b { font-weight: 600; color: var(--muted); }
+.ask-box .log-sum { margin: 2px 0 12px; padding: 8px 10px; border-radius: 8px; background: var(--bg); color: var(--text); font-variant-numeric: tabular-nums; word-break: keep-all; }
+.ask-box .log-sum.bad { color: var(--muted); }
+.log-sum[hidden] { display: none; }
+/* 타임테이블 화면: 칸을 누르면 그 시각으로 공부 시간 추가 */
+.tt-full .tt-row[data-tt-row] { cursor: pointer; }
+@media (hover: hover) { .tt-full .tt-row[data-tt-row]:hover .tt-bar { box-shadow: inset 0 0 0 1px var(--line); } }

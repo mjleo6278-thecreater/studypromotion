@@ -89,7 +89,7 @@ const server = http.createServer((req, res) => {
   await page.tap('.pv-sheet [data-ui-close]');
   await page.waitForTimeout(300);
   // 미리 보기 파일에도 새 기능이 그대로 들어 있다 (타임테이블, 공부 시작하기)
-  assert(await page.evaluate(() => !!window.Timetable && App.version === '2.9') && await page.isVisible('#h-start') && await page.isVisible('#h-tt .day-strip'), '미리 보기 파일에도 타임테이블과 공부 시작하기가 들어 있음');
+  assert(await page.evaluate(() => !!window.Timetable && App.version === '2.10') && await page.isVisible('#h-start') && await page.isVisible('#h-tt .day-strip'), '미리 보기 파일에도 타임테이블과 공부 시작하기가 들어 있음');
 
   /* 4) 비우고 처음부터 / 예시 다시 넣기 */
   await page.evaluate(() => Preview.open());

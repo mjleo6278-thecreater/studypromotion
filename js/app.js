@@ -82,10 +82,11 @@
 
   // 여러 선택지 중 하나를 고르는 창 (폰: 아래에서 올라오는 시트, 넓은 화면: 가운데 창). 고른 값을 돌려주고, 그냥 닫으면 undefined
   // options: [{ value, label, hint, color }] — color를 주면 과목 색 점을 그린다 (''이면 빈 점)
+  //  { head: '할 일' }은 고르는 칸이 아니라 묶음 제목 (할 일과 범위를 나눠 보여 줄 때)
   function choose(title, options, opts) {
     opts = opts || {};
     const body = (opts.note ? `<p class="ch-note muted small">${esc(opts.note)}</p>` : '') +
-      '<div class="ui-opts ch-opts">' + options.map((o, i) =>
+      '<div class="ui-opts ch-opts">' + options.map((o, i) => o.head ? `<p class="ui-group ch-head">${esc(o.head)}${o.sub ? ` <small>${esc(o.sub)}</small>` : ''}</p>` :
         `<button type="button" class="ui-opt ch-opt${o.last ? ' ch-last' : ''}" data-ch="${i}">` +
         (o.color !== undefined ? `<i class="sel-dot${o.color ? '' : ' none'}"${o.color ? ` style="background:${esc(o.color)}"` : ''}></i>` : '') +
         `<span><b>${esc(o.label)}</b>${o.hint ? `<small>${esc(o.hint)}</small>` : ''}</span></button>`).join('') + '</div>';
@@ -1298,7 +1299,7 @@
       // 범위에서 시작한 기록은 이름이 ‘과목 · 항목’이라, 앞에 적힌 과목 이름과 겹치지 않게 뒤쪽만 보여 준다
       if (label && sub && label.startsWith(sub.name + ' · ')) label = label.slice(sub.name.length + 3);
       return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.manual ? ' <span class="sl-tag">직접</span>' : s.kind === 'stopwatch' ? ' <span class="sl-tag">스톱워치</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>
-        <span class="muted sl-when">${d.getMonth() + 1}/${d.getDate()}${s.manual ? '' : ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`} · ${Stats.formatMinutes(s.minutes)}</span>
+        <span class="muted sl-when">${d.getMonth() + 1}/${d.getDate()}${!Stats.sessionSpan(s) ? '' : ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`} · ${Stats.formatMinutes(s.minutes)}</span>
         <button class="icon-btn" data-del-session="${esc(s.id)}" aria-label="이 기록 삭제" title="기록 삭제">${ic('x')}</button></li>`;
     }).join('') + (more > 0 ? `<li class="sl-more"><button class="btn link" type="button" data-more-sessions>이전 기록 더 보기 (${more}개)</button></li>` : '')
       : '<li class="empty">아직 기록이 없어요. 타이머로 집중하거나 <button class="btn link inline" type="button" data-log-open>직접 기록</button>해 보세요.</li>';
@@ -1464,40 +1465,170 @@
     toast(`${d.getMonth() + 1}/${d.getDate()} ${Stats.formatMinutes(s.minutes)} 기록을 지웠어요`, { action: '되돌리기', onAction: () => store.update((st) => { if (!st.sessions.some((x) => x.id === id)) st.sessions.push(s); }) });
   });
 
-  /* ---------- 공부 시간 직접 기록 (학원·독서실·인강 등) ---------- */
+  /* ---------- 공부 시간 직접 기록 (학원·독서실·인강 등) ----------
+     두 가지로 적는다: ‘몇 시부터 몇 시까지’(타임테이블의 그 시간에 칠해진다) / ‘공부한 시간만’(시각 없이 분만, 칸에는 안 칠해진다)
+     시각으로 적은 기록: { manual: true, startAt, endedAt, minutes } — 하루 경계를 넘으면 스톱워치처럼 날마다 나눠 남긴다 */
   let logReturnFocus = null;
-  function openLog() {
+  let logMode = 'dur';
+  const LOG_DESC = {
+    time: '공부한 시각을 적으면 타임테이블의 그 시간에 칠해지고, 통계와 목표에도 함께 들어가요.',
+    dur: '타이머 없이 공부한 시간(학원·독서실·인강 등)을 적어 두면 통계와 목표에 함께 들어가요. 시각을 모르면 이렇게 적고, 타임테이블 칸에는 안 칠해져요.',
+  };
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const clockLabel = (t) => { const d = new Date(t); return d.getHours() + ':' + pad2(d.getMinutes()); };
+  function setLogMode(mode) {
+    logMode = mode === 'time' ? 'time' : 'dur';
+    $$('[data-log-mode]').forEach((b) => { const on = b.dataset.logMode === logMode; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
+    $('#log-clock').hidden = logMode !== 'time';
+    $('#log-dur').hidden = logMode === 'time';
+    $('#log-desc').textContent = LOG_DESC[logMode];
+    $$('#log-quick [data-min]').forEach((x) => x.classList.remove('active'));
+    renderLogSum();
+  }
+  // opts.mode: 'time'이면 시각으로 적기, opts.day: 공부 날짜(기본 오늘), opts.start: 시작 시각(ms, 타임테이블에서 누른 칸)
+  function openLog(opts) {
+    opts = opts || {};
     logReturnFocus = document.activeElement;
     const sid = timer.subjectId && subjectById(timer.subjectId) ? timer.subjectId : '';
     $('#log-subject').innerHTML = subjectOptions(sid, true);
-    $('#log-h').value = '';
-    $('#log-m').value = '';
-    $('#log-date').value = todayKey();
-    $('#log-date').max = todayKey();
+    ['#log-h', '#log-m', '#log-sh', '#log-sm', '#log-eh', '#log-em'].forEach((sel) => { $(sel).value = ''; });
+    const tk = todayKey();
+    $('#log-date').value = opts.day && /^\d{4}-\d{2}-\d{2}$/.test(opts.day) && opts.day <= tk ? opts.day : tk;
+    $('#log-date').max = tk;
     $('#log-label').value = '';
-    $$('#log-quick [data-min]').forEach((x) => x.classList.remove('active'));
+    if (opts.start > 0) {
+      // 누른 칸부터 한 시간 (지금이나 그날 끝을 넘지 않게)
+      const day = $('#log-date').value, end = Math.min(opts.start + 3600000, Math.floor(now() / 60000) * 60000, logDayRange(day)[1]);
+      const a = new Date(opts.start);
+      $('#log-sh').value = a.getHours();
+      $('#log-sm').value = pad2(a.getMinutes());
+      if (end > opts.start) {
+        const b = new Date(end);
+        $('#log-eh').value = end === logDayRange(day)[1] && !Stats.dayOffset() ? 24 : b.getHours();
+        $('#log-em').value = pad2(b.getMinutes());
+      }
+    }
+    setLogMode(opts.mode);
     $('#log-dlg').hidden = false;
-    $('#log-h').focus();
+    $(logMode === 'time' ? (opts.start > 0 ? '#log-eh' : '#log-sh') : '#log-h').focus();
   }
   function closeLog() {
     $('#log-dlg').hidden = true;
     try { if (logReturnFocus && logReturnFocus.focus) logReturnFocus.focus(); } catch (e) { /* 무시 */ }
   }
-  document.addEventListener('click', (e) => { if (e.target.closest('[data-log-open]')) { e.preventDefault(); openLog(); } });
+
+  // 공부 날짜의 시작·끝 (하루 시작 시각 설정을 따른다)
+  function logDayRange(day) {
+    const [y, m, d] = day.split('-').map(Number), off = Stats.dayOffset();
+    return [new Date(y, m - 1, d).getTime() + off, new Date(y, m - 1, d + 1).getTime() + off];
+  }
+  // 그 공부 날짜의 h시 m분이 실제로 언제인지. 하루 시작 시각을 새벽으로 옮겼으면 그 전 시각은 다음 날 새벽
+  function clockAt(day, h, m) {
+    const [y, mo, d] = day.split('-').map(Number);
+    return new Date(y, mo - 1, d + (h < Math.round(Stats.dayOffset() / 3600000) ? 1 : 0), h, m).getTime();
+  }
+  function logDay() { const tk = todayKey(), v = $('#log-date').value; return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : tk; }
+  // 적은 시작·끝 시각을 읽는다 → { from, to, min, split } 또는 { err, focus }
+  // 끝이 시작보다 이르면 자정을 넘겨 공부한 것으로 본다 (예: 22:00 ~ 1:00). 12시간이 넘게 되면 잘못 적은 것으로
+  function readClock() {
+    const num = (sel, max) => { const v = $(sel).value.trim(); if (v === '') return null; const n = Number(v); return Number.isInteger(n) && n >= 0 && n <= max ? n : NaN; };
+    const sh = num('#log-sh', 23), sm = num('#log-sm', 59), eh = num('#log-eh', 24), em = num('#log-em', 59);
+    if (sh === null) return { err: '시작 시각을 적어 주세요', focus: '#log-sh' };
+    if (eh === null) return { err: '끝 시각을 적어 주세요', focus: '#log-eh' };
+    if ([sh, sm, eh, em].some(Number.isNaN) || (eh === 24 && em)) return { err: '시각을 바르게 적어 주세요 (0~23시, 0~59분)', focus: '#log-sh' };
+    const day = logDay();
+    const from = clockAt(day, sh, sm || 0);
+    let to = clockAt(day, eh, em || 0);
+    let wrapped = false;
+    if (to <= from) { to = clockAt(day, eh, em || 0) + 864e5; wrapped = true; }
+    const min = Math.round((to - from) / 60000);
+    if (to === from + 864e5 || (wrapped && min > 12 * 60)) return { err: '끝 시각을 시작 시각보다 늦게 적어 주세요', focus: '#log-eh' };
+    return { from, to, min, split: to > logDayRange(day)[1], day };
+  }
+  function clockText(c) {
+    const end = c.to === logDayRange(c.day)[1] && !Stats.dayOffset() ? '24:00' : clockLabel(c.to);
+    return `${clockLabel(c.from)} ~ ${c.split ? '다음 날 ' : ''}${end}`;
+  }
+  // 시각으로 적을 때 아래에 ‘14:00 ~ 15:30 · 1시간 30분’을 바로 보여 준다
+  function renderLogSum() {
+    const el = $('#log-sum');
+    if (logMode !== 'time') { el.hidden = true; return; }
+    const c = readClock();
+    el.hidden = !!c.err && !$('#log-sh').value && !$('#log-eh').value;
+    el.classList.toggle('bad', !!c.err);
+    el.textContent = c.err ? (($('#log-sh').value && $('#log-eh').value) ? c.err : '시작과 끝 시각을 적으면 공부한 시간을 계산해요')
+      : `${clockText(c)} · ${Stats.formatMinutes(c.min)}${c.split ? ' (날짜가 바뀌는 때에 나눠서 기록해요)' : ''}`;
+  }
+  // 이미 있는 기록이나 지금 재는 중인 시간과 겹치는지 (겹치는 분을 돌려줌)
+  function logOverlaps(from, to) {
+    const hits = [];
+    for (const x of store.get().sessions) {
+      const sp = Stats.sessionSpan(x);
+      if (!sp) continue;
+      const o = Math.min(sp[1], to) - Math.max(sp[0], from);
+      if (o >= 60000) hits.push({ subjectId: x.subjectId, from: sp[0], to: sp[1], min: Math.round(o / 60000) });
+    }
+    const lv = (window.Stopwatch && window.Stopwatch.live && window.Stopwatch.live()) || (window.App.timerLive && window.App.timerLive());
+    if (lv) { const o = Math.min(lv.to, to) - Math.max(lv.from, from); if (o >= 60000) hits.push({ subjectId: lv.subjectId, from: lv.from, to: null, min: Math.round(o / 60000) }); }
+    return hits.sort((a, b) => a.from - b.from);
+  }
+  // 시각으로 적은 공부를 기록한다. 하루 시작 시각에서 나눠 날마다 따로 남긴다
+  function recordClock(c, subjectId, memo) {
+    const parts = [];
+    for (let a = c.from; a < c.to;) {
+      const dayEnd = logDayRange(Stats.dayKey(a))[1];
+      const b = Math.min(c.to, dayEnd);
+      parts.push({ a, b, end: b === dayEnd });
+      a = b;
+    }
+    store.update((st) => parts.forEach((p) => st.sessions.push({ id: uid(), subjectId, minutes: Math.round((p.b - p.a) / 60000), startAt: p.a, endedAt: p.end ? p.b - 1 : p.b, label: memo || '직접 기록', manual: true })));
+  }
+
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-log-open]');
+    if (!b) return;
+    e.preventDefault();
+    // 타임테이블에서 열면 보고 있는 날, 시각으로 적기
+    openLog(b.dataset.logOpen === 'time' ? { mode: 'time', day: window.Timetable && window.Timetable.day } : {});
+  });
   $('#log-cancel').addEventListener('click', closeLog);
   $('#log-dlg').addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLog(); });
-  $('#log-dlg').addEventListener('click', (e) => { if (e.target === $('#log-dlg')) closeLog(); });
+  $('#log-dlg').addEventListener('click', (e) => {
+    if (e.target === $('#log-dlg')) return closeLog();
+    const m = e.target.closest('[data-log-mode]');
+    if (m) setLogMode(m.dataset.logMode);
+  });
   $('#log-quick').addEventListener('click', (e) => {
     const b = e.target.closest('[data-min]');
     if (!b) return;
     const m = +b.dataset.min;
-    $('#log-h').value = Math.floor(m / 60) || '';
-    $('#log-m').value = m % 60 || '';
+    if (logMode === 'time') {
+      // 시작을 적었으면 시작부터, 끝만 적었으면 끝까지, 아무것도 없으면 지금까지 (오늘일 때)
+      const day = logDay();
+      const has = (sel) => $(sel).value.trim() !== '';
+      let from, to;
+      if (has('#log-sh')) { from = clockAt(day, +$('#log-sh').value || 0, +$('#log-sm').value || 0); to = from + m * 60000; }
+      else {
+        to = has('#log-eh') ? clockAt(day, +$('#log-eh').value || 0, +$('#log-em').value || 0) : Math.min(Math.floor(now() / 300000) * 300000, logDayRange(day)[1]);
+        from = to - m * 60000;
+      }
+      const a = new Date(from), z = new Date(to);
+      $('#log-sh').value = a.getHours();
+      $('#log-sm').value = pad2(a.getMinutes());
+      $('#log-eh').value = to === logDayRange(day)[1] && !Stats.dayOffset() ? 24 : z.getHours();
+      $('#log-em').value = pad2(z.getMinutes());
+      renderLogSum();
+    } else {
+      $('#log-h').value = Math.floor(m / 60) || '';
+      $('#log-m').value = m % 60 || '';
+    }
     $$('#log-quick [data-min]').forEach((x) => x.classList.toggle('active', x === b));
   });
-  ['#log-h', '#log-m'].forEach((sel) => $(sel).addEventListener('input', () => $$('#log-quick [data-min]').forEach((x) => x.classList.remove('active'))));
-  $('#log-form').addEventListener('submit', (e) => {
+  ['#log-h', '#log-m', '#log-sh', '#log-sm', '#log-eh', '#log-em'].forEach((sel) => $(sel).addEventListener('input', () => { $$('#log-quick [data-min]').forEach((x) => x.classList.remove('active')); renderLogSum(); }));
+  $('#log-date').addEventListener('change', renderLogSum);
+  $('#log-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (logMode === 'time') return submitClock();
     const h = Math.max(0, parseInt($('#log-h').value, 10) || 0);
     const m = Math.max(0, parseInt($('#log-m').value, 10) || 0);
     const minutes = Math.min(24 * 60, h * 60 + m);
@@ -1513,6 +1644,32 @@
     closeLog();
     toast(`${day === tk ? '오늘' : `${+day.slice(5, 7)}/${+day.slice(8)}`} ${Stats.formatMinutes(minutes)} 공부를 기록했어요`);
   });
+  let clockBusy = false;
+  async function submitClock() {
+    if (clockBusy) return;
+    const tk = todayKey();
+    const day = logDay();
+    if (day > tk) { toast('오늘 이후 날짜는 기록할 수 없어요'); $('#log-date').focus(); return; }
+    const c = readClock();
+    if (c.err) { toast(c.err); $(c.focus).focus(); return; }
+    if (c.to > now()) { toast('아직 오지 않은 시각이에요. 지금까지 공부한 시간만 적을 수 있어요'); $('#log-eh').focus(); return; }
+    const subjectId = $('#log-subject').value || null;
+    const memo = $('#log-label').value.trim();
+    const hits = logOverlaps(c.from, c.to);
+    if (hits.length) {
+      // 같은 시간에 두 가지를 공부할 수는 없으니, 겹치면 한 번 묻는다 (겹친 시간은 두 번 세어진다)
+      const list = hits.slice(0, 3).map((h) => { const sub = subjectById(h.subjectId); return `${sub ? sub.name : '과목 없음'} ${clockLabel(h.from)} ~ ${h.to ? clockLabel(h.to) : '지금'}`; }).join('\n');
+      const sum = hits.reduce((a, h) => a + h.min, 0);
+      clockBusy = true;
+      const ok = await ask(`그 시간에 이미 공부 기록이 있어요.\n${list}${hits.length > 3 ? `\n외 ${hits.length - 3}개` : ''}\n\n그래도 기록하면 겹치는 ${Stats.formatMinutes(sum)}은 두 번 세어져요.`, { ok: '그래도 기록하기', cancel: '시각 고치기' });
+      clockBusy = false;
+      if (!ok) { $('#log-sh').focus(); return; }
+    }
+    recordClock(c, subjectId, memo);
+    closeLog();
+    const dayName = day === tk ? '오늘' : `${+day.slice(5, 7)}/${+day.slice(8)}`;
+    toast(`${dayName} ${clockText(c)} ${Stats.formatMinutes(c.min)} 공부를 기록했어요`, currentView !== 'timetable' && window.Timetable ? { action: '타임테이블', onAction: () => window.Timetable.open(day) } : undefined);
+  }
 
   /* ---------- 계정·설정 ---------- */
   function renderAccount() {
@@ -1527,7 +1684,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.9';
+  const APP_VERSION = '2.10';
   const APP_DATE = '2026년 11월 13일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
