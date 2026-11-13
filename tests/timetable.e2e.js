@@ -219,7 +219,7 @@ const SW = 'studypromotion.stopwatch';
   const r9 = rs.find((r) => r.hour === 9), r10 = rs.find((r) => r.hour === 10), r11 = rs.find((r) => r.hour === 11), r13 = rs.find((r) => r.hour === 13);
   assert(r9.segs.length === 1 && near(r9.segs[0].left, (5 / 60) * 100) && near(r9.segs[0].width, (50 / 60) * 100) && r9.segs[0].color === hexToRgb(colorOf(K)), '9:05~9:55 국어가 9시 줄에 국어 색으로');
   assert(near(r10.segs[0].left, 25) && near(r10.segs[0].width, 75) && near(r11.segs[0].left, 0) && near(r11.segs[0].width, (40 / 60) * 100) && r11.segs[0].color === hexToRgb(colorOf(M)), '10:15~11:40 수학이 10시·11시 두 줄에 걸쳐 칠해짐');
-  assert(r13.segs.length === 0 && /직접 기록한 30분은 공부한 시각이 없어/.test(await page.textContent('#ttv-foot')), '직접 기록은 칸에 칠하지 않고 아래에 알려 줌');
+  assert(r13.segs.length === 0 && /직접 기록 30분은 공부한 시각이 없어/.test(await page.textContent('#ttv-foot')), '직접 기록은 칸에 칠하지 않고 아래에 알려 줌');
   assert(/3시간 5분/.test(await page.textContent('#ttv-sum')) && /4:10 ~ 11:40/.test(await page.textContent('#ttv-sum')), '합계 3시간 5분(직접 기록 포함), 4:10 ~ 11:40: ' + (await page.textContent('#ttv-sum')));
   const legend = await page.$$eval('#ttv-legend .tt-chip', (els) => els.map((e) => e.textContent.trim()));
   assert(legend.length === 2 && /수학 1시간 45분/.test(legend[0]) && /국어 1시간 20분/.test(legend[1]), '과목별 시간을 많은 순으로: ' + legend.join(' / '));
@@ -306,16 +306,21 @@ const SW = 'studypromotion.stopwatch';
   await page.waitForFunction(() => window.App);
   const tabs = await page.$$eval('#ver-tabs [data-ver-tab]', (els) => els.map((e) => ({ v: e.dataset.verTab, on: e.classList.contains('active'), sel: e.getAttribute('aria-selected') })));
   assert(tabs.length >= 9 && tabs[0].v === await page.evaluate(() => App.version) && tabs[0].on && tabs[0].sel === 'true' && tabs.filter((t) => t.on).length === 1, '버전마다 탭 하나, 맨 앞이 지금 버전(' + tabs[0].v + ')이고 처음에 골라져 있음: ' + tabs.map((t) => t.v).join(' '));
-  assert(/버전 2\.9/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
+  assert(/버전 2\.10/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
   const shown = () => page.$$eval('#about-news .ver', (els) => els.filter((e) => !e.hidden && e.offsetParent !== null).map((e) => ({ v: e.dataset.ver, when: e.querySelector('.ver-when').textContent, n: e.querySelectorAll('.news li').length })));
   let sh = await shown();
-  assert(sh.length === 1 && sh[0].v === '2.9' && /버전 2\.9 · 2026년 11월 13일 업데이트/.test(sh[0].when) && sh[0].n >= 5, '고른 버전의 내용만 보이고, 업데이트한 날이 적혀 있음: ' + sh[0].when);
-  assert(/타임테이블/.test(await page.textContent('#about-news .ver:not([hidden])')) && /공부 시작하기/.test(await page.textContent('#about-news .ver:not([hidden])')), '2.9 소식에 타임테이블과 공부 시작하기');
+  assert(sh.length === 1 && sh[0].v === '2.10' && /버전 2\.10 · 2026년 11월 13일 업데이트/.test(sh[0].when) && sh[0].n >= 2, '고른 버전의 내용만 보이고, 업데이트한 날이 적혀 있음: ' + sh[0].when);
+  assert(/범위/.test(await page.textContent('#about-news .ver:not([hidden])')) && /타임테이블에 직접 추가/.test(await page.textContent('#about-news .ver:not([hidden])')), '2.10 소식에 범위 고르기와 타임테이블 직접 추가');
+  await page.tap('#ver-tabs [data-ver-tab="2.9"]');
+  sh = await shown();
+  assert(sh.length === 1 && sh[0].v === '2.9' && /버전 2\.9 · 2026년 11월 13일 업데이트/.test(sh[0].when) && sh[0].n >= 5 && /공부 시작하기/.test(await page.textContent('#about-news .ver:not([hidden])')), '2.9 소식(타임테이블, 공부 시작하기)도 그대로');
   await page.tap('#ver-tabs [data-ver-tab="2.7"]');
   sh = await shown();
   assert(sh.length === 1 && sh[0].v === '2.7' && /2026년 11월 10일/.test(sh[0].when) && /스톱워치/.test(await page.textContent('#about-news .ver:not([hidden])')), '2.7을 누르면 2.7 내용으로 바뀜');
   const allVers = await page.$$eval('#about-news .ver', (els) => els.map((e) => ({ v: e.dataset.ver, d: e.dataset.date, n: e.querySelectorAll('.news li').length })));
-  assert(allVers.every((x) => /^\d+\.\d+$/.test(x.v) && /^\d{4}년 \d{1,2}월 \d{1,2}일$/.test(x.d) && x.n >= 1) && allVers.map((x) => +x.v).every((v, i, a) => !i || v < a[i - 1]), '모든 버전에 날짜와 내용이 있고 최신 순');
+  // 버전은 점 앞뒤를 따로 비교한다 (2.10은 2.9 다음)
+  const verNum = (v) => v.split('.').map(Number).reduce((a, n) => a * 1000 + n, 0);
+  assert(allVers.every((x) => /^\d+\.\d+$/.test(x.v) && /^\d{4}년 \d{1,2}월 \d{1,2}일$/.test(x.d) && x.n >= 1) && allVers.map((x) => verNum(x.v)).every((v, i, a) => !i || v < a[i - 1]), '모든 버전에 날짜와 내용이 있고 최신 순');
   fit = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
   assert(fit.sw <= fit.cw, '버전 탭이 많아도 화면이 옆으로 밀리지 않음 (360)');
   // 업데이트한 뒤의 알림 → 달라진 점
@@ -326,7 +331,7 @@ const SW = 'studypromotion.stopwatch';
   await page.tap('#toast .toast-act');
   await page.waitForTimeout(300);
   sh = await shown();
-  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '2.9' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
+  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '2.10' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
   await page.context().close();
 
   /* ===== 8) PC 화면, 어두운 화면 ===== */

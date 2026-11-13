@@ -179,6 +179,15 @@
    *  opts.live: 지금 재고 있는 구간 { from, to, subjectId } (아직 기록 전이지만 바로 칠한다, 조각에 live: true가 붙는다)
    *  opts.full: 공부한 시간대만이 아니라 하루 전체 24줄 (타임테이블 화면, 하루 시작 시각부터)
    */
+  // 기록이 차지하는 시각 [시작, 끝] (ms). 시각 없이 시간만 적은 직접 기록은 null
+  //  타이머·스톱워치 기록: 끝난 시각에서 공부한 분만큼 앞으로
+  //  시각을 적은 직접 기록(manual + startAt): 적은 시작 시각부터 (하루 끝에 딱 맞춰 끝나면 endedAt을 1ms 당겨 그날에 넣어 둔다)
+  function sessionSpan(s) {
+    if (!s || !(s.minutes > 0)) return null;
+    if (s.manual) return +s.startAt > 0 ? [+s.startAt, +s.startAt + s.minutes * 60000] : null;
+    return [s.endedAt - s.minutes * 60000, s.endedAt];
+  }
+
   function dayTimeline(sessions, key, opts) {
     opts = opts || {};
     const [y, m, d] = key.split('-').map(Number);
@@ -198,8 +207,9 @@
     };
     for (const s of sessions) {
       if (!(s.minutes > 0)) continue;
-      if (s.manual) { if (dayKey(s.endedAt) === key) untimed += s.minutes; continue; }
-      add(s.endedAt - s.minutes * 60000, s.endedAt, s.subjectId, false);
+      const span = sessionSpan(s);
+      if (!span) { if (dayKey(s.endedAt) === key) untimed += s.minutes; continue; }
+      add(span[0], span[1], s.subjectId, false);
     }
     if (opts.live) add(opts.live.from, opts.live.to, opts.live.subjectId, true);
     const hours = [];
@@ -225,7 +235,7 @@
     return { hours, start, end, timed: Math.round(timed), untimed };
   }
 
-  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, dayKey, dateKey, dayOffset, setDayStart, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes, josa };
+  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, sessionSpan, dayKey, dateKey, dayOffset, setDayStart, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes, josa };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);

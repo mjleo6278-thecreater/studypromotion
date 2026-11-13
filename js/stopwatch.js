@@ -53,6 +53,12 @@
   const subjects = () => store.get().subjects || [];
   const subjectOf = (id) => subjects().find((s) => s.id === id) || null;
   const nameOf = (id) => { const s = subjectOf(id); return s ? s.name : '과목 없이'; };
+  // ‘수학 · 함수의 극한’: 범위에서 온 이름은 앞에 과목 이름이 붙어 있어서, 과목 이름을 두 번 쓰지 않게 뺀다
+  const what = (id, label) => {
+    const name = nameOf(id);
+    if (!label) return name;
+    return name + ' · ' + (label.startsWith(name + ' · ') ? label.slice(name.length + 3) : label);
+  };
   // 이번에 잰 시간(초). 오늘 몫은 자정 이후만
   const runSec = (t) => (sw.running ? Math.max(0, (t - sw.startAt) / 1000) : 0);
   const runTodaySec = (t) => (sw.running ? Math.max(0, (t - Math.max(sw.startAt, dayStart(t))) / 1000) : 0);
@@ -154,7 +160,7 @@
     if (sec > 0) {
       // 할 일을 골라서 시작했으면 끝냈는지 바로 표시할 수 있게
       const task = taskId ? store.get().tasks.find((t) => t.id === taskId && !t.done) : null;
-      toast(`${nameOf(sid)}${label ? ' · ' + label : ''} ${Stats.formatMinutes(sec / 60)} 기록했어요`, task ? { action: '할 일 완료', onAction: () => finishTask(task.id) } : undefined);
+      toast(`${what(sid, label)} ${Stats.formatMinutes(sec / 60)} 기록했어요`, task ? { action: '할 일 완료', onAction: () => finishTask(task.id) } : undefined);
       if (topicId && App.askTopicDone) App.askTopicDone(topicId, label);
     } else if (sec === 0) toast('1분이 안 돼서 기록하지 않았어요');
   }
@@ -232,9 +238,9 @@
     if (!sw.running) { el.innerHTML = ''; return; }
     const s = subjectOf(sw.subjectId);
     el.innerHTML = `<i class="dot${s ? '' : ' none'}"${s ? ` style="background:${esc(s.color)}"` : ''}></i><span class="lv-txt"><span class="lv-name">${esc(nameOf(sw.subjectId))}</span><span class="lv-state">재는 중</span></span><b>${shortClock(runSec(now()))}</b>`;
-    const what = nameOf(sw.subjectId) + (sw.label ? ' · ' + sw.label : '');
-    el.setAttribute('aria-label', `스톱워치: ${what} 재는 중, 눌러서 스톱워치 열기`);
-    el.title = `${what} 재는 중 · 눌러서 스톱워치 열기`;
+    const doing = what(sw.subjectId, sw.label);
+    el.setAttribute('aria-label', `스톱워치: ${doing} 재는 중, 눌러서 스톱워치 열기`);
+    el.title = `${doing} 재는 중 · 눌러서 스톱워치 열기`;
   }
 
   function renderTabs() {
@@ -274,7 +280,7 @@
     $('#sw-now').hidden = !sw.running;
     $('#sw-now-dot').style.background = s ? s.color : '';
     $('#sw-now-dot').classList.toggle('none', !s);
-    $('#sw-now-name').textContent = nameOf(sw.subjectId) + (sw.label ? ' · ' + sw.label : '');
+    $('#sw-now-name').textContent = what(sw.subjectId, sw.label);
     paint(now());
   }
 
@@ -309,7 +315,7 @@
     showTab(tab === 'sw' ? 'focus' : 'sw');
     $(`[data-ttab="${tab}"]`).focus();
   });
-  /* ---------- 홈 ‘공부 시작하기’: 과목 → 할 일 → 스톱워치 ---------- */
+  /* ---------- 홈 ‘공부 시작하기’: 과목 → 할 일이나 범위 → 스톱워치 ---------- */
   function taskHint(t) {
     const parts = [];
     if (t.due) { const tk = App.todayKey(); parts.push(t.due < tk ? '기한 지남' : t.due === tk ? '오늘까지' : `${+t.due.slice(5, 7)}/${+t.due.slice(8)}까지`); }
@@ -320,6 +326,43 @@
   function openTasks(sid) {
     return store.get().tasks.filter((t) => !t.done && (t.subjectId && subjectOf(t.subjectId) ? t.subjectId : '') === sid)
       .sort((a, b) => { const ad = a.due || '9999', bd = b.due || '9999'; return ad !== bd ? (ad < bd ? -1 : 1) : a.createdAt - b.createdAt; });
+  }
+  // 그 과목의 시험 범위에서 아직 안 끝낸 항목: 다가오는 시험부터, 범위에 적은 순서대로
+  // 범위의 과목 카드 이름이 과목 이름과 같으면 그 과목의 범위로 본다 (범위에서 타이머를 켤 때와 같은 기준)
+  // 이미 할 일로 옮겨 둔 항목은 할 일 쪽에만 보여 준다 (같은 것이 두 번 나오지 않게)
+  function openTopics(sid, skip) {
+    const subj = subjectOf(sid);
+    if (!subj || !window.Scope) return [];
+    const st = store.get();
+    const tk = App.todayKey();
+    const index = Scope.indexByParent(st.topics);
+    const kidsOf = (id) => index.get(id) || [];
+    const exams = st.exams.filter((e) => !e.date || e.date >= tk)
+      .sort((a, b) => { const ad = a.date || '9999', bd = b.date || '9999'; return ad < bd ? -1 : ad > bd ? 1 : 0; });
+    const groups = [];
+    for (const ex of exams) {
+      const items = [];
+      kidsOf('root:' + ex.id).filter((c) => c.kind !== 'note' && c.title === subj.name).forEach((card) => {
+        (function walk(n, path) {
+          const ks = kidsOf(n.id).filter((k) => k.kind !== 'note');
+          if (!ks.length) {
+            if (n !== card && Scope.leafPct(n) < 100 && !skip.has(n.id)) items.push({ n, card, path });
+            return;
+          }
+          ks.forEach((k) => walk(k, n === card ? [] : path.concat(n.title)));
+        })(card, []);
+      });
+      if (items.length) groups.push({ exam: ex, items });
+    }
+    return groups;
+  }
+  function topicHint(it) {
+    const pct = Scope.leafPct(it.n);
+    const est = +it.n.est || 0;
+    const parts = it.path.slice();
+    if (pct > 0) parts.push(`${pct}% 했음`);
+    if (est > 0) parts.push(`남은 ${Stats.formatMinutes(Math.max(1, Math.round((est * (100 - pct)) / 100)))}`);
+    return parts.join(' · ');
   }
   let flowOpen = false;
   async function startFlow() {
@@ -334,14 +377,32 @@
         if (sid === undefined) return;
       }
       const tasks = openTasks(sid);
+      const groups = openTopics(sid, new Set(tasks.map((t) => t.topicId).filter(Boolean)));
       let extra;
-      if (tasks.length) {
-        const pick = await App.choose(sid ? `${nameOf(sid)} · 어떤 할 일을 할까요?` : '어떤 할 일을 할까요?',
-          tasks.map((t) => ({ value: t.id, label: t.title, hint: taskHint(t) })).concat([{ value: '', label: sid ? `할 일 없이 ${nameOf(sid)}만 공부하기` : '할 일 없이 시작하기', last: true }]),
-          { cls: 'start-sheet', note: '할 일에 없는 공부라면 맨 아래를 고르세요.' });
+      if (tasks.length || groups.length) {
+        // 할 일만 있으면 예전처럼 할 일만, 범위가 있으면 ‘할 일’ ‘범위’로 나눠서 한 창에
+        const opts = [];
+        if (tasks.length && groups.length) opts.push({ head: '할 일' });
+        tasks.forEach((t) => opts.push({ value: 'task:' + t.id, label: t.title, hint: taskHint(t) }));
+        groups.forEach((g) => {
+          const dd = Scope.ddayLabel(g.exam.date, now());
+          opts.push({ head: '범위', sub: g.exam.name + (dd ? ' ' + dd : '') });
+          g.items.forEach((it) => opts.push({ value: 'topic:' + it.n.id, label: it.n.title, hint: topicHint(it) }));
+        });
+        const none = !groups.length ? (sid ? `할 일 없이 ${nameOf(sid)}만 공부하기` : '할 일 없이 시작하기') : `고르지 않고 ${nameOf(sid)}만 공부하기`;
+        opts.push({ value: '', label: none, last: true });
+        const pick = await App.choose((sid ? nameOf(sid) + ' · ' : '') + (groups.length ? '무엇을 공부할까요?' : '어떤 할 일을 할까요?'), opts,
+          { cls: 'start-sheet', note: groups.length ? '할 일이나 범위에 없는 공부라면 맨 아래를 고르세요.' : '할 일에 없는 공부라면 맨 아래를 고르세요.' });
         if (pick === undefined) return;
-        const t = pick && tasks.find((x) => x.id === pick);
-        if (t) extra = { label: t.title, taskId: t.id };
+        if (pick && pick.startsWith('task:')) {
+          const t = tasks.find((x) => x.id === pick.slice(5));
+          if (t) extra = { label: t.title, taskId: t.id };
+        } else if (pick && pick.startsWith('topic:')) {
+          let it = null;
+          groups.some((g) => (it = g.items.find((x) => x.n.id === pick.slice(6))));
+          // 범위에서 타이머를 켤 때와 같은 이름(‘과목 · 항목’)으로 남긴다. 멈추면 이 범위를 끝냈는지 묻는다
+          if (it) extra = { label: `${it.card.title} · ${it.n.title}`, topicId: it.n.id };
+        }
       }
       if (sw.running) return; // 고르는 동안 다른 창에서 이미 시작함
       showTab('sw');

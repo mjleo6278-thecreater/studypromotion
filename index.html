@@ -416,7 +416,7 @@
         <div class="tt-foot" id="ttv-foot"></div>
       </div>
       <div class="panel">
-        <div class="panel-head"><h2>이날의 공부 기록</h2><button class="btn link" type="button" data-log-open>＋ 직접 기록</button></div>
+        <div class="panel-head"><h2>이날의 공부 기록</h2><button class="btn link" type="button" data-log-open="time">＋ 공부 시간 추가</button></div>
         <ul class="simple-list" id="ttv-list"></ul>
       </div>
       <p class="muted small stats-foot">다른 날은 <a href="#stats" data-go="stats">통계</a>의 공부 달력에서 날짜를 누르고 ‘타임테이블’을 눌러도 볼 수 있어요.</p>
@@ -556,7 +556,7 @@
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-home"/></svg>홈</summary>
           <p>오늘 공부한 시간과 하루 목표, 남은 할 일, 오늘 복습할 카드, 연속 학습일을 한눈에 보여 줘요. <b>시험 준비</b>에는 시험마다 D-day, 진행률(폰이 걷는 체스 칸), 남은 시간과 오늘 더 해야 할 양이 나와요.</p>
-          <p>‘오늘 공부’의 <b>공부 시작하기</b>를 누르면 과목을 고르고, 그 과목의 할 일을 고르면 바로 스톱워치가 켜져요. 할 일에 없는 공부라면 맨 아래에서 과목만 골라요. <b>오늘 타임테이블</b>은 오늘 하루 중 언제 공부했는지를 한 줄로 보여 주고, 누르면 타임테이블이 열려요.</p>
+          <p>‘오늘 공부’의 <b>공부 시작하기</b>를 누르면 과목을 고르고, 그 과목의 할 일이나 시험 범위 항목을 고르면 바로 스톱워치가 켜져요. 범위를 골랐다면 멈출 때 그 범위를 끝냈는지 물어봐요. 할 일이나 범위에 없는 공부라면 맨 아래에서 과목만 골라요. <b>오늘 타임테이블</b>은 오늘 하루 중 언제 공부했는지를 한 줄로 보여 주고, 누르면 타임테이블이 열려요.</p>
           <p><b>오늘 할 범위</b>는 가장 가까운 시험에서 아직 안 끝낸 내용을 과목을 번갈아 가며 오늘 할 양만큼 골라 줘요. 바로 체크할 수 있고, <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼을 누르면 그 범위로 타이머가 준비돼요.</p>
         </details>
         <details>
@@ -596,8 +596,8 @@
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-stats"/></svg>통계와 월 목표</summary>
           <p>이번 달 공부 시간과 지난달 비교, 최근 6개월과 7일 그래프, 과목별 공부 시간(최근 7일·이번 달·전체), 최근 기록을 보여 줘요. <b>월 목표</b>를 정하면 달마다 다른 날 수에 맞춰 하루 기본 페이스와 오늘 남은 양을 계산해 줘요.</p>
-          <p><b>공부 달력</b>은 날마다 공부한 만큼 진하게 칠해져요(1시간 미만 · 1~2시간 · 2~4시간 · 4시간 이상). 날짜를 누르면 그날 과목별로 얼마나 했는지와 함께, 스터디 플래너처럼 한 줄이 한 시간·한 칸이 10분인 <b>시간표</b>가 과목 색으로 칠해져 나와요. <b>인증 이미지</b>를 누르면 그날 공부를 인스타 스토리 크기 그림으로 만들어 공유하거나 저장할 수 있어요. 잘못 남긴 기록은 ✕로 지우고, 빠진 시간은 <b>＋ 직접 기록</b>으로 채워요.</p>
-          <p><b>타임테이블</b>은 하루 전체를 한 줄이 한 시간, 한 칸이 10분인 표로 보여 줘요. 스톱워치나 타이머로 공부하는 동안에는 지금 재는 시간도 바로 칠해지고, 그날의 기록을 시간 순서로 보고 지울 수 있어요. 홈의 ‘오늘 타임테이블’이나 공부 달력에서 날짜를 누른 뒤 ‘타임테이블’을 눌러 열어요. 직접 기록은 공부한 시각이 없어서 칸에는 칠해지지 않아요.</p>
+          <p><b>공부 달력</b>은 날마다 공부한 만큼 진하게 칠해져요(1시간 미만 · 1~2시간 · 2~4시간 · 4시간 이상). 날짜를 누르면 그날 과목별로 얼마나 했는지와 함께, 스터디 플래너처럼 한 줄이 한 시간·한 칸이 10분인 <b>시간표</b>가 과목 색으로 칠해져 나와요. <b>인증 이미지</b>를 누르면 그날 공부를 인스타 스토리 크기 그림으로 만들어 공유하거나 저장할 수 있어요. 잘못 남긴 기록은 ✕로 지우고, 빠진 시간은 <b>＋ 직접 기록</b>으로 채워요. ‘몇 시부터 몇 시까지’로 적으면 시간표에도 칠해지고, 시각을 모르면 ‘공부한 시간만’ 적어요.</p>
+          <p><b>타임테이블</b>은 하루 전체를 한 줄이 한 시간, 한 칸이 10분인 표로 보여 줘요. 스톱워치나 타이머로 공부하는 동안에는 지금 재는 시간도 바로 칠해지고, 그날의 기록을 시간 순서로 보고 지울 수 있어요. 홈의 ‘오늘 타임테이블’이나 공부 달력에서 날짜를 누른 뒤 ‘타임테이블’을 눌러 열어요. 기록하지 못한 공부는 <b>＋ 공부 시간 추가</b>나 그 시각의 칸을 눌러 몇 시부터 몇 시까지 했는지 적으면 칸에 칠해져요. 시각 없이 공부한 시간만 적은 직접 기록은 칸에는 칠해지지 않아요.</p>
           <p>새벽까지 공부한다면 <a href="#account" data-go="account">계정·설정</a>의 <b>하루 시작 시각</b>을 새벽으로 옮겨 보세요. 그 전의 새벽 공부는 전날 공부로 세요.</p>
         </details>
         <details>
@@ -638,6 +638,12 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="2.10" data-date="2026년 11월 13일">
+            <ul class="news">
+              <li><b>범위도 골라 공부 시작하기</b>: ‘공부 시작하기’에서 과목을 고르면 할 일과 함께 그 과목의 시험 범위 중 아직 안 끝낸 항목도 나와요. 범위를 골라 시작하면 스톱워치를 멈출 때 그 범위를 끝냈는지 물어보고 체크해 줘요</li>
+              <li><b>타임테이블에 직접 추가</b>: 기록하지 못한 공부를 ‘몇 시부터 몇 시까지’로 적으면 타임테이블의 그 시간에 칠해져요. 타임테이블의 칸을 누르면 그 시각부터 바로 적을 수 있고, 이미 기록이 있는 시간과 겹치면 알려 줘요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="2.9" data-date="2026년 11월 13일">
             <ul class="news">
               <li><b>타임테이블</b>: 공부한 시간이 하루 시간표에 과목 색으로 칠해져요. 홈에서 오늘 하루를 한 줄로 보고, 누르면 날짜별 시간표와 그날의 기록이 나와요. 재는 중인 시간도 바로 칠해져요</li>
@@ -794,14 +800,27 @@
   <div class="ask-backdrop" id="log-dlg" hidden>
     <form class="ask-box" id="log-form" role="dialog" aria-modal="true" aria-labelledby="log-title">
       <h2 id="log-title">공부 시간 직접 기록</h2>
-      <p class="muted small">타이머 없이 공부한 시간(학원·독서실·인강 등)을 적어 두면 통계와 목표에 함께 들어가요.</p>
+      <div class="seg log-mode" role="group" aria-label="적는 방법">
+        <button class="seg-btn" type="button" data-log-mode="time" aria-pressed="false">몇 시부터 몇 시까지</button>
+        <button class="seg-btn active" type="button" data-log-mode="dur" aria-pressed="true">공부한 시간만</button>
+      </div>
+      <p class="muted small" id="log-desc">타이머 없이 공부한 시간(학원·독서실·인강 등)을 적어 두면 통계와 목표에 함께 들어가요.</p>
       <label class="field">과목<select id="log-subject"></select></label>
-      <label class="field">공부한 시간
+      <div class="log-clock" id="log-clock" hidden>
+        <label class="field">시작
+          <span class="time-input clock-input"><input type="number" id="log-sh" min="0" max="23" inputmode="numeric" placeholder="시" aria-label="시작 시"><b aria-hidden="true">:</b><input type="number" id="log-sm" min="0" max="59" step="5" inputmode="numeric" placeholder="분" aria-label="시작 분"></span>
+        </label>
+        <label class="field">끝
+          <span class="time-input clock-input"><input type="number" id="log-eh" min="0" max="24" inputmode="numeric" placeholder="시" aria-label="끝 시"><b aria-hidden="true">:</b><input type="number" id="log-em" min="0" max="59" step="5" inputmode="numeric" placeholder="분" aria-label="끝 분"></span>
+        </label>
+      </div>
+      <label class="field" id="log-dur">공부한 시간
         <span class="time-input"><input type="number" id="log-h" min="0" max="24" inputmode="numeric" aria-label="시간"> 시간 <input type="number" id="log-m" min="0" max="59" step="5" inputmode="numeric" aria-label="분"> 분</span>
       </label>
       <div class="lock-chips" id="log-quick">
         <button class="chip" type="button" data-min="30">30분</button><button class="chip" type="button" data-min="60">1시간</button><button class="chip" type="button" data-min="90">1시간 30분</button><button class="chip" type="button" data-min="120">2시간</button><button class="chip" type="button" data-min="180">3시간</button>
       </div>
+      <p class="log-sum small" id="log-sum" aria-live="polite" hidden></p>
       <label class="field">날짜<input type="date" id="log-date"></label>
       <label class="field"><span>메모 <small>(선택)</small></span><input id="log-label" maxlength="40" placeholder="예: 학원 수학 수업" autocomplete="off"></label>
       <div class="ask-actions">
