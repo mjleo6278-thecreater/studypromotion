@@ -1623,3 +1623,89 @@ input[type="search"]::-webkit-search-cancel-button {
 /* 타임테이블 화면: 칸을 누르면 그 시각으로 공부 시간 추가 */
 .tt-full .tt-row[data-tt-row] { cursor: pointer; }
 @media (hover: hover) { .tt-full .tt-row[data-tt-row]:hover .tt-bar { box-shadow: inset 0 0 0 1px var(--line); } }
+
+/* ===== v2.11: 일정 — 타임테이블에 일정(점선)·주간 표, 일정 추가 창, 홈의 지금·다음 일정 ===== */
+.tt-head { margin-bottom: 14px; }
+.tt-head + .tagline { margin-top: -6px; }
+#ttv-day[hidden], #ttv-week[hidden], #ttv-log-panel[hidden] { display: none; }
+/* 일정 칸: 과목 색 점선 (다른 일정은 회색 빗금) */
+.tt-bar b.plan, .ds-bar b.plan { position: absolute; top: 1px; bottom: 1px; box-sizing: border-box; border: 1.5px dashed var(--c); border-radius: 3px; background: color-mix(in srgb, var(--c) 12%, transparent); pointer-events: none; }
+.tt-bar b.plan.other, .ds-bar b.plan.other { border-style: solid; border-color: color-mix(in srgb, var(--muted) 45%, transparent); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 18%, transparent) 0 3px, transparent 3px 6px); }
+.ds-bar b.plan { top: 2px; bottom: 2px; }
+.tt-bar i, .ds-bar i { z-index: 1; }
+/* 일정 목록 */
+.ev-list li.ev-row { align-items: center; padding: 6px 0; }
+.ev-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: 0; background: none; color: inherit; font: inherit; text-align: left; padding: 4px 0; cursor: pointer; border-radius: 8px; }
+.ev-main:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ev-when { flex: none; min-width: 92px; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ev-what { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; word-break: keep-all; }
+.ev-what small { color: var(--muted); font-size: 12px; }
+.ev-row.other .ev-what > span { color: var(--muted); }
+.ev-row.now .ev-when { color: var(--accent-text, var(--accent)); }
+.ev-st { flex: none; font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ev-st.done { color: var(--accent-text, var(--accent)); font-weight: 700; }
+.ev-row .btn.sm { flex: none; padding: 4px 9px; font-size: 12.5px; display: inline-flex; align-items: center; gap: 3px; }
+.ev-row .btn.sm .ic, .h-plan .btn.sm .ic { width: 13px; height: 13px; }
+/* 홈: 지금·다음 일정 한 줄 */
+#h-plan:empty { display: none; }
+.h-plan { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding: 8px 10px; border-radius: 10px; background: var(--bg); font-size: 13.5px; }
+.h-plan-what { min-width: 0; word-break: keep-all; }
+.h-plan-what b { margin-right: 2px; }
+.h-plan .btn.sm { flex: none; display: inline-flex; align-items: center; gap: 3px; padding: 4px 10px; }
+.h-plan.empty { background: none; padding: 0; justify-content: flex-start; flex-wrap: wrap; gap: 2px 8px; }
+.h-plan.empty .btn.link { padding: 0; font-size: 13.5px; }
+/* 주간 표 */
+.wk-panel .ttv-sum { margin-bottom: 6px; }
+.wk-exam { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; padding: 6px 10px; border-radius: 9px; background: var(--bg); font-size: 13px; }
+.wk-exam[hidden] { display: none; }
+.wk-exam b { color: var(--danger); }
+.wk-ex-tag { font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 999px; border: 1px solid var(--danger); color: var(--danger); }
+.wk { display: grid; grid-template-columns: 22px repeat(7, minmax(0, 1fr)); gap: 0 2px; font-variant-numeric: tabular-nums; }
+.wk-dh { border: 0; background: none; font: inherit; color: var(--muted); font-size: 11px; line-height: 1.25; padding: 2px 0 4px; cursor: pointer; border-radius: 8px; min-width: 0; }
+.wk-dh b { display: block; margin: 1px auto 0; width: 24px; font-size: 13px; color: var(--text); border-radius: 999px; }
+.wk-dh.today b { background: var(--ink); color: var(--ink-text); }
+.wk-badge { display: block; height: 13px; margin-top: 1px; font-size: 9.5px; font-weight: 700; color: var(--accent-text, var(--accent)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wk-badge.ex { color: var(--danger); }
+.wk-hours { position: relative; }
+.wk-hours span { position: absolute; right: 3px; font-size: 10px; color: var(--muted); transform: translateY(-50%); line-height: 1; }
+.wk-col { position: relative; border-radius: 4px; overflow: hidden; cursor: pointer; background-color: var(--bg);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 calc(var(--hh) - 1px), var(--line) calc(var(--hh) - 1px) var(--hh)); }
+.wk-col.today { box-shadow: inset 0 0 0 1.5px var(--text); }
+.wk-ev { position: absolute; box-sizing: border-box; border: 0; border-left: 3px solid var(--c); border-radius: 4px; padding: 2px 2px 2px 3px; margin: 0; text-align: left; font: inherit; font-size: 10px; line-height: 1.2; overflow: hidden; cursor: pointer;
+  background: color-mix(in srgb, var(--c) 20%, var(--surface)); color: var(--text); word-break: keep-all; letter-spacing: -0.03em; z-index: 1; }
+.wk-ev b { display: block; font-weight: 700; overflow: hidden; }
+.wk-ev small { display: block; font-size: 9px; color: var(--muted); overflow: hidden; }
+.wk-ev.other { border-left-color: color-mix(in srgb, var(--muted) 60%, transparent); color: var(--muted); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 16%, var(--surface)) 0 4px, var(--surface) 4px 8px); }
+.wk-ev.ok::after { content: '✓'; position: absolute; right: 6px; top: 1px; font-size: 10px; font-weight: 800; color: var(--accent-text, var(--accent)); }
+.wk-ev:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+.wk-act { position: absolute; right: 0; width: 4px; border-radius: 2px; background: var(--c); z-index: 2; pointer-events: none; }
+.wk-act.live { opacity: .7; }
+.wk-now { position: absolute; left: 0; right: 0; height: 2px; margin-top: -1px; background: var(--text); z-index: 3; pointer-events: none; }
+.wk-key { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+.wk-key i { display: inline-block; vertical-align: -2px; margin-right: 4px; border-radius: 2px; }
+.wk-key .k-plan { width: 14px; height: 12px; border-left: 3px solid var(--text); background: color-mix(in srgb, var(--text) 14%, var(--surface)); }
+.wk-key .k-act { width: 4px; height: 12px; background: var(--text); }
+.wk-key .k-oth { width: 14px; height: 12px; border-left: 3px solid var(--muted); background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 25%, var(--surface)) 0 3px, var(--surface) 3px 6px); }
+.wk-key b { color: var(--accent-text, var(--accent)); }
+.wk-add { margin-top: 10px; align-items: center; gap: 10px; }
+/* 일정 추가 창 */
+#ev-dlg .ask-box { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+.ev-kind { display: flex; width: 100%; box-sizing: border-box; margin: 4px 0 12px; }
+.ev-kind .seg-btn { flex: 1 1 0; justify-content: center; padding: 7px 6px; font-size: 13.5px; }
+.ev-two { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+.ev-two .field[hidden] { display: none; }
+.ev-two:has(> .field[hidden]) { grid-template-columns: 1fr; }
+#ev-task-f[hidden], #ev-until-f[hidden], #ev-subject-f[hidden] { display: none; }
+.ev-rep { margin: 4px 0 0; }
+.ev-days { display: flex; gap: 5px; margin: 8px 0 2px; }
+.ev-days[hidden] { display: none; }
+.ev-days button { flex: 1 1 0; min-width: 0; height: 34px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; padding: 0; }
+.ev-days button.on { background: var(--ink); color: var(--ink-text); border-color: var(--ink); font-weight: 700; }
+.ask-box .ev-rep + .ev-days, #ev-dlg .field > .lock-chips { margin-bottom: 0; }
+#ev-dlg .field { margin-bottom: 12px; }
+.ev-actions { align-items: center; }
+.ev-actions #ev-del { margin-right: auto; }
+.ev-actions #ev-del[hidden] { display: none; }
+/* 할 일: 시간 정하기 */
+.task-plan { display: inline-flex; align-items: center; gap: 3px; color: var(--accent-text, var(--accent)); font-weight: 600; cursor: pointer; }
+.task-plan .ic { width: 12px; height: 12px; }

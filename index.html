@@ -59,6 +59,7 @@
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.4" r="3.9"/><path d="M4.6 20c1.1-3.9 4-6 7.4-6s6.3 2.1 7.4 6"/></symbol>
     <symbol id="i-install" viewBox="0 0 24 24"><path d="M12 4v10.4"/><path d="m7.6 10.2 4.4 4.4 4.4-4.4"/><path d="M4.6 15.6v2.6a1.8 1.8 0 0 0 1.8 1.8h11.2a1.8 1.8 0 0 0 1.8-1.8v-2.6"/></symbol>
     <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4.8 19.2l.8-3.9L15.8 5.1a1.9 1.9 0 0 1 2.7 0l.4.4a1.9 1.9 0 0 1 0 2.7L8.7 18.4z"/><path d="m14 6.9 3.1 3.1"/></symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5.5" width="16" height="14.5" rx="3"/><path d="M4 10h16M8.5 3.5v4M15.5 3.5v4"/></symbol>
     <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.6 6.6l10.8 10.8M17.4 6.6 6.6 17.4"/></symbol>
     <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M8 5.7v12.6a1 1 0 0 0 1.53.85l9.9-6.3a1 1 0 0 0 0-1.7l-9.9-6.3A1 1 0 0 0 8 5.7z"/></symbol>
     <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8.4 5.2 4.4 9.2l4 4"/><path d="M4.8 9.2h9.6a5 5 0 0 1 0 10H9.8"/></symbol>
@@ -115,6 +116,7 @@
       <div class="panel tt-home" id="h-tt-panel">
         <div class="panel-head"><h2>오늘 타임테이블</h2><a href="#timetable" data-go="timetable">전체 보기</a></div>
         <div id="h-tt"></div>
+        <div id="h-plan"></div>
       </div>
       <div class="panel" id="h-exams-panel">
         <div class="panel-head"><h2>시험 준비</h2><a href="#board" data-go="board">시험 범위 열기</a></div>
@@ -403,23 +405,48 @@
 
     <!-- 타임테이블 -->
     <section id="view-timetable" class="view">
-      <h1>타임테이블</h1>
-      <p class="tagline muted">공부한 시간이 과목 색으로 칠해져요. 스톱워치나 타이머로 공부하면 저절로 채워져요.</p>
-      <div class="panel ttv-panel">
-        <div class="panel-head">
-          <div class="cal-nav ttv-nav"><button type="button" id="ttv-prev" aria-label="전날">‹</button><span id="ttv-title" aria-live="polite"></span><button type="button" id="ttv-next" aria-label="다음 날">›</button></div>
-          <button class="btn sm" type="button" id="ttv-today" hidden>오늘로</button>
+      <div class="timer-head tt-head">
+        <h1>타임테이블</h1>
+        <div class="seg tt-mode" role="group" aria-label="보기">
+          <button class="seg-btn active" type="button" data-tt-mode="day" aria-pressed="true">하루</button>
+          <button class="seg-btn" type="button" data-tt-mode="week" aria-pressed="false">주간</button>
         </div>
-        <p class="ttv-sum" id="ttv-sum"></p>
-        <div class="tt-legend" id="ttv-legend" hidden></div>
-        <div id="ttv-grid"></div>
-        <div class="tt-foot" id="ttv-foot"></div>
       </div>
-      <div class="panel">
-        <div class="panel-head"><h2>이날의 공부 기록</h2><button class="btn link" type="button" data-log-open="time">＋ 공부 시간 추가</button></div>
-        <ul class="simple-list" id="ttv-list"></ul>
+      <p class="tagline muted">공부한 시간은 과목 색으로 칠해지고, 세워 둔 일정은 점선으로 보여요.</p>
+      <div id="ttv-day">
+        <div class="panel ttv-panel">
+          <div class="panel-head">
+            <div class="cal-nav ttv-nav"><button type="button" id="ttv-prev" aria-label="전날">‹</button><span id="ttv-title" aria-live="polite"></span><button type="button" id="ttv-next" aria-label="다음 날">›</button></div>
+            <button class="btn sm" type="button" id="ttv-today" hidden>오늘로</button>
+          </div>
+          <p class="ttv-sum" id="ttv-sum"></p>
+          <div class="tt-legend" id="ttv-legend" hidden></div>
+          <div id="ttv-grid"></div>
+          <div class="tt-foot" id="ttv-foot"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2 id="ttv-plans-title">이날의 일정</h2><button class="btn link" type="button" data-ev-open="day">＋ 일정 추가</button></div>
+          <ul class="simple-list ev-list" id="ttv-plans"></ul>
+        </div>
+        <div class="panel" id="ttv-log-panel">
+          <div class="panel-head"><h2>이날의 공부 기록</h2><button class="btn link" type="button" data-log-open="time">＋ 공부 시간 추가</button></div>
+          <ul class="simple-list" id="ttv-list"></ul>
+        </div>
       </div>
-      <p class="muted small stats-foot">다른 날은 <a href="#stats" data-go="stats">통계</a>의 공부 달력에서 날짜를 누르고 ‘타임테이블’을 눌러도 볼 수 있어요.</p>
+      <div id="ttv-week" hidden>
+        <div class="panel wk-panel">
+          <div class="panel-head">
+            <div class="cal-nav ttv-nav"><button type="button" id="wk-prev" aria-label="지난주">‹</button><span id="wk-title" aria-live="polite"></span><button type="button" id="wk-next" aria-label="다음 주">›</button></div>
+            <button class="btn sm" type="button" id="wk-today" hidden>이번 주</button>
+          </div>
+          <p class="ttv-sum" id="wk-sum"></p>
+          <p class="wk-exam" id="wk-exam" hidden></p>
+          <div id="wk-grid"></div>
+          <div class="wk-key" aria-hidden="true"><span><i class="k-plan"></i>일정</span><span><i class="k-act"></i>실제 공부</span><span><i class="k-oth"></i>다른 일정</span><span><b>✓</b> 계획대로 함</span></div>
+        </div>
+        <div class="btn-row left wk-add"><button class="btn primary" type="button" data-ev-open="week">＋ 일정 추가</button><span class="muted small">표의 빈칸을 눌러도 그 시각으로 추가돼요</span></div>
+      </div>
+      <p class="muted small stats-foot">지난 날은 <a href="#stats" data-go="stats">통계</a>의 공부 달력에서 날짜를 누르고 ‘타임테이블’을 눌러도 볼 수 있어요.</p>
     </section>
 
     <!-- 계정·설정 -->
@@ -598,6 +625,7 @@
           <p>이번 달 공부 시간과 지난달 비교, 최근 6개월과 7일 그래프, 과목별 공부 시간(최근 7일·이번 달·전체), 최근 기록을 보여 줘요. <b>월 목표</b>를 정하면 달마다 다른 날 수에 맞춰 하루 기본 페이스와 오늘 남은 양을 계산해 줘요.</p>
           <p><b>공부 달력</b>은 날마다 공부한 만큼 진하게 칠해져요(1시간 미만 · 1~2시간 · 2~4시간 · 4시간 이상). 날짜를 누르면 그날 과목별로 얼마나 했는지와 함께, 스터디 플래너처럼 한 줄이 한 시간·한 칸이 10분인 <b>시간표</b>가 과목 색으로 칠해져 나와요. <b>인증 이미지</b>를 누르면 그날 공부를 인스타 스토리 크기 그림으로 만들어 공유하거나 저장할 수 있어요. 잘못 남긴 기록은 ✕로 지우고, 빠진 시간은 <b>＋ 직접 기록</b>으로 채워요. ‘몇 시부터 몇 시까지’로 적으면 시간표에도 칠해지고, 시각을 모르면 ‘공부한 시간만’ 적어요.</p>
           <p><b>타임테이블</b>은 하루 전체를 한 줄이 한 시간, 한 칸이 10분인 표로 보여 줘요. 스톱워치나 타이머로 공부하는 동안에는 지금 재는 시간도 바로 칠해지고, 그날의 기록을 시간 순서로 보고 지울 수 있어요. 홈의 ‘오늘 타임테이블’이나 공부 달력에서 날짜를 누른 뒤 ‘타임테이블’을 눌러 열어요. 기록하지 못한 공부는 <b>＋ 공부 시간 추가</b>나 그 시각의 칸을 눌러 몇 시부터 몇 시까지 했는지 적으면 칸에 칠해져요. 시각 없이 공부한 시간만 적은 직접 기록은 칸에는 칠해지지 않아요.</p>
+          <p><b>일정</b>은 공부할 시간을 미리 정해 두는 기능이에요. 타임테이블의 <b>＋ 일정 추가</b>나 앞으로의 칸을 눌러 과목과 시각을 적고, 학원처럼 되풀이되는 일정은 ‘매주’와 요일을 골라요. 약속·운동처럼 공부가 아닌 일은 ‘다른 일정’으로 넣어요. 하루 보기에서는 일정이 점선으로, 공부한 시간은 칠한 칸으로 겹쳐 보이고, <b>주간</b>을 누르면 월~일 스케줄 표가 나와요. 끝난 일정을 타이머 없이 했다면 ‘계획대로 했어요’를 눌러 바로 기록하고, 일정을 누르면 고치거나 지울 수 있어요(반복 일정은 이 날만·앞으로·전체 중에서 골라요). 할 일 옆 달력 단추를 누르면 그 할 일을 할 시간을 정해요.</p>
           <p>새벽까지 공부한다면 <a href="#account" data-go="account">계정·설정</a>의 <b>하루 시작 시각</b>을 새벽으로 옮겨 보세요. 그 전의 새벽 공부는 전날 공부로 세요.</p>
         </details>
         <details>
@@ -638,6 +666,14 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="2.11" data-date="2026년 11월 14일">
+            <ul class="news">
+              <li><b>일정 추가</b>: 공부할 시간을 과목과 함께 ‘몇 시부터 몇 시까지’로 미리 정해 두세요. 학원처럼 매주 같은 요일에 하는 일정은 반복으로 한 번만 넣으면 되고, 약속·운동 같은 ‘다른 일정’도 넣어 빈 시간을 볼 수 있어요. 할 일 옆 달력 단추로 그 할 일을 할 시간도 정해요</li>
+              <li><b>주간 스케줄 표</b>: 타임테이블에서 ‘주간’을 누르면 월~일 시간표에 일정과 실제 공부가 함께 나와요. 계획대로 공부한 일정에는 ✓가 붙고, 다가오는 시험 D-day와 그날 마감인 할 일도 보여요</li>
+              <li><b>계획과 실제 비교</b>: 하루 보기에서 일정은 점선, 공부한 시간은 칠한 칸으로 겹쳐 보여요. 타이머 없이 한 공부(학원 수업 등)는 끝난 일정 옆 ‘계획대로 했어요’를 누르면 바로 기록돼요</li>
+              <li><b>일정으로 공부 시작</b>: 지금 공부 일정이 있으면 홈과 ‘공부 시작하기’ 맨 위에 나와서, 누르면 그 과목으로 스톱워치가 바로 켜져요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="2.10" data-date="2026년 11월 13일">
             <ul class="news">
               <li><b>범위도 골라 공부 시작하기</b>: ‘공부 시작하기’에서 과목을 고르면 할 일과 함께 그 과목의 시험 범위 중 아직 안 끝낸 항목도 나와요. 범위를 골라 시작하면 스톱워치를 멈출 때 그 범위를 끝냈는지 물어보고 체크해 줘요</li>
@@ -796,6 +832,46 @@
     </form>
   </div>
 
+  <!-- 일정 추가·고치기 -->
+  <div class="ask-backdrop" id="ev-dlg" hidden>
+    <form class="ask-box ev-box" id="ev-form" role="dialog" aria-modal="true" aria-labelledby="ev-title-h">
+      <h2 id="ev-title-h">일정 추가</h2>
+      <div class="seg ev-kind" role="group" aria-label="일정 종류">
+        <button class="seg-btn active" type="button" data-ev-kind="study" aria-pressed="true">공부 일정</button>
+        <button class="seg-btn" type="button" data-ev-kind="other" aria-pressed="false">다른 일정 (약속·운동 등)</button>
+      </div>
+      <div class="ev-two">
+        <label class="field" id="ev-subject-f">과목<select id="ev-subject"></select></label>
+        <label class="field"><span id="ev-name-label">이름 <small>(선택)</small></span><input id="ev-name" maxlength="40" placeholder="예: 학원, 문제집 3단원" autocomplete="off"></label>
+      </div>
+      <label class="field">날짜<input type="date" id="ev-date"></label>
+      <div class="log-clock">
+        <label class="field">시작
+          <span class="time-input clock-input"><input type="number" id="ev-sh" min="0" max="23" inputmode="numeric" placeholder="시" aria-label="시작 시"><b aria-hidden="true">:</b><input type="number" id="ev-sm" min="0" max="59" step="5" inputmode="numeric" placeholder="분" aria-label="시작 분"></span>
+        </label>
+        <label class="field">끝
+          <span class="time-input clock-input"><input type="number" id="ev-eh" min="0" max="24" inputmode="numeric" placeholder="시" aria-label="끝 시"><b aria-hidden="true">:</b><input type="number" id="ev-em" min="0" max="59" step="5" inputmode="numeric" placeholder="분" aria-label="끝 분"></span>
+        </label>
+      </div>
+      <p class="log-sum small" id="ev-sum" aria-live="polite" hidden></p>
+      <div class="field">반복
+        <div class="lock-chips ev-rep" role="group" aria-label="반복">
+          <button class="chip active" type="button" data-ev-rep="" aria-pressed="true">한 번만</button><button class="chip" type="button" data-ev-rep="daily" aria-pressed="false">매일</button><button class="chip" type="button" data-ev-rep="weekly" aria-pressed="false">매주</button>
+        </div>
+        <div class="ev-days" id="ev-days" role="group" aria-label="반복할 요일" hidden>
+          <button type="button" data-ev-day="1" aria-pressed="false">월</button><button type="button" data-ev-day="2" aria-pressed="false">화</button><button type="button" data-ev-day="3" aria-pressed="false">수</button><button type="button" data-ev-day="4" aria-pressed="false">목</button><button type="button" data-ev-day="5" aria-pressed="false">금</button><button type="button" data-ev-day="6" aria-pressed="false">토</button><button type="button" data-ev-day="0" aria-pressed="false">일</button>
+        </div>
+      </div>
+      <label class="field" id="ev-until-f" hidden>언제까지<input type="date" id="ev-until" placeholder="끝나는 날 없음"></label>
+      <label class="field" id="ev-task-f"><span>할 일과 연결 <small>(선택)</small></span><select id="ev-task"></select></label>
+      <div class="ask-actions ev-actions">
+        <button class="btn danger" type="button" id="ev-del" hidden>지우기</button>
+        <button class="btn" type="button" id="ev-cancel">취소</button>
+        <button class="btn primary" type="submit" id="ev-save">추가</button>
+      </div>
+    </form>
+  </div>
+
   <!-- 공부 시간 직접 기록 -->
   <div class="ask-backdrop" id="log-dlg" hidden>
     <form class="ask-box" id="log-form" role="dialog" aria-modal="true" aria-labelledby="log-title">
@@ -879,6 +955,7 @@
 
   <script src="js/srs.js"></script>
   <script src="js/stats.js"></script>
+  <script src="js/schedule.js"></script>
   <script src="js/store.js"></script>
   <script src="js/scope.js"></script>
   <script src="js/share.js"></script>
@@ -890,6 +967,7 @@
   <script src="js/lock.js"></script>
   <script src="js/stopwatch.js"></script>
   <script src="js/timetable.js"></script>
+  <script src="js/events.js"></script>
   <script src="js/cloud.js"></script>
 </body>
 </html>

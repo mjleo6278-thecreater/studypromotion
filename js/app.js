@@ -196,6 +196,16 @@
     return `<span>D-${diff} (${esc(due.slice(5).replace('-', '/'))})</span>`;
   }
 
+  // 이 할 일을 하기로 정한 다음 일정: ‘🗓 11/16 (월) 16:00’
+  function planLabel(t) {
+    if (!window.Schedule) return '';
+    const o = Schedule.next(store.get().events, now(), 60, (ev) => ev.taskId === t.id);
+    if (!o) return '';
+    const d = Schedule.keyDate(o.date);
+    const when = o.date === todayKey() ? '오늘' : `${d.getMonth() + 1}/${d.getDate()} (${'일월화수목금토'[d.getDay()]})`;
+    return `<span class="task-plan" data-tt-open="${esc(o.date)}">${ic('cal')}${when} ${esc(Schedule.fmtHM(Schedule.parseHM(o.ev.start)))}</span>`;
+  }
+
   let editingTaskId = null;
   let taskDraft = null; // 고치는 중 다시 그려질 때 입력값 유지
   function taskItem(t) {
@@ -218,8 +228,10 @@
           ${s ? `<span><i class="dot" style="background:${esc(s.color)}"></i>${esc(s.name)}</span>` : ''}
           ${t.estimateMin ? `<span>${Stats.formatMinutes(t.estimateMin)}</span>` : ''}
           ${t.done ? '' : dueLabel(t.due)}
+          ${t.done ? '' : planLabel(t)}
         </div>
       </div>
+      ${t.done ? '' : `<button class="icon-btn task-plan-btn" aria-label="시간 정하기" title="시간 정하기">${ic('cal')}</button>`}
       <button class="icon-btn task-edit-btn" aria-label="고치기" title="고치기">${ic('edit')}</button>
       <button class="icon-btn task-del" aria-label="삭제" title="삭제">${ic('x')}</button>
     </li>`;
@@ -267,6 +279,11 @@
       return;
     }
     if (e.target.closest('[data-task-cancel]')) { editingTaskId = null; taskDraft = null; render(); return; }
+    if (e.target.closest('.task-plan-btn')) {
+      const t = store.get().tasks.find((x) => x.id === id);
+      if (t && window.Events) window.Events.open({ taskId: t.id, subjectId: t.subjectId });
+      return;
+    }
     if (e.target.classList.contains('task-check')) {
       store.update((st) => {
         const t = st.tasks.find((x) => x.id === id);
@@ -345,6 +362,8 @@
     store.update((st) => {
       st.subjects = st.subjects.filter((x) => x.id !== id);
       st.tasks.forEach((t) => { if (t.subjectId === id) t.subjectId = null; });
+      // 일정은 과목 이름을 일정 이름으로 남긴다
+      (st.events || []).forEach((ev) => { if (ev.subjectId === id) { if (!ev.title) ev.title = s.name; ev.subjectId = null; } });
     });
   });
 
@@ -1489,16 +1508,16 @@
   function openLog(opts) {
     opts = opts || {};
     logReturnFocus = document.activeElement;
-    const sid = timer.subjectId && subjectById(timer.subjectId) ? timer.subjectId : '';
+    const sid = opts.subjectId && subjectById(opts.subjectId) ? opts.subjectId : timer.subjectId && subjectById(timer.subjectId) ? timer.subjectId : '';
     $('#log-subject').innerHTML = subjectOptions(sid, true);
     ['#log-h', '#log-m', '#log-sh', '#log-sm', '#log-eh', '#log-em'].forEach((sel) => { $(sel).value = ''; });
     const tk = todayKey();
     $('#log-date').value = opts.day && /^\d{4}-\d{2}-\d{2}$/.test(opts.day) && opts.day <= tk ? opts.day : tk;
     $('#log-date').max = tk;
-    $('#log-label').value = '';
+    $('#log-label').value = opts.label || '';
     if (opts.start > 0) {
-      // 누른 칸부터 한 시간 (지금이나 그날 끝을 넘지 않게)
-      const day = $('#log-date').value, end = Math.min(opts.start + 3600000, Math.floor(now() / 60000) * 60000, logDayRange(day)[1]);
+      // 누른 칸부터 한 시간 (일정이 있으면 일정 끝까지. 지금이나 그날 끝을 넘지 않게)
+      const day = $('#log-date').value, end = Math.min(opts.end > opts.start ? opts.end : opts.start + 3600000, Math.floor(now() / 60000) * 60000, logDayRange(day)[1]);
       const a = new Date(opts.start);
       $('#log-sh').value = a.getHours();
       $('#log-sm').value = pad2(a.getMinutes());
@@ -1581,7 +1600,9 @@
       parts.push({ a, b, end: b === dayEnd });
       a = b;
     }
-    store.update((st) => parts.forEach((p) => st.sessions.push({ id: uid(), subjectId, minutes: Math.round((p.b - p.a) / 60000), startAt: p.a, endedAt: p.end ? p.b - 1 : p.b, label: memo || '직접 기록', manual: true })));
+    const ids = parts.map(() => uid());
+    store.update((st) => parts.forEach((p, i) => st.sessions.push({ id: ids[i], subjectId, minutes: Math.round((p.b - p.a) / 60000), startAt: p.a, endedAt: p.end ? p.b - 1 : p.b, label: memo || '직접 기록', manual: true })));
+    return ids;
   }
 
   document.addEventListener('click', (e) => {
@@ -1684,8 +1705,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '2.10';
-  const APP_DATE = '2026년 11월 13일';
+  const APP_VERSION = '2.11';
+  const APP_DATE = '2026년 11월 14일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
@@ -1988,7 +2009,7 @@
   window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone,
     // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
     timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null } : null),
-    openLog, timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
+    openLog, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   initHistory();

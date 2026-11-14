@@ -133,7 +133,7 @@ const SW = 'studypromotion.stopwatch';
   page = await open();
   await page.goto(base + '#timetable');
   await page.waitForFunction(() => window.App && window.Timetable && App.view === 'timetable');
-  assert(/칸을 눌러 추가/.test(await page.textContent('#ttv-foot')), '칸을 누르면 추가할 수 있다고 알려 줌');
+  assert(/칸을 누르면 공부 시간을/.test(await page.textContent('#ttv-foot')), '칸을 누르면 추가할 수 있다고 알려 줌');
   // 10시 줄의 세 번째 칸(20~30분)을 누름
   let bar = await (await page.$('[data-tt-row="10"] .tt-bar')).boundingBox();
   await page.touchscreen.tap(bar.x + bar.width * 0.42, bar.y + bar.height / 2);
@@ -162,7 +162,9 @@ const SW = 'studypromotion.stopwatch';
   bar = await (await page.$('[data-tt-row="18"] .tt-bar')).boundingBox();
   await page.touchscreen.tap(bar.x + 10, bar.y + bar.height / 2);
   await page.waitForTimeout(200);
-  assert(await page.isHidden('#log-dlg') && /아직 오지 않은 시간/.test(await toastOf(page)), '지나지 않은 칸은 열지 않고 알림');
+  assert(await page.isHidden('#log-dlg') && await page.isVisible('#ev-dlg') && await page.inputValue('#ev-sh') === '18', '지나지 않은 칸은 공부 기록 대신 그 시각의 일정 추가 창 (v2.11)');
+  await page.tap('#ev-cancel');
+  await page.waitForTimeout(150);
 
   /* ===== 3) 겹치는 시간, 잘못 적은 시각 ===== */
   await page.tap('#view-timetable [data-log-open]');

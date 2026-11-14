@@ -135,7 +135,7 @@
 
   function localEmpty() {
     const st = store.get();
-    return !st.tasks.length && !st.sessions.length && !st.cards.length && !st.topics.length && !st.exams.length;
+    return !st.tasks.length && !st.sessions.length && !st.cards.length && !st.topics.length && !st.exams.length && !(st.events || []).length;
   }
 
   async function onUser(u) {

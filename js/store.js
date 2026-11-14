@@ -19,6 +19,7 @@
         { id: uid(), name: '영어', color: '#3fa774' },
       ],
       tasks: [],
+      events: [], // 일정 (schedule.js 참고)
       sessions: [],
       decks: [],
       cards: [],
@@ -42,6 +43,7 @@
       version: VERSION,
       subjects: Array.isArray(data.subjects) ? data.subjects : base.subjects,
       tasks: Array.isArray(data.tasks) ? data.tasks : [],
+      events: Array.isArray(data.events) ? data.events : [],
       sessions: Array.isArray(data.sessions) ? data.sessions : [],
       decks: Array.isArray(data.decks) ? data.decks : [],
       cards: Array.isArray(data.cards) ? data.cards : [],
