@@ -118,3 +118,17 @@ test('일정: 지금 할 공부 일정, 계획한 시간 합계', () => {
   assert.strictEqual(S.current([night], at(17, 0, 30)).id, 'n');
   assert.strictEqual(S.plannedMinutes([e, o], '2026-11-16', '2026-11-22'), 360); // 월수금 2시간씩, 다른 일정은 빼고
 });
+
+test('일정: 반복을 글로, 다음 일정 찾기', () => {
+  assert.strictEqual(S.repeatText(ev({})), '');
+  assert.strictEqual(S.repeatText(ev({ repeat: { freq: 'daily' } })), '매일');
+  assert.strictEqual(S.repeatText(ev({ repeat: { freq: 'weekly', days: [5, 1, 3] } })), '매주 월·수·금');
+  assert.strictEqual(S.repeatText(ev({ repeat: { freq: 'weekly', days: [0, 6] } })), '매주 토·일');
+  assert.strictEqual(S.repeatText(ev({ repeat: { freq: 'weekly', days: [2], until: '2026-12-02' } })), '매주 화 · 12월 2일까지');
+  const t = ev({ id: 't', taskId: 'task1', date: '2026-11-18' });
+  const o = ev({ id: 'o', date: '2026-11-17' });
+  assert.strictEqual(S.next([t, o], at(16, 9), 7, (e) => e.taskId === 'task1').date, '2026-11-18');
+  assert.strictEqual(S.next([t, o], at(16, 9), 7).id, 'o');
+  assert.strictEqual(S.next([t], at(19, 9), 7), null); // 이미 지남
+  assert.strictEqual(S.next([t], at(14, 9), 3), null); // 3일 안에 없음
+});

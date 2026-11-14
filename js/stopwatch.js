@@ -371,10 +371,21 @@
     try {
       const list = subjects();
       let sid = '';
-      if (list.length) {
-        sid = await App.choose('어떤 과목을 공부할까요?',
-          list.map((s) => ({ value: s.id, label: s.name, color: s.color })).concat([{ value: '', label: '과목 없이', color: '' }]), { cls: 'start-sheet' });
+      // 지금(또는 10분 안에) 공부 일정이 있으면 맨 위에 보여 주고, 고르면 바로 그 일정으로 시작
+      const plan = window.Schedule ? Schedule.current(store.get().events, now(), 10) : null;
+      if (list.length || plan) {
+        const opts = list.map((s) => ({ value: s.id, label: s.name, color: s.color })).concat([{ value: '', label: '과목 없이', color: '' }]);
+        if (plan) {
+          const ps = subjectOf(plan.ev.subjectId);
+          opts.unshift({ head: '지금 일정' }, { value: 'plan:', label: window.Events ? Events.nameOf(plan.ev) : (ps ? ps.name : plan.ev.title), hint: `${Schedule.fmtHM(Schedule.parseHM(plan.ev.start))} ~ ${Schedule.fmtHM(Schedule.parseHM(plan.ev.end))}`, color: ps ? ps.color : '' }, { head: '다른 과목' });
+        }
+        sid = await App.choose('어떤 과목을 공부할까요?', opts, { cls: 'start-sheet' });
         if (sid === undefined) return;
+        if (sid === 'plan:') {
+          if (sw.running) return;
+          await startPlan(plan.ev);
+          return;
+        }
       }
       const tasks = openTasks(sid);
       const groups = openTopics(sid, new Set(tasks.map((t) => t.topicId).filter(Boolean)));
@@ -410,6 +421,16 @@
       await start(sid, extra);
     } finally { flowOpen = false; }
   }
+  // 일정으로 공부 시작: 일정의 과목과 (있으면) 할 일·이름으로 스톱워치를 켠다
+  async function startPlan(ev) {
+    if (!ev || sw.running || busy || (window.Lock && window.Lock.state)) { if (sw.running) { showTab('sw'); App.go('timer'); } return; }
+    const sid = ev.subjectId && subjectOf(ev.subjectId) ? ev.subjectId : '';
+    const t = ev.taskId ? store.get().tasks.find((x) => x.id === ev.taskId && !x.done) : null;
+    const extra = t ? { label: t.title, taskId: t.id } : ev.title ? { label: ev.title } : undefined;
+    showTab('sw');
+    App.go('timer');
+    await start(sid, extra);
+  }
   const homeStart = $('#h-start');
   if (homeStart) homeStart.addEventListener('click', () => startFlow());
 
@@ -442,7 +463,7 @@
   // 지금 재고 있는 구간 (타임테이블이 실시간으로 그린다). 재는 중이 아니면 null
   const live = () => (sw.running ? { from: sw.startAt, to: now(), subjectId: sw.subjectId && subjectOf(sw.subjectId) ? sw.subjectId : null, label: sw.label } : null);
 
-  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: () => tab, showTab, render, todayMinutes, live, startFlow };
+  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: () => tab, showTab, render, todayMinutes, live, startFlow, startPlan };
   if (sw.running) begin();
   render();
 })();

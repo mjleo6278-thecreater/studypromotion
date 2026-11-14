@@ -108,7 +108,7 @@ const server = http.createServer((req, res) => {
   }));
   await page.goto(base + '#plan');
   const taskBtns = await page.$$eval('#tasklist .task .icon-btn', (els) => els.map((e) => { const r = e.getBoundingClientRect(); const i = e.querySelector('svg.ic').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), iw: Math.round(i.width), text: e.textContent.trim() }; }));
-  assert(taskBtns.length === 2 && taskBtns[0].w === taskBtns[1].w && taskBtns[0].h === taskBtns[1].h && taskBtns[0].w >= 36, '할 일 고치기·삭제 버튼 크기 같음 (' + taskBtns.map((b) => b.w + 'x' + b.h).join(', ') + ')');
+  assert(taskBtns.length === 3 && taskBtns.every((b) => b.w === taskBtns[0].w && b.h === taskBtns[0].h) && taskBtns[0].w >= 36, '할 일 시간 정하기·고치기·삭제 버튼 크기 같음 (' + taskBtns.map((b) => b.w + 'x' + b.h).join(', ') + ')');
   assert(taskBtns.every((b) => b.iw === 18 && !b.text), '아이콘 18px, 글꼴 기호 없음');
   await page.tap('#tasklist .task-del'); // 아이콘(svg) 위를 눌러도 삭제
   assert((await state()).tasks.length === 0, '삭제 아이콘을 눌러 할 일 삭제');

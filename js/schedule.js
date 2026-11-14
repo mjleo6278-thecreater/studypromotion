@@ -184,7 +184,30 @@
     return Object.assign({}, ev, { repeat: Object.assign({}, ev.repeat, { until: shiftKey(key, -1) }), skip: (ev.skip || []).filter((k) => k < key) });
   }
 
-  const api = { parseHM, fmtHM, keyDate, dateToKey, shiftKey, weekday, weekStart, daysBetween, isKey, clockAt, span, occursOn, forDay, range, clean, actualMinutes, status, current, plannedMinutes, skipDay, endBefore };
+  // 반복을 글로: '매일', '매주 월·수·금', '매주 화 · 12월 2일까지'
+  const WD = ['일', '월', '화', '수', '목', '금', '토'];
+  function repeatText(ev) {
+    const r = ev && ev.repeat;
+    if (!r) return '';
+    const days = r.freq === 'daily' ? '매일' : r.days.length === 7 ? '매일' : '매주 ' + r.days.slice().sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)).map((d) => WD[d]).join('·');
+    if (!r.until) return days;
+    const u = keyDate(r.until);
+    return days + ' · ' + (u.getMonth() + 1) + '월 ' + u.getDate() + '일까지';
+  }
+
+  // 지금부터 days일 안에서 조건에 맞는 다음 일정 (이미 끝난 것은 건너뜀)
+  function next(events, now, days, pred) {
+    const list = (events || []).filter(pred || (() => true));
+    if (!list.length) return null;
+    const k0 = Stats ? Stats.dayKey(now) : dateToKey(new Date(now));
+    for (let i = -1; i < days; i++) {
+      const o = forDay(list, shiftKey(k0, i)).find((x) => x.to > now);
+      if (o) return o;
+    }
+    return null;
+  }
+
+  const api = { parseHM, fmtHM, keyDate, dateToKey, shiftKey, weekday, weekStart, daysBetween, isKey, clockAt, span, occursOn, forDay, range, clean, actualMinutes, status, current, plannedMinutes, skipDay, endBefore, repeatText, next };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Schedule = api;
 })(typeof window !== 'undefined' ? window : globalThis);
