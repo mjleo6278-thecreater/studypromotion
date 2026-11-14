@@ -26,6 +26,8 @@ const ASSETS = [
   './js/stopwatch.js',
   './js/timetable.js',
   './js/events.js',
+  './js/aicore.js',
+  './js/ai.js',
   './js/cloud.js',
   './icons/icon-192.png',
   './icons/icon-512.png',

@@ -74,7 +74,7 @@ const server = http.createServer((req, res) => {
   assert(requests.length === 0, '바깥으로 나가는 요청 없음 ' + requests.slice(0, 3).join(' '));
   assert(await page.evaluate(() => typeof window.firebase === 'undefined'), '로그인 도구(Firebase)를 불러오지 않음');
 
-  /* 3) 미리 보기 단추와 안내 창 (지금은 미리 보기에만 있는 변경이 없다) */
+  /* 3) 미리 보기 단추와 안내 창 (미리 보기에만 있는 변경: AI 도우미 세 가지) */
   await page.evaluate(() => App.go('home'));
   await page.waitForTimeout(300);
   const fit = await page.evaluate(() => { const b = document.querySelector('.topbar'); return { sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, pill: document.querySelector('#pv-open').getBoundingClientRect().right, brand: document.querySelector('.brand').getBoundingClientRect().height, bar: b.getBoundingClientRect().height }; });
@@ -82,11 +82,21 @@ const server = http.createServer((req, res) => {
   await shot('pv-01-home');
   await page.tap('#pv-open');
   await page.waitForSelector('.ui-back.in .pv-sheet');
-  assert(await page.evaluate(() => Preview.items.length) === 0 && (await page.locator('.pv-item').count()) === 0, '미리 보기에만 있는 변경은 지금 없음');
-  assert(/미리 보기에만 있는 변경이 없어요/.test(await page.textContent('.pv-sheet .pv-none')) && /버전 2\.9/.test(await page.textContent('.pv-sheet .pv-none')), '안내 창에 까닭이 적혀 있음 (개선안은 실제 앱 2.9에 들어감)');
+  assert(await page.evaluate(() => Preview.items.length) === 3 && (await page.locator('.pv-item').count()) === 3 && /AI 도우미 세컨드/.test(await page.textContent('.pv-item >> nth=0')), '미리 보기에만 있는 변경 세 가지 (AI 도우미)');
+  assert(/진짜 AI가 아니라 정해 둔 예시에만 답하는 가짜/.test(await page.textContent('.pv-sheet .pv-foot')), '미리 보기의 AI가 가짜라는 것이 적혀 있음');
   assert(await page.isVisible('[data-pv-sample]') && await page.isVisible('[data-pv-empty]'), '예시 기록 다시 넣기·비우기 단추는 그대로');
   await shot('pv-02-panel');
-  await page.tap('.pv-sheet [data-ui-close]');
+  // 써 보기: 대화 창이 열리고 가짜 AI가 일정을 제안한다. 적용하면 미리 보기의 기록만 바뀐다
+  const evBefore = await page.evaluate(() => App.store.get().events.length);
+  await page.tap('[data-pv-try="1"]');
+  await page.waitForFunction(() => window.AI && AI.messages.length === 2 && !AI.busy && document.querySelector('#ai-log [data-plan-apply]'), null, { timeout: 15000 });
+  assert(await page.isVisible('#ai-panel .ai-sheet') && /일정 추가: 수학/.test(await page.textContent('#ai-log .ai-plan')) && /진짜가 아니에요/.test(await page.textContent('.ai-foot')), "'써 보기'를 누르면 대화 창이 열리고 가짜 AI가 일정을 제안함");
+  await shot('pv-02b-ai');
+  await page.tap('#ai-log [data-plan-apply]');
+  await page.waitForTimeout(300);
+  assert(await page.evaluate(() => App.store.get().events.length) === evBefore + 1, '적용하면 미리 보기의 일정이 하나 늘어남');
+  assert(requests.length === 0 && await page.evaluate(() => !!localStorage.getItem('studypromotion-preview.ai') && !localStorage.getItem('studypromotion.ai')), '가짜 AI는 바깥으로 아무것도 보내지 않고, 대화도 미리 보기 이름으로만 저장');
+  await page.tap('#ai-close');
   await page.waitForTimeout(300);
   // 미리 보기 파일에도 새 기능이 그대로 들어 있다 (타임테이블, 공부 시작하기)
   assert(await page.evaluate(() => !!window.Timetable && App.version === '2.11') && await page.isVisible('#h-start') && await page.isVisible('#h-tt .day-strip'), '미리 보기 파일에도 타임테이블과 공부 시작하기가 들어 있음');

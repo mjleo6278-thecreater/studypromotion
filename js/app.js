@@ -742,6 +742,23 @@
 
   // 집중 타이머가 돌거나 멈춰 있는 중이면 'focus'/'break', 아니면 null (스톱워치와 동시에 재지 않게)
   function timerBusy() { return timer.running || timer.remaining < timer.total ? timer.mode : null; }
+  // AI 도우미가 말로 집중 타이머를 켤 때: 과목과 (있으면) 길이를 정하고 바로 시작한다. 이미 무언가 재고 있으면 아무것도 하지 않고 false
+  function startFocus(opts) {
+    opts = opts || {};
+    if (timerBusy() || (window.Stopwatch && window.Stopwatch.running()) || (window.Lock && window.Lock.state)) return false;
+    if (window.Stopwatch) window.Stopwatch.showTab('focus');
+    timer.subjectId = opts.subjectId && subjectById(opts.subjectId) ? opts.subjectId : '';
+    timer.label = null;
+    timer.topicId = null;
+    timer.startedAt = 0;
+    setMode('focus');
+    if (opts.minutes) setLen(opts.minutes);
+    go('timer');
+    startTimer();
+    return true;
+  }
+  // 설정의 집중·휴식 시간이 화면 밖에서 바뀌었을 때(AI 도우미), 쉬고 있는 타이머에 새 길이를 보여 준다
+  function syncTimerLen() { if (!timerBusy()) setMode(timer.mode); }
   function stopTimerForStopwatch() {
     const mode = timerBusy();
     if (!mode) return;
@@ -1827,6 +1844,7 @@
   $('#reset-btn').addEventListener('click', async () => {
     if (!(await ask('모든 할 일, 기록, 카드가 삭제됩니다. 계속할까요?', { ok: '모두 삭제', danger: true }))) return;
     store.reset();
+    if (window.AI && window.AI.clear) window.AI.clear(); // AI 도우미와 나눈 대화도 함께 지운다
     setMode('focus');
     toast('초기화했어요');
   });
@@ -2009,7 +2027,7 @@
   window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone,
     // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
     timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null } : null),
-    openLog, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
+    openLog, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   initHistory();

@@ -4,8 +4,8 @@
   "description": "스터디 프로모션: 시험 범위 화이트보드, 학습 계획, 집중 타이머, 플래시카드 복습, 통계",
   "private": true,
   "scripts": {
-    "test": "node --test tests/logic.test.js tests/scope.test.js tests/lock.test.js tests/cloud.test.js tests/feedback.test.js tests/daystart.test.js tests/schedule.test.js",
-    "test:e2e": "node tests/e2e.js && node tests/board.e2e.js && node tests/pwa.e2e.js && node tests/lock.e2e.js && node tests/pace.e2e.js && node tests/design.e2e.js && node tests/cloud.e2e.js && node tests/update.e2e.js && node tests/scope.e2e.js && node tests/today.e2e.js && node tests/polish.e2e.js && node tests/feedback.e2e.js && node tests/stopwatch.e2e.js && node tests/audit.e2e.js && node tests/improve.e2e.js && node tests/timetable.e2e.js && node tests/entry.e2e.js && node tests/schedule.e2e.js && node tests/preview-build.e2e.js",
+    "test": "node --test tests/logic.test.js tests/scope.test.js tests/lock.test.js tests/cloud.test.js tests/feedback.test.js tests/daystart.test.js tests/schedule.test.js tests/ai.test.js",
+    "test:e2e": "node tests/e2e.js && node tests/board.e2e.js && node tests/pwa.e2e.js && node tests/lock.e2e.js && node tests/pace.e2e.js && node tests/design.e2e.js && node tests/cloud.e2e.js && node tests/update.e2e.js && node tests/scope.e2e.js && node tests/today.e2e.js && node tests/polish.e2e.js && node tests/feedback.e2e.js && node tests/stopwatch.e2e.js && node tests/audit.e2e.js && node tests/improve.e2e.js && node tests/timetable.e2e.js && node tests/entry.e2e.js && node tests/schedule.e2e.js && node tests/ai.e2e.js && node tests/preview-build.e2e.js",
     "build": "node tools/build.js",
     "start": "python3 -m http.server 8080",
     "build:preview": "node tools/build-preview.js"
