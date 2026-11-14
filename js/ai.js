@@ -33,7 +33,7 @@
   };
 
   /* ---------- AI를 부르는 쪽 ---------- */
-  // ask(messages, { signal, onText }) → { text, left } (left: 오늘 남은 횟수, 모르면 null). 실패하면 err.aiCode에 까닭
+  // ask(messages, { signal, onText }) → { text, left, unlimited } (left: 오늘 남은 횟수, 모르면 null. unlimited: 횟수 제한이 없는 계정). 실패하면 err.aiCode에 까닭
   const fail = (code, more) => Object.assign(new Error(code), { aiCode: code }, more || {});
   const remote = {
     needsLogin: true,
@@ -53,9 +53,9 @@
         try { j = await res.json(); } catch (e) { /* 글이 아닌 답 */ }
         throw fail(j.error || (res.status === 429 ? 'limit' : res.status === 401 ? 'login' : 'server'), { scope: j.scope });
       }
-      // 답은 조금씩 온다: 한 줄에 data: {"t":"글 조각"} 또는 data: {"left":37}, 끝은 data: [DONE]
+      // 답은 조금씩 온다: 한 줄에 data: {"t":"글 조각"} 또는 data: {"left":19}·{"unlimited":true}, 끝은 data: [DONE]
       const reader = res.body.getReader(), dec = new TextDecoder();
-      let buf = '', text = '', left = null;
+      let buf = '', text = '', left = null, unlimited = false;
       for (;;) {
         const part = await reader.read();
         if (part.done) break;
@@ -72,9 +72,10 @@
           if (j.error) throw fail(j.error, { scope: j.scope });
           if (typeof j.t === 'string') { text += j.t; opts.onText(text); }
           if (typeof j.left === 'number') left = j.left;
+          if (j.unlimited === true) unlimited = true;
         }
       }
-      return { text, left };
+      return { text, left, unlimited };
     },
   };
   const provider = () => window.AIMock || (AI_ENDPOINT ? remote : null);
@@ -213,6 +214,7 @@
     login: 'AI 도우미는 로그인한 뒤에 쓸 수 있어요. 한 사람이 하루에 쓰는 횟수를 세기 위해서예요.',
     limit: '오늘 쓸 수 있는 횟수를 다 썼어요. 내일 오전 9시에 다시 채워져요.',
     'limit-all': '오늘은 모두가 쓸 수 있는 양을 다 썼어요. 내일 오전 9시부터 다시 쓸 수 있어요.',
+    closed: 'AI 도우미는 지금 먼저 써 보는 중이라 곧 열려요.',
     offline: '인터넷에 연결되지 않아 답을 받지 못했어요.',
     server: 'AI가 지금 답하지 못했어요. 잠시 뒤에 다시 해 주세요.',
   };
@@ -257,8 +259,9 @@
   // 한도는 한국 시각 오전 9시(= 0시 UTC)에 다시 채워진다. 그 전에 받은 남은 횟수만 보여 준다
   const quotaDay = (t) => Math.floor(t / 86400000);
   function renderLeft() {
-    const known = typeof S.left === 'number' && quotaDay(S.leftAt) === quotaDay(Date.now());
-    $('#ai-left', back).textContent = known ? `오늘 ${Math.max(0, S.left)}번 남음` : 'AI 도우미';
+    const today = quotaDay(S.leftAt) === quotaDay(Date.now());
+    $('#ai-left', back).textContent = today && S.left === 'unlimited' ? '횟수 제한 없음'
+      : today && typeof S.left === 'number' ? `오늘 ${Math.max(0, S.left)}번 남음` : 'AI 도우미';
   }
 
   /* ---------- 열고 닫기 ---------- */
@@ -375,7 +378,8 @@
         out = await p.ask(Core.messages(text, ctx, hist, true), { signal: ctrl.signal, onText });
         r = Core.parseReply(out.text);
       }
-      if (typeof out.left === 'number') { S.left = out.left; S.leftAt = Date.now(); }
+      if (out.unlimited) { S.left = 'unlimited'; S.leftAt = Date.now(); }
+      else if (typeof out.left === 'number') { S.left = out.left; S.leftAt = Date.now(); }
       finish(m, r, ctx);
     } catch (e) {
       if (e && e.name === 'AbortError') {

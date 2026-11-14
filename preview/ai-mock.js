@@ -6,7 +6,7 @@
  * 알아듣는 말은 예시 수준이다. 스페인어 풀이도 정해 둔 몇 가지뿐이다. */
 (function () {
   'use strict';
-  const LIMIT = 40;
+  const LIMIT = 20;
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const pad = (n) => String(n).padStart(2, '0');
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));

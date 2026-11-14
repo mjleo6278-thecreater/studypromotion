@@ -49,7 +49,8 @@ const server = http.createServer((req, res) => {
             opts.onText(text.slice(0, Math.ceil(text.length * i / 3)));
             await new Promise((ok) => setTimeout(ok, r && r.slow ? 400 : 15));
           }
-          return { text, left: 40 - window.__calls.length };
+          if (window.__unlimited) return { text, left: null, unlimited: true };
+          return { text, left: 20 - window.__calls.length };
         },
       };
     }, !!mock);
@@ -126,7 +127,7 @@ const server = http.createServer((req, res) => {
   assert(calls.length === 1 && !calls[0][0].content.includes('[앱 정보]') && calls[0][calls[0].length - 1].content === 'echar de menos가 무슨 뜻이야?', '표현 질문에는 앱 정보를 붙이지 않고 보냄');
   assert((await page.textContent('#ai-log .ai-msg.me .ai-bubble')) === 'echar de menos가 무슨 뜻이야?', '내가 보낸 말이 보임');
   assert((await last(page, '.ai-text b').first().textContent()) === 'echar de menos' && (await last(page, '.ai-text li').count()) === 1 && !/cards|\[\{/.test(await last(page, '.ai-text').textContent()), '답이 굵은 글씨·목록으로 보이고 꼬리표는 안 보임');
-  assert((await page.textContent('#ai-left')) === '오늘 39번 남음', '남은 횟수 표시');
+  assert((await page.textContent('#ai-left')) === '오늘 19번 남음', '남은 횟수 표시');
   assert((await last(page, '.ai-cardlist li').count()) === 2 && /덱 고르기/.test(await last(page, '[data-deck-pick]').textContent()), '외울 표현 두 개가 저장 단추와 함께 나옴');
   await last(page, '[data-card="0"]').tap();
   await page.waitForSelector('.ui-back.in .ch-opt');
@@ -220,6 +221,8 @@ const server = http.createServer((req, res) => {
   /* ===== 7) 답을 못 받았을 때 ===== */
   await say(page, '오늘 한도 넘김', { fail: 'limit' });
   assert(/오늘 쓸 수 있는 횟수를 다 썼어요/.test(await last(page, '.ai-err').textContent()) && (await last(page, '[data-retry]').count()) === 0 && await last(page, '[data-copy-q]').isVisible(), '하루 횟수를 다 쓰면 알림과 질문 복사');
+  await say(page, '아직 안 열림', { fail: 'closed' });
+  assert(/먼저 써 보는 중/.test(await last(page, '.ai-err').textContent()) && (await last(page, '[data-retry]').count()) === 0, '아직 열지 않은 계정이면 알림 (다시 보내기 없음)');
   await say(page, '인터넷 끊김', { fail: 'offline' });
   assert(/인터넷에 연결되지 않아/.test(await last(page, '.ai-err').textContent()), '인터넷이 없으면 알림');
   const before = await page.locator('#ai-log .ai-msg').count();
@@ -280,6 +283,11 @@ const server = http.createServer((req, res) => {
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => !AI.busy && document.querySelectorAll('#ai-log .ai-msg').length === 2);
   assert((await page.locator('#ai-log .ai-msg.me .ai-bubble').innerHTML()) === '첫 줄<br>둘째 줄' && (await page.inputValue('#ai-input')) === '', 'Enter로 보내고 Shift+Enter로 줄 바꿈');
+  await page.evaluate(() => { window.__unlimited = true; window.__replies.push('주인 계정의 답'); });
+  await page.fill('#ai-input', '나는 몇 번 남았어?');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => !AI.busy && document.querySelectorAll('#ai-log .ai-msg').length === 4);
+  assert((await page.textContent('#ai-left')) === '횟수 제한 없음', '횟수 제한이 없는 계정에는 그렇게 보임');
   await page.click('.tab[data-view="plan"]');
   assert(await page.evaluate(() => App.view === 'plan') && await page.isVisible('.ai-sheet'), '창을 열어 둔 채 다른 화면을 쓸 수 있음');
   await page.keyboard.press('Escape');
