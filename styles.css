@@ -1728,6 +1728,8 @@ input[type="search"]::-webkit-search-cancel-button {
   .ai-fab { right: 14px; bottom: calc(68px + env(safe-area-inset-bottom)); }
   body.ai-open .ai-fab { opacity: 0; pointer-events: none; }
 }
+/* 가로로 눕힌 폰(높이가 낮은 터치 화면)도 대화 창은 폰처럼 아래 시트로: 떠 있는 창은 너무 낮고 자판에 가려진다 */
+@media (max-height: 520px) and (pointer: coarse) { body.ai-open .ai-fab { opacity: 0; pointer-events: none; } }
 @media print { .ai-fab, .ai-back { display: none !important; } }
 body:has(.lock-screen:not([hidden])) .ai-fab { display: none; }
 
@@ -1740,7 +1742,7 @@ body:has(.lock-screen:not([hidden])) .ai-fab { display: none; }
   transform: translateY(100%); transition: transform .22s cubic-bezier(.2, .8, .2, 1); box-shadow: 0 -8px 32px rgba(0, 0, 0, .14);
 }
 .ai-back.in .ai-sheet { transform: none; }
-@media (min-width: 721px) {
+@media (min-width: 721px) and (min-height: 521px), (min-width: 721px) and (pointer: fine) {
   .ai-back, .ai-back.in { background: none; pointer-events: none; padding: 0; }
   .ai-sheet {
     position: fixed; right: 24px; bottom: 88px; width: 400px; max-width: calc(100vw - 48px); height: min(660px, calc(100dvh - 160px));
@@ -1857,13 +1859,13 @@ body:has(.lock-screen:not([hidden])) .ai-fab { display: none; }
 }
 .ai-form textarea:focus { border-color: var(--text); }
 .ai-form textarea::placeholder { color: var(--muted); }
-@media (min-width: 721px) { .ai-form textarea { font-size: 14.5px; } }
+@media (min-width: 721px) and (min-height: 521px), (min-width: 721px) and (pointer: fine) { .ai-form textarea { font-size: 14.5px; } }
 .ai-send { flex: none; width: 42px; height: 42px; border-radius: 50%; border: 0; padding: 0; background: var(--ink); color: var(--ink-text); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .ai-send svg { width: 20px; height: 20px; stroke-width: 2.2; }
 .ai-send.stop { background: var(--surface); color: var(--text); border: 1px solid var(--text); }
 .ai-send:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ai-foot { margin: 0; padding: 6px 16px calc(8px + env(safe-area-inset-bottom)); font-size: 11.5px; color: var(--muted); text-align: center; flex: none; }
-@media (min-width: 721px) { .ai-foot { padding-bottom: 10px; } }
+@media (min-width: 721px) and (min-height: 521px), (min-width: 721px) and (pointer: fine) { .ai-foot { padding-bottom: 10px; } }
 
 /* ================================================================
    처음 안내: 미리 해 두면 좋아요 (앱 설치 · 로그인) · 설치 방법 창 (v3.2)
@@ -1886,3 +1888,24 @@ body:has(.lock-screen:not([hidden])) .ai-fab { display: none; }
 .ih-mine { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
 .ui-install ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; line-height: 1.55; word-break: keep-all; }
 .ui-install .ih-sec p { margin: 6px 0 0; line-height: 1.5; word-break: keep-all; }
+
+/* 잠금 화면 가로 보기 (v3.2.1): 높이가 낮으면 칸이 눌려 '포기하기' 글씨가 깨지던 문제.
+   - 어떤 칸도 줄어들지 않게 하고, 높이가 낮을 때는 시계 글씨·아이콘·간격을 화면 높이에 맞춰 줄인다 */
+.lock-screen > * { flex-shrink: 0; }
+@media (max-height: 520px) {
+  .lock-screen { gap: 6px; padding-top: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .lock-icon { width: min(44px, 11vh); height: min(44px, 11vh); }
+  .lock-time { font-size: clamp(40px, 24vh, 96px); line-height: 1.1; }
+  .lock-quit { margin-top: 8px; }
+}
+/* 시작 화면도 가로(높이가 낮은 화면)에서 위쪽 판이 잘리지 않게 그림 높이를 화면에 맞춘다 */
+@media (max-height: 520px) {
+  .sp-art { width: auto; height: min(275px, calc(100vh - 110px)); margin-bottom: 10px; }
+}
+/* 날짜·선택 창도 가로에서 세 줄만 보이던 것을 화면 높이를 거의 다 쓰게 */
+@media (max-height: 520px) {
+  .ui-sheet { max-height: min(92vh, 560px); }
+  .ui-back.pop .ui-sheet { max-height: calc(100vh - 16px); }
+  .ui-day, .ui-back.pop .ui-day { max-height: 32px; }
+  .ui-cal-foot { padding-top: 8px; }
+}

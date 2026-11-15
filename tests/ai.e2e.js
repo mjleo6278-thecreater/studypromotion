@@ -297,6 +297,14 @@ const server = http.createServer((req, res) => {
   assert(await page.isHidden('#ai-panel'), 'Esc로 닫힘');
   await page.context().close();
 
+  // 가로로 눕힌 폰: 떠 있는 작은 창 대신 폰처럼 아래에서 올라오는 시트 (v3.2.1)
+  page = await open(true, { viewport: { width: 800, height: 380 } });
+  await page.click('#ai-fab');
+  await page.waitForTimeout(400);
+  const land = await page.evaluate(() => { const b = document.querySelector('.ai-sheet').getBoundingClientRect(); return { h: b.height, bottom: b.bottom, fab: getComputedStyle(document.querySelector('#ai-fab')).opacity }; });
+  assert(land.h >= 300 && Math.abs(land.bottom - 380) <= 1 && land.fab === '0', '가로 폰에서는 대화 창이 아래 시트로 높게 열림 (높이 ' + Math.round(land.h) + ')');
+  await page.context().close();
+
   assert(!errors.length, '콘솔 오류 없음' + (errors.length ? ': ' + errors.join(' / ') : ''));
   await browser.close();
   server.close();
