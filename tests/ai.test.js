@@ -500,3 +500,19 @@ test('제목·목록·표를 알아본다', () => {
   assert.match(html, /<ol><li>첫째<\/li><li>둘째<\/li><\/ol>/);
   assert.match(html, /<table><thead><tr><th>단어<\/th><th>뜻<\/th><\/tr><\/thead><tbody><tr><td>mañana<\/td><td>내일<\/td><\/tr><\/tbody><\/table>/);
 });
+test('번호 목록: 사이에 글머리표나 빈 줄이 끼어도 번호가 이어지고, 글머리표는 그 번호 아래에 (v3.1.1)', () => {
+  // 2026-11-15 실제 답과 같은 모양: 번호마다 들여 쓴 글머리표, 번호 사이 빈 줄 → 예전에는 번호가 모두 1이었다
+  const html = AI.md('비슷한 표현이에요.\n\n1.  **Quizás**\n    *   **뜻**: 아마도\n    *   **설명**: 흔히 써요\n\n2.  **A lo mejor**\n    *   **뜻**: 아마\n      직설법과 써요\n\n3.  **Puede ser**\n* **뜻**: 그럴 수도\n\n마지막 말');
+  assert.strictEqual(html,
+    '<p>비슷한 표현이에요.</p><ol>' +
+    '<li><b>Quizás</b><ul><li><b>뜻</b>: 아마도</li><li><b>설명</b>: 흔히 써요</li></ul></li>' +
+    '<li><b>A lo mejor</b><ul><li><b>뜻</b>: 아마<br>직설법과 써요</li></ul></li>' +
+    '<li><b>Puede ser</b><ul><li><b>뜻</b>: 그럴 수도</li></ul></li>' +
+    '</ol><p>마지막 말</p>');
+  assert.strictEqual((html.match(/<ol/g) || []).length, 1);
+  // 중간에 끊겨도 모델이 적은 번호를 그대로
+  assert.strictEqual(AI.md('1. 하나\n\n설명 문단\n\n2. 둘\n3. 셋'), '<ol><li>하나</li></ol><p>설명 문단</p><ol start="2"><li>둘</li><li>셋</li></ol>');
+  // 번호 목록 뒤에 빈 줄을 두고 따로 적은 글머리표는 따로
+  assert.strictEqual(AI.md('1. 하나\n2. 둘\n\n- 따로 팁'), '<ol><li>하나</li><li>둘</li></ol><ul><li>따로 팁</li></ul>');
+  assert.strictEqual(AI.md('- 가\n\n- 나'), '<ul><li>가</li><li>나</li></ul>');
+});

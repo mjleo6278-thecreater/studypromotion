@@ -82,7 +82,7 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   assert(egg.includes('만든 사람') && egg.includes('기록 지키기'), '만든 사람 이스터에그');
   assert(await page.$$eval('#egg-out .pt-sq', (s) => s.length) === 8, '퀸으로 승급한 체스 칸');
   const ver = await page.evaluate(() => App.version);
-  assert(/^\d+\.\d+$/.test(ver) && await page.$eval('#app-version', (v, ver) => v.textContent.includes(ver), ver), '버전 ' + ver);
+  assert(/^\d+\.\d+(\.\d+)?$/.test(ver) && await page.$eval('#app-version', (v, ver) => v.textContent.includes(ver), ver), '버전 ' + ver);
 
   // 4) 업데이트 때 자동 백업 → 기록이 사라져도 되돌리기
   await page.evaluate(() => {

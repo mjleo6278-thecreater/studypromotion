@@ -215,7 +215,7 @@
         <input name="title" value="${esc(d.title)}" required maxlength="120" aria-label="할 일" autocomplete="off">
         <select name="subject" aria-label="과목">${subjectOptions(d.subjectId, true)}</select>
         <input name="due" type="date" value="${esc(d.due)}" aria-label="마감일">
-        <input name="est" type="number" min="5" step="5" value="${esc(d.est)}" placeholder="예상(분)" aria-label="예상 시간(분)">
+        <input name="est" type="number" min="1" step="1" value="${esc(d.est)}" placeholder="예상(분)" aria-label="예상 시간(분)">
         <span class="card-edit-actions"><button class="btn sm" type="button" data-task-cancel>취소</button><button class="btn primary sm" type="submit">저장</button></span>
       </form></li>`;
     }
@@ -1722,7 +1722,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.1';
+  const APP_VERSION = '3.1.1';
   const APP_DATE = '2026년 11월 15일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }

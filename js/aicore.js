@@ -717,22 +717,29 @@
   // 먼저 전부 글자로 바꾼 뒤(esc), 굵게·목록·표·제목만 다시 살린다. AI의 답에 든 태그는 실행되지 않는다.
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const inline = (s) => s.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s).,!?]|$)/g, '$1<i>$2</i>');
+  // 번호 목록은 모델이 적은 번호를 그대로 쓴다(<ol start>). 번호 항목 아래의 글머리표(들여 쓴 것, 또는 바로 이어진 것)는
+  // 그 항목 안에 넣고, 빈 줄이 끼어도 번호 목록은 이어 간다. (예전에는 항목마다 새 목록이 되어 번호가 모두 1이었다)
   function md(text) {
     const out = [];
-    let para = [], list = null, table = null;
+    let para = [], list = null, table = null, gap = false;
+    const item = (t) => ({ lines: [t], sub: [] });
+    const li = (x) => '<li>' + x.lines.map(inline).join('<br>') + (x.sub.length ? '<ul>' + x.sub.map(li).join('') + '</ul>' : '') + '</li>';
     const flush = () => {
       if (para.length) { out.push('<p>' + para.map(inline).join('<br>') + '</p>'); para = []; }
-      if (list) { out.push(`<${list.tag}>` + list.items.map((x) => '<li>' + inline(x) + '</li>').join('') + `</${list.tag}>`); list = null; }
+      if (list) { out.push(`<${list.tag}${list.start > 1 ? ` start="${list.start}"` : ''}>` + list.items.map(li).join('') + `</${list.tag}>`); list = null; }
       if (table) {
         const [head, ...rows] = table;
         out.push('<div class="ai-table"><table><thead><tr>' + head.map((c) => '<th>' + inline(c) + '</th>').join('') + '</tr></thead><tbody>' +
           rows.map((r) => '<tr>' + r.map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>');
         table = null;
       }
+      gap = false;
     };
     esc(text).split(/\r?\n/).forEach((line) => {
       let m;
-      if (!line.trim() || /^\s*-{3,}\s*$/.test(line)) return flush();
+      if (/^\s*-{3,}\s*$/.test(line)) return flush();
+      if (!line.trim()) { if (list) { if (para.length) flush(); else gap = true; } else flush(); return; }
+      const indent = /^\s{2,}/.test(line);
       if ((m = /^\s*#{1,4}\s+(.*)$/.exec(line))) { flush(); out.push('<p class="ai-h"><b>' + inline(m[1].replace(/\*\*/g, '')) + '</b></p>'); return; }
       if ((m = /^\s*\|(.+)\|\s*$/.exec(line))) {
         if (para.length || list) flush();
@@ -740,10 +747,26 @@
         if (!cells.every((c) => /^:?-{2,}:?$/.test(c))) (table = table || []).push(cells);
         return;
       }
-      if ((m = /^\s*(?:[-*•]|(\d+)[.)])\s+(.*)$/.exec(line))) {
-        const tag = m[1] ? 'ol' : 'ul';
-        if (para.length || table || (list && list.tag !== tag)) flush();
-        (list = list || { tag, items: [] }).items.push(m[2]);
+      if ((m = /^\s*(\d+)[.)]\s+(.*)$/.exec(line))) { // 번호 항목
+        if (para.length || table || (list && list.tag !== 'ol')) flush();
+        if (!list) list = { tag: 'ol', items: [], start: Math.min(+m[1], 999) };
+        list.items.push(item(m[2]));
+        gap = false;
+        return;
+      }
+      if ((m = /^\s*[-*•]\s+(.*)$/.exec(line))) { // 글머리표
+        const last = list && list.items[list.items.length - 1];
+        if (list && list.tag === 'ol' && last && (indent || !gap)) { last.sub.push(item(m[1])); gap = false; return; } // 번호 항목 아래에 넣는다
+        if (para.length || table || (list && list.tag !== 'ul')) flush();
+        (list = list || { tag: 'ul', items: [], start: 0 }).items.push(item(m[1]));
+        gap = false;
+        return;
+      }
+      if (list && indent) { // 들여 쓴 줄은 바로 위 항목에 이어 붙인다
+        const last = list.items[list.items.length - 1];
+        const to = last.sub.length ? last.sub[last.sub.length - 1] : last;
+        to.lines.push(line.trim());
+        gap = false;
         return;
       }
       if (list || table) flush();
