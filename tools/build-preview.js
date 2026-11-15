@@ -58,6 +58,9 @@ page = must(page, /const FIREBASE_CONFIG = \{[\s\S]*?\n {2}\};/, 'Firebase 설�
 page = must(page, /계정 기능 준비 중이에요\. 곧 구글 계정이나 이메일로 로그인해서 여러 기기에서 같은 기록을 쓸 수 있어요\./, '로그인 안내 문구')
   .replace('계정 기능 준비 중이에요. 곧 구글 계정이나 이메일로 로그인해서 여러 기기에서 같은 기록을 쓸 수 있어요.', '미리 보기에서는 로그인하지 않아요. 실제 계정의 기록을 건드리지 않도록 막아 두었어요.');
 
+// 2-1) AI 서버 주소 지우기: 미리 보기는 가짜 AI만 쓴다
+page = must(page, /const AI_ENDPOINT = '[^']*';/, 'AI 서버 주소').replace(/const AI_ENDPOINT = '[^']*';/, "const AI_ENDPOINT = '';");
+
 // 3) 서비스 워커 등록 끄기
 page = must(page, /navigator\.serviceWorker\.register\('sw\.js'/, '서비스 워커 등록').replace(/if \(\/\^https\?:\$\/\.test\(location\.protocol\) && 'serviceWorker' in navigator\) \{/, "if (false && 'serviceWorker' in navigator) { // 미리 보기: 서비스 워커를 쓰지 않는다");
 

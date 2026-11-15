@@ -141,6 +141,7 @@
   async function onUser(u) {
     if (unsub) { unsub(); unsub = null; }
     user = u;
+    try { root.dispatchEvent(new CustomEvent('cloud-user')); } catch (e) { /* 무시 */ } // 로그인이 바뀜을 알린다 (AI 도우미가 듣는다)
     docRef = u ? fb.firestore().collection('users').doc(u.uid) : null;
     if (!u) { render(); return; }
     if (meta.uid !== u.uid) { meta = { uid: u.uid }; saveMeta(); } // 다른 계정이면 처음처럼

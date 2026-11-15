@@ -2,6 +2,9 @@
 name = "studypromotion-ai"
 main = "src/index.js"
 compatibility_date = "2026-11-01"
+# 서버 주소(studypromotion-ai.<계정>.workers.dev)를 켠다. 브랜치마다 생기는 시험용 주소는 끈다
+workers_dev = true
+preview_urls = false
 
 # Workers AI: 모델을 비밀 키 없이 부른다
 [ai]

@@ -13,7 +13,10 @@
   const App = window.App, Core = window.AICore;
   if (!App || !Core) return;
 
-  const AI_ENDPOINT = ''; // 무료 서버(Cloudflare Worker) 주소. 비어 있으면 AI 도우미가 꺼진다
+  const AI_ENDPOINT = 'https://studypromotion-ai.mj-leo6278.workers.dev'; // 무료 서버(Cloudflare Worker) 주소. 비어 있으면 AI 도우미가 꺼진다
+  const AI_HOME = 'https://mjleo6278-thecreater.github.io'; // 서버는 이 주소의 앱에서 온 요청만 받는다. 다른 주소(개발용 등)에서는 AI 도우미를 켜지 않는다
+  const GATE_KEY = 'studypromotion.ai.gate';
+  const GATE_FRESH = 10 * 60 * 1000; // 서버에 다시 묻기까지 기다리는 시간
   const NAME = '세컨드';
   const KEY = 'studypromotion.ai';
   const KEEP = 60; // 남겨 두는 말의 수
@@ -78,7 +81,8 @@
       return { text, left, unlimited };
     },
   };
-  const provider = () => window.AIMock || (AI_ENDPOINT ? remote : null);
+  const useRemote = !!AI_ENDPOINT && location.origin === AI_HOME;
+  const provider = () => window.AIMock || (useRemote ? remote : null);
   if (!provider()) return; // 서버 주소가 없으면 여기서 끝: 단추도 창도 만들지 않는다
 
   /* ---------- 저장 ---------- */
@@ -296,6 +300,60 @@
     if (lastFocus && document.contains(lastFocus) && back.contains(document.activeElement)) { try { lastFocus.focus({ preventScroll: true }); } catch (e) { /* 무시 */ } }
   }
   fab.addEventListener('click', () => (back.hidden || !back.classList.contains('in') ? open() : close()));
+
+  /* ---------- 먼저 써 보기: 서버가 열어 준 사람에게만 단추를 보인다 ---------- */
+  // 서버에 GET /me로 묻는다(횟수를 쓰지 않는다). 답은 이 기기에 기억해 두어 다음에 열 때 바로 쓰고, 로그인이 바뀌면 다시 묻는다.
+  // 가짜 AI(미리 보기·테스트)는 서버가 없으니 묻지 않고 언제나 보인다
+  const gated = () => !window.AIMock;
+  let gate = { open: false, uid: '', at: 0 };
+  let gateSeq = 0;
+  let asking = null; // 지금 서버에 묻고 있는 계정 ('' = 로그인 안 함). 같은 계정으로 겹쳐 묻지 않는다
+  function showFab() {
+    const on = !gated() || gate.open;
+    fab.hidden = !on;
+    if (!on && !back.hidden) close();
+  }
+  async function checkGate(force) {
+    if (!gated()) return;
+    const user = window.Cloud && window.Cloud.user;
+    const uid = user ? user.uid : '';
+    if (!force && (asking === uid || (gate.uid === uid && Date.now() - gate.at < GATE_FRESH))) return;
+    const my = ++gateSeq;
+    asking = uid;
+    let j = null;
+    try {
+      const headers = {};
+      if (user) headers.Authorization = 'Bearer ' + await user.getIdToken();
+      const res = await fetch(AI_ENDPOINT.replace(/\/+$/, '') + '/me', { headers });
+      if (res.ok) j = await res.json();
+    } catch (e) { /* 인터넷이 없으면 기억해 둔 답을 그대로 쓴다 */ }
+    if (my !== gateSeq) return; // 그사이 로그인이 바뀌어 새로 물었다
+    asking = null;
+    if (!j) return; // 답을 못 받음
+    gate = { open: j.open === true, uid, at: Date.now() };
+    try { localStorage.setItem(GATE_KEY, JSON.stringify(gate)); } catch (e) { /* 저장이 막힌 환경 */ }
+    if (j.unlimited === true) { S.left = 'unlimited'; S.leftAt = Date.now(); }
+    else if (typeof j.left === 'number') { S.left = j.left; S.leftAt = Date.now(); }
+    else if (S.left === 'unlimited') S.left = null; // 다른 계정으로 바뀜
+    save();
+    showFab();
+    renderLeft();
+  }
+  if (gated()) {
+    try {
+      const saved = JSON.parse(localStorage.getItem(GATE_KEY) || 'null');
+      if (saved && typeof saved.open === 'boolean') gate = { open: saved.open, uid: String(saved.uid || ''), at: Number(saved.at) || 0 };
+    } catch (e) { /* 읽지 못하면 닫힌 것으로 */ }
+    window.addEventListener('cloud-user', () => checkGate(false)); // 로그인·로그아웃 (js/cloud.js가 알린다). 계정이 그대로이고 방금 물었으면 다시 묻지 않는다
+    window.addEventListener('online', () => checkGate(false));
+    const start = () => {
+      // 전에 로그인했던 기기면 로그인이 이어진 뒤(cloud-user)에 묻는다: 그 전에 물으면 로그인 안 한 사람으로 답이 온다
+      const c = window.Cloud;
+      if (!c || !c.meta || !c.meta.uid || c.user) checkGate(false);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  }
+  showFab();
   $('#ai-close', back).addEventListener('click', close);
   back.addEventListener('mousedown', (e) => { if (e.target === back) close(); });
   back.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.querySelector('.ui-back:not(.out)')) { e.stopPropagation(); close(); } });
