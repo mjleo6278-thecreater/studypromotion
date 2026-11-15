@@ -22,6 +22,10 @@
 
   if (typeof module !== 'undefined' && module.exports) { module.exports = { PALETTE, ALL }; return; }
   const doc = root.document;
+  // 손가락으로 누르면 html에 .touch를 붙이고, 마우스를 움직이면 뗀다. styles.css는 .touch일 때 '마우스를 올린 표시'(:hover)를 쓰지 않는다.
+  // (S펜 태블릿처럼 hover가 된다고 알리는 기기에서, 손가락으로 누른 단추에 그 표시가 남아 다른 곳을 눌러야 풀렸다)
+  doc.addEventListener('pointerdown', (e) => { doc.documentElement.classList.toggle('touch', e.pointerType === 'touch'); }, { capture: true, passive: true });
+  doc.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') doc.documentElement.classList.remove('touch'); }, { passive: true });
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const narrow = () => root.matchMedia('(max-width: 720px)').matches;
 

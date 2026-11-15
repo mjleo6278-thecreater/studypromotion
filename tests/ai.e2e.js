@@ -266,6 +266,15 @@ const server = http.createServer((req, res) => {
   await page.tap('#ask-ok');
   await page.waitForTimeout(150);
   assert((await page.locator('#ai-log .ai-msg').count()) === 0 && (await page.locator('#ai-log .ai-eg').count()) === 5 && (await page.evaluate(() => JSON.parse(localStorage.getItem('studypromotion.ai')).msgs.length)) === 0, '새 대화: 지난 대화를 지우고 처음 화면으로');
+  // v3.2.2: 지울 대화가 없으면 새 대화 단추를 숨긴다 (비어 있을 때 눌러도 아무 일이 없어 고장처럼 보였다)
+  assert(await page.isHidden('#ai-new') && await page.isVisible('#ai-close') && await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('ai-sheet')), '대화가 비면 새 대화 단추가 숨고 초점은 창으로');
+  await say(page, 'hola 뜻', '안녕이라는 뜻이에요.');
+  assert(await page.isVisible('#ai-new'), '말을 보내면 새 대화 단추가 다시 보임');
+  // 손가락으로 누르면 '마우스를 올린 표시'를 쓰지 않는다 (태블릿에서 누른 단추에 표시가 남던 문제)
+  assert(await page.evaluate(() => document.documentElement.classList.contains('touch')), '손가락으로 누르면 html에 touch 표시');
+  const hoverRules = await page.evaluate(() => [...document.styleSheets].flatMap((sh) => { try { return [...sh.cssRules]; } catch (e) { return []; } })
+    .filter((r) => r.media && /hover:\s*hover/.test(r.media.mediaText)).flatMap((r) => [...r.cssRules].map((x) => x.selectorText)));
+  assert(hoverRules.length > 30 && hoverRules.every((t) => t.split(',').every((one) => /:where\(:root:not\(\.touch\)\)|:root(\[[^\]]*\])+:where\(:not\(\.touch\)\)/.test(one))), '마우스를 올린 표시는 모두 손가락으로 누른 뒤에는 꺼짐: ' + hoverRules.filter((t) => !/:not\(\.touch\)/.test(t)).join(' / '));
   await page.context().close();
 
   /* ===== 11) 넓은 화면: 단추 위에 뜨는 창, Enter로 보내기 ===== */
