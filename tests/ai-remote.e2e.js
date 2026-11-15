@@ -83,7 +83,7 @@ const FAKE = `
         return route.fulfill({ headers: Object.assign({}, type, cors), body: sse([{ t: srv.answer.slice(0, half) }, { t: srv.answer.slice(half) }, owner ? { unlimited: true } : { left: srv.limit - srv.used }]) });
       }
       // 새 서버(v 2): 모델이 보내는 줄 그대로, 남은 횟수는 머리말로
-      const chunks = srv.chunks || [
+      const chunks = (srv.queue && srv.queue.length ? srv.queue.shift() : null) || srv.chunks || [
         { choices: [{ index: 0, delta: { role: 'assistant', content: srv.answer.slice(0, half) } }] },
         { choices: [{ index: 0, delta: { content: srv.answer.slice(half) }, finish_reason: 'stop' }] },
         { choices: [], usage: { prompt_tokens: 500, completion_tokens: 40 } },
@@ -150,6 +150,19 @@ const FAKE = `
   await last().locator('[data-plan-apply]').tap();
   const added = await page.evaluate(() => App.store.get().events.filter((e) => e.title === '정아름 영어'));
   assert(added.length === 1 && added[0].kind === 'other' && added[0].start === '18:30' && added[0].end === '22:00' && added[0].repeat.freq === 'weekly' && String(added[0].repeat.days) === '0' && new Date(added[0].date + 'T12:00').getDay() === 0, '적용하면 가장 가까운 일요일부터 매주 반복하는 일정 하나가 생김');
+  // 다음 질문에는 앞에서 낸 제안과 그 뒤에 어떻게 됐는지를 붙인다 ("그거 7시로 바꿔 줘"를 알아듣게, v3.3.1)
+  srv.chunks = null;
+  await ask(page, '고마워');
+  const prev = chat()[chat().length - 1].body.messages;
+  assert(prev.some((m) => m.role === 'assistant' && /넣을게요\.\n\[앱 기록: 이때 낸 제안 적용함 — 일정 추가: 정아름 영어 \(.*18:30~22:00 · 매주 일/.test(m.content)), '다음 질문에 앞에서 낸 제안과 적용했는지를 붙여 보냄');
+  // AI가 앱 정보가 필요하다고 하면 앱 정보를 붙여 다시 묻고, 서버에 다시 묻는 것이라고 알린다(하루 횟수를 두 번 세지 않게)
+  srv.queue = [[word('<need_app/>', { finish_reason: 'stop' })], [word('내일은 일정이 없어요.', { finish_reason: 'stop' })]];
+  const sentBefore = chat().length;
+  await ask(page, '내일 뭐 있어?');
+  const two = chat().slice(sentBefore);
+  assert(two.length === 2 && two[0].body.again === undefined && two[1].body.again === true && !/\[앱 정보\]/.test(two[0].body.messages[0].content) && /\[앱 정보\]/.test(two[1].body.messages[0].content), '앱 정보가 필요하다고 하면 붙여서 다시 묻고, 다시 묻는 것이라고 알림');
+  assert(/내일은 일정이 없어요/.test(await last().textContent()) && !/need_app/.test(await last().textContent()), '다시 받은 답만 보임');
+  srv.queue = null;
 
   /* ===== 2-2) 답이 온전히 오지 않을 때: 받은 데까지 살리고 까닭을 보여 준다 ===== */
   // 모델이 생각에 답 길이를 다 써서 동작 목록이 중간에 끊김

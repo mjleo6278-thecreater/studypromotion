@@ -59,7 +59,7 @@ function world(opts) {
   w.env = Object.assign({
     FIREBASE_PROJECT_ID: PROJECT, DAILY_LIMIT: '20', MODEL: 'test-model', MAX_TOKENS: '1200', ALLOWED_ORIGINS: ORIGIN + ', https://second.example',
     OWNER_EMAILS: 'Owner@Example.com', OPEN_TO: 'all',
-    AI: { run: async (model, input) => { w.runs.push({ model, input }); return w.answer(); } },
+    AI: { run: async (model, input) => { w.runs.push({ model, input }); return w.answer(input); } },
     COUNTER: {
       idFromName: (name) => name,
       get: (id) => ({ fetch: (url, init) => new Counter({ storage: storage(id) }).fetch(new Request(url, init)) }),
@@ -72,7 +72,7 @@ function world(opts) {
     if (tok) headers.Authorization = 'Bearer ' + tok;
     const req = new Request('https://ai.example' + (o.path || '/chat'), {
       method: o.method || 'POST', headers,
-      body: (o.method || 'POST') === 'POST' ? (o.raw != null ? o.raw : JSON.stringify({ messages: o.messages || [{ role: 'user', content: '안녕' }], v: o.v })) : undefined,
+      body: (o.method || 'POST') === 'POST' ? (o.raw != null ? o.raw : JSON.stringify({ messages: o.messages || [{ role: 'user', content: '안녕' }], v: o.v, again: o.again })) : undefined,
     });
     const res = await handle(req, w.env, { now: w.now, fetch: w.fetch });
     const text = await res.text();
@@ -196,7 +196,7 @@ test('하루 20번을 다 쓰면 429, 다른 사람과 다음 날은 다시 된�
   w.now = NOW + DAY; // 0시 UTC(한국 오전 9시)가 지남
   const next = await w.ask(await token({ iat: Math.floor(w.now / 1000) - 60, exp: Math.floor(w.now / 1000) + 3000 }));
   assert.equal(next.left, 19);
-  assert.deepEqual([...w.stores.get('user-1').keys()], ['n:2026-11-15']); // 지난날 기록은 지웠다
+  assert.deepEqual([...w.stores.get('user-1').keys()].filter((k) => k.startsWith('n:')), ['n:2026-11-15']); // 지난날 기록은 지웠다
 });
 
 test('주인 계정(구글 로그인 + OWNER_EMAILS)은 횟수 제한이 없다', async () => {
@@ -244,7 +244,7 @@ test('앱 전체의 하루 무료 양을 다 쓰면 limit(all), 횟수는 돌려
   const s = await w.ask(me);
   assert.equal(s.status, 503);
   assert.deepEqual(s.json, { error: 'server' }); // 주인이 아닌 사람에게는 까닭을 적어 보내지 않는다
-  assert.equal(w.runs.length, 4); // 덧붙인 설정을 빼고 한 번 더 물었다
+  assert.equal(w.runs.length, 5); // 덧붙인 설정을 하나씩 빼고 두 번 더 물었다
   w.answer = () => sse(['다시']);
   assert.equal((await w.ask(me)).left, 18); // 실패한 두 번은 세지 않았다
 });
@@ -458,15 +458,51 @@ test('생각하기: 기본은 끄고 THINKING이 on일 때만 켠다', async () 
 
 test('모델이 덧붙인 설정을 받지 않으면 꼭 필요한 것만으로 한 번 더 묻는다', async () => {
   const w = world();
-  let n = 0;
-  w.answer = () => { if (!n++) throw new Error('5006: unknown field chat_template_kwargs'); return sse(['됐어요']); };
+  w.answer = (input) => { if (input.chat_template_kwargs) throw new Error('5006: unknown field chat_template_kwargs'); return sse(['됐어요']); };
   const messages = [{ role: 'user', content: '안녕' }];
   const r = await w.ask(await token(), { v: 2, messages });
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('x-ai-mode'), 'plain');
   assert.equal(r.headers.get('x-ai-left'), '19'); // 한 번만 센다
+  assert.equal(w.runs.length, 3);
+  assert.deepEqual(w.runs[2].input, { messages, stream: true, max_tokens: 1200 });
+});
+
+test('생각하기 끄기는 되도록 남긴다: 다른 설정만 받지 않으면 그것만 빼고 묻는다 (v3.3.1)', async () => {
+  const w = world();
+  w.answer = (input) => { if (input.max_completion_tokens || input.stream_options) throw new Error('5006: unknown field stream_options'); return sse(['됐어요']); };
+  const messages = [{ role: 'user', content: '안녕' }];
+  const r = await w.ask(await token(), { v: 2, messages });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('x-ai-mode'), 'mid');
   assert.equal(w.runs.length, 2);
-  assert.deepEqual(w.runs[1].input, { messages, stream: true, max_tokens: 1200 });
+  assert.deepEqual(w.runs[1].input, { messages, stream: true, max_tokens: 1200, chat_template_kwargs: { enable_thinking: false } });
+});
+
+test('앱 정보를 붙여 같은 질문을 바로 다시 묻는 것은 한 번만 세지 않는다 (v3.3.1)', async () => {
+  const w = world();
+  const me = await token();
+  const q = (content) => [{ role: 'user', content }];
+  assert.equal((await w.ask(me, { v: 2, messages: q('내일 일정 알려줘') })).headers.get('x-ai-left'), '19');
+  const again = await w.ask(me, { v: 2, messages: [{ role: 'system', content: '앱 정보' }, { role: 'user', content: '내일 일정 알려줘' }], again: true });
+  assert.equal(again.status, 200);
+  assert.equal(again.headers.get('x-ai-left'), '19'); // 세지 않았다
+  // 한 번만: 또 다시 묻거나, 다른 질문으로 다시 묻는다고 하면 센다
+  assert.equal((await w.ask(me, { v: 2, messages: q('내일 일정 알려줘'), again: true })).headers.get('x-ai-left'), '18');
+  assert.equal((await w.ask(me, { v: 2, messages: q('다른 질문'), again: true })).headers.get('x-ai-left'), '17');
+  // 시간이 많이 지나면 센다
+  await w.ask(me, { v: 2, messages: q('모레 일정') });
+  w.now += 3 * 60 * 1000;
+  assert.equal((await w.ask(me, { v: 2, messages: q('모레 일정'), again: true })).headers.get('x-ai-left'), '15');
+  // 세지 않은 질문이 실패해도 횟수를 돌려주지 않는다(센 적이 없으니까)
+  await w.ask(me, { v: 2, messages: q('글피 일정') });
+  w.answer = () => { throw new Error('boom'); };
+  assert.equal((await w.ask(me, { v: 2, messages: q('글피 일정'), again: true })).status, 503);
+  w.answer = () => sse(['응']);
+  assert.equal((await w.ask(me, { v: 2, messages: q('새 질문') })).headers.get('x-ai-left'), '13');
+  // 저장소에는 질문의 글이 남지 않는다
+  const kept = JSON.stringify([...w.stores.values()].flatMap((m) => [...m.values()]));
+  assert.doesNotMatch(kept, /일정|질문/);
 });
 
 test('모델이 오류를 내면 주인 계정에만 까닭을 적어 보낸다', async () => {

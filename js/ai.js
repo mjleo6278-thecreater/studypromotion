@@ -36,7 +36,8 @@
   };
 
   /* ---------- AI를 부르는 쪽 ---------- */
-  // ask(messages, { signal, onText }) → { text, left, unlimited, cut, diag }
+  // ask(messages, { signal, onText, again }) → { text, left, unlimited, cut, diag }
+  //  again: 방금 한 질문을 앱 정보와 함께 다시 묻는 것 (서버가 한 번만 센다)
   //  left: 오늘 남은 횟수(모르면 null), unlimited: 횟수 제한이 없는 계정, cut: 답이 오다가 연결이 끊김,
   //  diag: 무슨 일이 있었는지 알려 주는 숫자들(문제가 생겼을 때 '자세히'에 보여 준다). 실패하면 err.aiCode에 까닭
   const fail = (code, more) => Object.assign(new Error(code), { aiCode: code }, more || {});
@@ -53,7 +54,7 @@
       try {
         res = await fetch(AI_ENDPOINT.replace(/\/+$/, '') + '/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ messages, v: 2 }), signal: opts.signal, // v 2: 서버가 모델의 답을 손대지 않고 넘겨 준다
+          body: JSON.stringify(Object.assign({ messages, v: 2 }, opts.again ? { again: true } : {})), signal: opts.signal, // v 2: 서버가 모델의 답을 손대지 않고 넘겨 준다
         });
       } catch (e) { if (e && e.name === 'AbortError') throw e; throw fail('offline'); }
       d.status = res.status;
@@ -253,6 +254,7 @@
     offline: '인터넷에 연결되지 않아 답을 받지 못했어요.',
     server: 'AI가 지금 답하지 못했어요. 잠시 뒤에 다시 해 주세요.',
     empty: 'AI가 빈 답을 보냈어요. 다시 보내 주세요.',
+    bad: '보낸 글이 너무 길어서 AI가 받지 못했어요. 질문을 줄이거나 새 대화를 시작해 주세요.',
   };
   // 문제가 생겼을 때 '자세히'에 보여 줄 글: 서버와 모델이 어떻게 답했는지 (고칠 때 이 글을 보고 까닭을 찾는다)
   function diagText(d, raw) {
@@ -447,8 +449,20 @@
     send(text);
   });
 
+  // 지난 대화: AI의 답에는 그때 낸 제안과 그 뒤에 어떻게 됐는지를 붙인다 ("그거 7시로 바꿔 줘"를 알아듣게)
+  const PLAN_WORD = { ready: '아직 적용 안 함', expired: '적용 안 함', cancelled: '취소함', applied: '적용함', undone: '적용했다가 되돌림' };
   function historyFor() {
-    return S.msgs.filter((m) => !m.pending && !m.error && m.text).map((m) => ({ role: m.role === 'ai' ? 'assistant' : 'user', text: m.text }));
+    return S.msgs.filter((m) => !m.pending && !m.error).map((m) => {
+      if (m.role !== 'ai') return { role: 'user', text: m.text };
+      const bits = [m.text];
+      if (m.plan && m.plan.lines) {
+        const off = m.plan.state === 'applied' ? m.plan.off || [] : [];
+        const ls = m.plan.lines.filter((l, i) => !off.includes(i)).map((l) => l.line + (l.sub ? ' (' + l.sub + ')' : ''));
+        if (ls.length) bits.push(`[앱 기록: 이때 낸 제안 ${PLAN_WORD[m.plan.state] || ''} — ${ls.join(' / ')}]`);
+      }
+      if (m.cards && m.cards.length) bits.push('[앱 기록: 카드 후보 ' + m.cards.map((c) => c.front).join(', ') + ']');
+      return { role: 'assistant', text: bits.filter(Boolean).join('\n') };
+    }).filter((m) => m.text);
   }
 
   async function send(text) {
@@ -486,7 +500,7 @@
       let r = Core.parseReply(out.text);
       if (r.needApp && !withApp) {
         raw = '';
-        out = await p.ask(Core.messages(text, ctx, hist, true), { signal: ctrl.signal, onText });
+        out = await p.ask(Core.messages(text, ctx, hist, true), { signal: ctrl.signal, onText, again: true });
         r = Core.parseReply(out.text);
       }
       if (out.unlimited) { S.left = 'unlimited'; S.leftAt = Date.now(); }

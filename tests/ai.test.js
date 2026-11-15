@@ -516,3 +516,104 @@ test('번호 목록: 사이에 글머리표나 빈 줄이 끼어도 번호가 �
   assert.strictEqual(AI.md('1. 하나\n2. 둘\n\n- 따로 팁'), '<ol><li>하나</li><li>둘</li></ol><ul><li>따로 팁</li></ul>');
   assert.strictEqual(AI.md('- 가\n\n- 나'), '<ul><li>가</li><li>나</li></ul>');
 });
+
+/* ---------- v3.3.1: 모델이 조금 다르게 적어도 알아듣는다 (스스로 점검에서 찾은 것) ---------- */
+test('시각·날짜를 조금 다르게 적어도 읽는다 (v3.3.1)', () => {
+  // 오늘은 2026-11-14(토)
+  const { res } = check([
+    { type: 'add_event', subject: '영어', date: '2026/11/16', start: '오후 6:30', end: '8:00 PM' },
+    { type: 'add_event', subject: '영어', date: '2026-11-17T00:00:00', start: '18:30:00', end: '20시 30분' },
+    { type: 'add_event', subject: '영어', date: '2026년 11월 18일', start: '저녁 7시', end: '9시 반' },
+    { type: 'add_event', subject: '영어', date: '2026.11.19', start: '오전 7:00', end: '12 PM' },
+    { type: 'add_task', title: '단어', due: '2026/11/20' },
+    { type: 'add_event', subject: '영어', date: '2026-11-21', start: '23:00', end: '1:00' }, // 자정 넘김은 그대로
+    { type: 'add_event', subject: '영어', date: '2026-11-22', start: '12:00', end: '1:30' },
+  ]);
+  assert.deepStrictEqual(res.ops.map((o) => o.sub), [
+    '11/16(월) 18:30~20:00',
+    '11/17(화) 18:30~20:30',
+    '11/18(수) 19:00~21:30',
+    '11/19(목) 7:00~12:00',
+    '11/20(금)까지',
+    '11/21(토) 23:00~1:00',
+    '11/22(일) 12:00~13:30',
+  ]);
+  assert.deepStrictEqual(res.rejected, []);
+});
+test('반복 일정: 요일을 영어·숫자·평일·주말로 적거나 repeat을 한글로 적어도 읽는다 (v3.3.1)', () => {
+  const { res } = check([
+    { type: 'add_event', subject: '영어', start: '18:30', end: '20:00', repeat: 'weekly', days: ['Mon', 'thursday'] },
+    { type: 'add_event', subject: '영어', start: '18:30', end: '20:00', repeat: '매주', days: [3, '0'] },
+    { type: 'add_event', kind: 'other', title: '운동', start: '7:00', end: '8:00', days: '평일' }, // repeat 없이 요일만
+    { type: 'add_event', kind: 'other', title: '늦잠', start: '9:00', end: '10:00', repeat: 'weekly', days: '주말' },
+    { type: 'add_event', subject: '국어', start: '6:00', end: '6:30', repeat: { freq: 'weekly', days: '월수금', until: '2026-12-31' } },
+    { type: 'add_event', kind: 'other', title: '산책', start: '21:00', end: '21:30', repeat: '매일' },
+  ]);
+  assert.deepStrictEqual(res.ops.map((o) => o.data.ev.repeat && [o.data.ev.repeat.freq, o.data.ev.repeat.days, o.data.ev.repeat.until]), [
+    ['weekly', [1, 4], null],
+    ['weekly', [0, 3], null],
+    ['weekly', [1, 2, 3, 4, 5], null],
+    ['weekly', [0, 6], null],
+    ['weekly', [1, 3, 5], '2026-12-31'],
+    ['daily', [], null],
+  ]);
+  assert.deepStrictEqual(res.ops.map((o) => o.data.ev.date), ['2026-11-16', '2026-11-15', '2026-11-16', '2026-11-14', '2026-11-16', '2026-11-14']);
+});
+test('할 일·일정·시험을 번호(대문자, 숫자)나 제목으로 가리켜도 찾는다 (v3.3.1)', () => {
+  const st = withEvents();
+  for (const task of ['T1', 1, '1', '1번', '영어 단어 50개', '영어 단어']) {
+    const { res } = check([{ type: 'complete_task', task }], st);
+    assert.deepStrictEqual(res.ops.map((o) => o.line), ['완료 표시: 영어 단어 50개'], String(task));
+  }
+  // 여러 개에 맞는 제목이나 없는 번호는 고르지 않는다
+  assert.strictEqual(check([{ type: 'complete_task', task: '정리' }], st).res.ops.length, 1); // '국어 문법 정리' 하나뿐
+  assert.strictEqual(check([{ type: 'complete_task', task: '어' }], st).res.ops.length, 0); // 한 글자는 고르지 않는다
+  assert.strictEqual(check([{ type: 'complete_task', task: '단어 50개 끝냄' }], st).res.ops.length, 0);
+  assert.strictEqual(check([{ type: 'complete_task', task: 't9' }], st).res.ops.length, 0);
+  assert.strictEqual(check([{ type: 'set_exam_date', exam: 'E1', date: '2026-12-02' }], st).res.ops.length, 1);
+  assert.strictEqual(check([{ type: 'move_event', event: 'P1', start: '17:00', end: '19:00' }], st).res.ops.length, 1);
+});
+test('동작 이름을 대문자로 적거나 type 대신 action에 적어도 읽고, 타이머·화면은 한글 이름도 읽는다 (v3.3.1)', () => {
+  const { res } = check([
+    { type: 'ADD_TASK', title: '가' },
+    { action: 'add-task', title: '나' },
+    { type: 'start_timer', kind: '스톱워치' },
+    { type: 'open_view', view: '시간표' },
+  ]);
+  assert.deepStrictEqual(res.ops.map((o) => o.line), ['할 일 추가: 가', '할 일 추가: 나', '스톱워치 시작', '화면 열기: 타임테이블']);
+  assert.strictEqual(check([{ type: 'start_timer', kind: '집중' }]).res.ops[0].line, '집중 타이머 시작');
+  assert.strictEqual(check([{ type: 'open_view', view: '통계' }]).res.ops[0].line, '화면 열기: 통계');
+});
+test('동작 목록에 주석이나 작은따옴표가 있어도 읽고, 감싼 코드 울타리는 글에 남기지 않는다 (v3.3.1)', () => {
+  const want = [{ type: 'add_task', title: '가' }];
+  assert.deepStrictEqual(AI.parseReply('<actions>[\n  // 할 일 추가\n  {"type":"add_task","title":"가"} /* 끝 */\n]</actions>').actions, want);
+  assert.deepStrictEqual(AI.parseReply("<actions>[{'type':'add_task','title':'가'}]</actions>").actions, want);
+  // 글자 속의 // 와 작은따옴표는 그대로
+  assert.deepStrictEqual(AI.parseReply('<actions>[{"type":"add_task","title":"https://a.b/c it\'s"}]</actions>').actions, [{ type: 'add_task', title: "https://a.b/c it's" }]);
+  const r = AI.parseReply('넣을게요.\n```json\n<actions>[{"type":"add_task","title":"가"}]</actions>\n```');
+  assert.deepStrictEqual([r.text, r.actions], ['넣을게요.', want]);
+  assert.strictEqual(AI.parseReply('넣을게요.\n<actions>[{"type":"add_task","title":"가"}]</actions>\n확인해 주세요!').text, '넣을게요.\n\n확인해 주세요!');
+});
+test('지난 대화는 질문과 답이 번갈아 가게 맞추고, 답을 못 받은 질문은 뺀다 (v3.3.1)', () => {
+  const ctx = AI.buildContext(sample(), NOW);
+  const hist = [
+    { role: 'assistant', text: '먼저 온 답' }, // 앞에 답만 있으면 뺀다
+    { role: 'user', text: '못 받은 질문' }, // 오류가 나서 답이 없다
+    { role: 'user', text: '질문 1' },
+    { role: 'assistant', text: '답 1\n- 줄바꿈은 남긴다' },
+    { role: 'user', text: '질문 2' }, // 답을 못 받았다
+  ];
+  const msgs = AI.messages('새 질문', ctx, hist, false);
+  assert.deepStrictEqual(msgs.slice(1), [
+    { role: 'user', content: '질문 1' },
+    { role: 'assistant', content: '답 1\n- 줄바꿈은 남긴다' },
+    { role: 'user', content: '새 질문' },
+  ]);
+  assert.ok(msgs[0].content.includes('[앱 기록'));
+});
+test('인용(>)과 취소선(~~)을 글자 그대로 두지 않는다 (v3.3.1)', () => {
+  assert.strictEqual(AI.md('예문:\n\n> *Ojalá que llueva.*\n> (비가 오면 좋겠어요)\n\n끝'), '<p>예문:</p><blockquote><i>Ojalá que llueva.</i><br>(비가 오면 좋겠어요)</blockquote><p>끝</p>');
+  assert.strictEqual(AI.md('1. **Ojalá**\n   > Ojalá que llueva.\n2. 둘'), '<ol><li><b>Ojalá</b><br>Ojalá que llueva.</li><li>둘</li></ol>');
+  assert.strictEqual(AI.md('~~틀림~~ 맞음, 3 > 2'), '<p><s>틀림</s> 맞음, 3 &gt; 2</p>');
+  assert.strictEqual(AI.md('> <b>태그</b>'), '<blockquote>&lt;b&gt;태그&lt;/b&gt;</blockquote>');
+});
