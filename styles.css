@@ -1864,3 +1864,25 @@ body:has(.lock-screen:not([hidden])) .ai-fab { display: none; }
 .ai-send:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ai-foot { margin: 0; padding: 6px 16px calc(8px + env(safe-area-inset-bottom)); font-size: 11.5px; color: var(--muted); text-align: center; flex: none; }
 @media (min-width: 721px) { .ai-foot { padding-bottom: 10px; } }
+
+/* ================================================================
+   처음 안내: 미리 해 두면 좋아요 (앱 설치 · 로그인) · 설치 방법 창 (v3.2)
+   ================================================================ */
+.welcome-setup { margin: 14px 0 2px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 12px; }
+.ws-head { margin: 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+.ws-row { display: flex; align-items: flex-start; gap: 12px; }
+.ws-ico { flex: none; margin-top: 2px; width: 38px; height: 38px; border-radius: 11px; background: var(--bg); color: var(--text); display: inline-flex; align-items: center; justify-content: center; }
+.ws-ico .ic { width: 20px; height: 20px; vertical-align: 0; }
+.ws-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 14px; line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.ws-text b { font-weight: 700; }
+.ws-text small { font-size: 12.5px; line-height: 1.45; }
+.ws-text small:empty { display: none; }
+.ws-btn { flex: none; align-self: center; padding: 7px 14px; font-size: 14px; white-space: nowrap; }
+.ws-row.done .ws-ico { background: var(--accent-soft); color: var(--accent); }
+.ui-install .ui-sheet-body { padding: 0 16px 16px; }
+.ui-install .ih-sec { padding: 2px 0 12px; }
+.ui-install .ih-sec + .ih-sec { border-top: 1px solid var(--line); padding-top: 4px; }
+.ui-install h3 { font-size: 15px; font-weight: 700; margin: 10px 0 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ih-mine { font-size: 11.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+.ui-install ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 14px; line-height: 1.55; word-break: keep-all; }
+.ui-install .ih-sec p { margin: 6px 0 0; line-height: 1.5; word-break: keep-all; }

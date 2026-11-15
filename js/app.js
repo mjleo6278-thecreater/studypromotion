@@ -595,11 +595,66 @@
     let closed = false;
     try { closed = !!localStorage.getItem(WELCOME_KEY); } catch (e) { /* 무시 */ }
     $('#h-welcome').hidden = closed || !!(st.exams.length || st.sessions.length || st.tasks.length || st.cards.length);
+    renderSetup();
   }
   $('#welcome-close').addEventListener('click', () => {
     try { localStorage.setItem(WELCOME_KEY, '1'); } catch (e) { /* 무시 */ }
     $('#h-welcome').hidden = true;
   });
+
+  // 처음 안내의 '미리 해 두면 좋아요': 앱 설치와 로그인. 이미 설치한 앱으로 열었으면 설치 줄을 숨기고, 로그인했으면 로그인 줄에 그렇다고 적는다
+  let installEvent = null; // 브라우저가 준 설치 창(크롬·엣지·삼성 인터넷). 없으면(아이폰 등) 설치 방법을 보여 준다
+  let installedNow = false; // 이 탭에서 방금 설치함 (탭은 그대로 브라우저라 isInstalled()는 아직 아니다)
+  const devicePlatform = (() => {
+    const ua = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ios'; // 아이패드는 맥처럼 보인다
+    return /Android/.test(ua) ? 'android' : 'desktop';
+  })();
+  const INSTALL_HOW = {
+    ios: '공유 버튼 → ‘홈 화면에 추가’',
+    android: '브라우저 메뉴 → ‘앱 설치’ 또는 ‘홈 화면에 추가’',
+    desktop: '버튼을 누르면 설치 방법을 볼 수 있어요',
+  };
+  function renderSetup() {
+    const installed = isInstalled() || installedNow;
+    const user = window.Cloud && window.Cloud.user;
+    $('#ws-install').hidden = installed;
+    $('#ws-install-how').textContent = installEvent ? '버튼을 누르면 바로 설치돼요' : INSTALL_HOW[devicePlatform];
+    $('#ws-login').classList.toggle('done', !!user);
+    $('#ws-login-btn').hidden = !!user;
+    $('#ws-login-how').hidden = !!user;
+    $('#ws-login-text').textContent = user
+      ? `${user.displayName || (user.email || '').split('@')[0] || '내 계정'} 님으로 로그인했어요. 기록이 계정에 저장돼요.`
+      : '구글 계정이나 이메일로 로그인하면 폰과 PC에서 같은 기록을 이어 쓰고, 폰을 바꿔도 기록이 남아요.';
+    $('#ws').hidden = installed && !!user;
+  }
+  window.addEventListener('cloud-user', renderSetup); // 로그인·로그아웃 (js/cloud.js가 알린다)
+
+  // 설치 창을 띄우거나, 띄울 수 없는 브라우저면 기기별 설치 방법을 보여 준다 (처음 안내·위쪽 '앱 설치' 버튼이 같이 쓴다)
+  async function installApp() {
+    if (!installEvent) return showInstallHelp();
+    const ev = installEvent;
+    installEvent = null;
+    ev.prompt();
+    try { if ((await ev.userChoice).outcome === 'accepted') installedNow = true; } catch (e) { /* 무시 */ }
+    $('#install-btn').hidden = true;
+    renderSetup();
+  }
+  function showInstallHelp() {
+    const SECS = {
+      ios: { name: '아이폰·아이패드', steps: ['Safari로 이 앱 주소를 열어요.', '공유 버튼(네모에서 화살표가 위로 나온 모양)을 눌러요. 안 보이면 주소창 옆 ⋯를 누르면 있어요.', '‘홈 화면에 추가’를 누르고 ‘추가’를 눌러요.'], note: '설치한 앱과 Safari는 기록을 따로 저장해요. 로그인하면 둘 다 같은 기록을 써요.' },
+      android: { name: '안드로이드', steps: ['크롬이나 삼성 인터넷으로 이 앱 주소를 열어요.', '메뉴(크롬 ⋮, 삼성 인터넷 ≡)를 눌러요.', '‘앱 설치’ 또는 ‘홈 화면에 추가’를 눌러요.'] },
+      desktop: { name: 'PC', steps: ['크롬이나 엣지로 이 앱 주소를 열어요.', '주소창 오른쪽의 설치 아이콘을 눌러요.', '‘설치’를 누르면 바탕화면과 시작 메뉴에 생겨요.'], note: '맥의 Safari는 메뉴 ‘파일’ → ‘Dock에 추가’로 설치해요.' },
+    };
+    const order = [devicePlatform].concat(['ios', 'android', 'desktop'].filter((p) => p !== devicePlatform));
+    const body = order.map((p, i) => {
+      const s = SECS[p];
+      return `<section class="ih-sec" data-ih="${p}"><h3>${esc(s.name)}${i === 0 ? ' <span class="ih-mine">지금 쓰는 기기</span>' : ''}</h3>` +
+        `<ol>${s.steps.map((t) => `<li>${esc(t)}</li>`).join('')}</ol>${s.note ? `<p class="muted small">${esc(s.note)}</p>` : ''}</section>`;
+    }).join('');
+    return window.UI.openSheet({ title: '앱으로 설치하는 방법', body, cls: 'ui-install' });
+  }
+  $('#ws-install-btn').addEventListener('click', installApp);
 
   /* ---------- 타이머 ---------- */
   const TIMER_KEY = 'studypromotion.timer';
@@ -1722,7 +1777,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.1.1';
+  const APP_VERSION = '3.2';
   const APP_DATE = '2026년 11월 15일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
@@ -1895,20 +1950,15 @@
   });
 
   /* ---------- 설치형 앱(PWA) ---------- */
-  let installEvent = null;
+  // installEvent·installApp은 위 '처음 안내'에 있다
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     installEvent = e;
     $('#install-btn').hidden = false;
+    renderSetup();
   });
-  $('#install-btn').addEventListener('click', async () => {
-    if (!installEvent) return;
-    installEvent.prompt();
-    try { await installEvent.userChoice; } catch (e) { /* 무시 */ }
-    installEvent = null;
-    $('#install-btn').hidden = true;
-  });
-  window.addEventListener('appinstalled', () => { $('#install-btn').hidden = true; toast('스터디 프로모션을 설치했어요'); });
+  $('#install-btn').addEventListener('click', () => { if (installEvent) installApp(); });
+  window.addEventListener('appinstalled', () => { installEvent = null; installedNow = true; $('#install-btn').hidden = true; renderSetup(); toast('스터디 프로모션을 설치했어요'); });
   if (/^https?:$/.test(location.protocol) && 'serviceWorker' in navigator) {
     // 새 버전이 배포되면: 쓰는 중이 아니면 바로 새로고침, 쓰는 중이면 안내 띠
     let swReg = null;
