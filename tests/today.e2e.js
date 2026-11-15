@@ -35,6 +35,40 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   await page.goto(base + '#home');
   assert(await page.isVisible('#h-welcome'), '처음 쓰는 사람에게 시작 안내');
   assert(!(await page.isVisible('#h-next-panel')), '시험이 없으면 오늘 할 범위는 숨김');
+
+  // 처음 안내의 '미리 해 두면 좋아요': 앱 설치·로그인 (v3.2)
+  assert(await page.isVisible('#ws-install') && await page.isVisible('#ws-login'), '처음 안내에 앱 설치와 로그인');
+  assert(/구글 계정이나 이메일/.test(await page.textContent('#ws-login')) && /오른쪽 위 사람 모양/.test(await page.textContent('#ws-login-how')), '로그인 방법: 구글·이메일, 나중에는 오른쪽 위 사람 모양');
+  await page.evaluate(() => { Object.defineProperty(navigator, 'standalone', { value: true, configurable: true }); App.render(); });
+  assert(!(await page.isVisible('#ws-install')) && await page.isVisible('#ws-login'), '설치한 앱으로 열었으면 설치 줄은 숨김');
+  await page.evaluate(() => { delete navigator.standalone; App.render(); });
+  assert(await page.isVisible('#ws-install'), '브라우저로 열면 설치 줄이 다시 보임');
+  await page.tap('#ws-install-btn'); // 브라우저가 설치 창을 주지 않았으면(아이폰 등) 기기별 설치 방법
+  await page.waitForSelector('.ui-install .ih-sec');
+  const ihSecs = await page.$$eval('.ui-install .ih-sec', (els) => els.map((e) => e.dataset.ih));
+  assert(ihSecs.length === 3 && /지금 쓰는 기기/.test(await page.textContent('.ui-install .ih-sec >> nth=0')), '설치 창이 없으면 기기별 설치 방법, 지금 기기가 맨 위: ' + ihSecs.join(','));
+  assert(/홈 화면에 추가/.test(await page.textContent('.ui-install [data-ih="ios"]')) && /로그인하면 둘 다 같은 기록/.test(await page.textContent('.ui-install [data-ih="ios"]')), '아이폰: 공유 → 홈 화면에 추가, Safari와 기록이 따로라는 안내');
+  await page.tap('.ui-install [data-ui-close]');
+  await page.waitForSelector('.ui-install', { state: 'detached' });
+  await page.evaluate(() => { // 크롬·삼성 인터넷처럼 브라우저가 설치 창을 주면
+    const e = new Event('beforeinstallprompt', { cancelable: true });
+    e.prompt = () => { window.__prompted = (window.__prompted || 0) + 1; };
+    e.userChoice = Promise.resolve({ outcome: 'accepted' });
+    window.dispatchEvent(e);
+  });
+  assert(/바로 설치/.test(await page.textContent('#ws-install-how')) && await page.isVisible('#install-btn'), '설치 창이 있으면 버튼으로 바로 설치한다고 알리고, 위쪽 앱 설치 버튼도 보임');
+  await page.tap('#ws-install-btn');
+  await page.waitForFunction(() => document.getElementById('ws-install').hidden);
+  assert(await page.evaluate(() => window.__prompted) === 1 && !(await page.isVisible('#install-btn')), '안내의 앱 설치 버튼이 설치 창을 띄우고, 설치하면 설치 줄과 위쪽 버튼이 사라짐');
+  await page.tap('#ws-login-btn');
+  assert(await page.evaluate(() => App.view) === 'account', '로그인 버튼은 계정 화면으로');
+  await page.goto(base + '#home');
+  await page.evaluate(() => { window.__cloud = window.Cloud; window.Cloud = { user: { email: 'mate@example.com', displayName: '' } }; window.dispatchEvent(new Event('cloud-user')); });
+  assert(await page.evaluate(() => document.getElementById('ws-login').classList.contains('done')) && !(await page.isVisible('#ws-login-btn')) && /mate 님으로 로그인했어요/.test(await page.textContent('#ws-login-text')), '로그인했으면 로그인 줄에 그렇다고 적고 버튼은 숨김');
+  assert(!(await page.isVisible('#ws')), '설치도 로그인도 했으면 ‘미리 해 두면 좋아요’ 칸을 통째로 숨김');
+  await page.evaluate(() => { window.Cloud = window.__cloud; window.dispatchEvent(new Event('cloud-user')); });
+  assert(await page.isVisible('#ws-login-btn'), '로그아웃하면 로그인 버튼이 다시 보임');
+
   await page.tap('#welcome-close');
   await page.reload();
   assert(!(await page.isVisible('#h-welcome')), '닫은 안내는 다시 안 보임');

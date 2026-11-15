@@ -166,7 +166,8 @@
   $('.ai-sheet', back).tabIndex = -1;
   const sheet = $('.ai-sheet', back), log = $('#ai-log', back), form = $('#ai-form', back), input = $('#ai-input', back), sendBtn = $('#ai-send', back);
 
-  const isPhone = () => matchMedia('(max-width: 720px)').matches;
+  // 가로로 눕힌 폰(높이가 낮은 터치 화면)도 폰처럼 아래 시트 + 자판 높이 맞추기
+  const isPhone = () => matchMedia('(max-width: 720px), (max-height: 520px) and (pointer: coarse)').matches;
   const fine = () => matchMedia('(pointer: fine)').matches;
 
   /* ---------- 그리기 ---------- */

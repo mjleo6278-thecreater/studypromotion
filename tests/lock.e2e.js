@@ -88,6 +88,25 @@ const server = http.createServer((req, res) => {
   await page.click('#ask-ok');
   assert(await page.isHidden('#lock-screen'), '3초 길게 눌러 포기');
 
+  // 가로로 눕힌 폰(높이가 낮은 화면): 모든 칸이 화면 안에 들어오고 '포기하기' 단추가 눌려 글씨가 잘리지 않음 (v3.2.1)
+  for (const [w, h] of [[800, 380], [568, 300]]) {
+    const lctx = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true });
+    const lp = await lctx.newPage(); lp.on('pageerror', (e) => errors.push(e.message));
+    await lp.goto(base + '#timer');
+    await lp.click('[data-lock="60"]'); await lp.click('#lock-start'); await lp.click('#ask-ok');
+    await lp.evaluate(() => {
+      document.querySelector('#lock-msg').textContent = '돌아왔네요. 나가 있던 시간은 공부 시간에서 빠져요.';
+      document.querySelector('#lock-leaves').textContent = '다른 앱으로 나간 횟수 1번 · 2분';
+    });
+    const fit = await lp.evaluate(() => ['.lock-icon', '#lock-time', '#lock-sub', '#lock-msg', '#lock-leaves', '#lock-quit'].map((s) => {
+      const el = document.querySelector(s); const b = el.getBoundingClientRect();
+      return { s, ok: b.top >= 0 && b.bottom <= innerHeight && b.height > 0 && (s !== '#lock-quit' || el.scrollHeight <= el.clientHeight + 1) };
+    }));
+    const quitH = await lp.evaluate(() => document.querySelector('#lock-quit').getBoundingClientRect().height);
+    assert(fit.every((x) => x.ok) && quitH >= 34, `가로 ${w}x${h}에서 잠금 화면이 모두 보임 (잘린 칸: ${fit.filter((x) => !x.ok).map((x) => x.s).join(' ') || '없음'}, 포기 단추 높이 ${Math.round(quitH)})`);
+    await lctx.close();
+  }
+
   assert(errors.length === 0, '페이지 오류 없음 ' + errors.join(' | '));
   await browser.close(); server.close();
 })().catch((e) => { console.error(e); process.exit(1); });
