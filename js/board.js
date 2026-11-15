@@ -1,6 +1,7 @@
 /* 시험 범위 화이트보드
  * 넓은 보드 위에 과목/범주 카드를 펼쳐 놓고, 단원·세부 항목을 하나씩 체크한다.
- * 이동(드래그·휠), 확대(Ctrl+휠·핀치·버튼), 펜/형광펜/지우개, 메모, 되돌리기를 지원한다.
+ * 이동(드래그·휠), 확대(Ctrl+휠·핀치·버튼), 펜/형광펜/지우개, 메모(붙임쪽지·글 상자), 되돌리기를 지원한다.
+ * 보드 보기는 전체 화면이다: 위 앱 바와 아래 탭을 숨기고(body.board-full) 도구는 아래 도구 띠(#board-dock)에 둔다.
  */
 (function () {
   'use strict';
@@ -28,6 +29,8 @@
   const cardsEl = $('#board-cards');
   const ink = $('#board-ink');
   const menu = $('#pop-menu');
+  const dock = $('#board-dock');
+  const noteBar = $('#note-bar');
 
   let examId = null;
   let tool = 'select';
@@ -41,11 +44,32 @@
   let settleAll = false; // 다음 렌더 때 겹친 카드 모두 정리
   let lastH = new Map(); // 카드 높이 (자란 카드 아래 카드를 밀어 내리기 위해)
 
-  // 보기 방식: 목록(과목 → 공부할 내용, 휴대폰 기본) / 보드(화이트보드)
-  const MODE_KEY = 'studypromotion.scopeMode';
-  let modePref = null;
-  try { modePref = localStorage.getItem(MODE_KEY); } catch (e) { /* 무시 */ }
-  let mode = modePref === 'list' || modePref === 'board' ? modePref : (window.innerWidth < 720 ? 'list' : 'board');
+  // 보기 방식: 목록(과목 → 공부할 내용) / 보드(화이트보드, 전체 화면).
+  // 범위 탭은 늘 목록부터 열고, '보드'를 누르면 화이트보드가 화면 전체로 열린다. '목록'·뒤로 가기·Esc로 돌아온다.
+  let mode = 'list';
+  const FULL_TIP_KEY = 'studypromotion.boardFullTip'; // 전체 화면에서 돌아가는 방법은 처음 한 번만 알려 준다
+
+  /* ---------- 메모: 붙임쪽지(기본)와 글 상자(style 'text') ----------
+     노드: { kind: 'note', title(내용), x, y, w?(폭), color, size?('s'|'m'|'l'), style?('text') }
+     쓰는 중인 메모는 noteEdit에 두고 다시 그릴 때마다 입력칸을 같이 그린다(다시 그려도 글자·커서가 남는다).
+     새 메모는 글을 적어야 보드에 남는다(draftNote): 빈 채로 닫으면 사라지고, 되돌리기에도 빈 메모가 끼지 않는다. */
+  const NOTE_W = 220;
+  const NOTE_MIN_W = 120;
+  const NOTE_MAX_W = 720;
+  const NOTE_PAPER = ['#fff3a8', '#ffd3df', '#cdeecb', '#cfe6ff', '#e6dbff']; // 쪽지 종이 색
+  const NOTE_INK = ['', '#e03131', '#1c7ed6', '#2b8a3e', '#f08c00']; // 글 상자 글자 색 ('' = 화면 기본 글자색)
+  const NOTE_SIZES = ['s', 'm', 'l'];
+  const NOTE_SIZE_LABEL = { s: '작게', m: '보통', l: '크게' };
+  let noteEdit = null; // { id, value }
+  let draftNote = null;
+  let focusNote = false;
+  const lastNote = { paper: NOTE_PAPER[0], ink: NOTE_INK[0], size: 'm' }; // 방금 쓴 색·크기로 다음 메모를 만든다
+  const isText = (n) => n.style === 'text';
+  const noteColors = (n) => (isText(n) ? NOTE_INK : NOTE_PAPER);
+  const noteColor = (n) => { const list = noteColors(n); return list.includes(n.color) ? n.color : list[0]; }; // 예전 메모(다른 색 값)는 기본색으로
+  const noteSize = (n) => (NOTE_SIZES.includes(n.size) ? n.size : 'm');
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const coarse = () => { try { return matchMedia('(pointer: coarse)').matches; } catch (e) { return false; } };
 
   // 한글 입력 중(조합 중)에 Enter가 눌려도 글자가 빠지지 않도록: 조합이 끝난 뒤에 처리
   let composing = false;
@@ -174,11 +198,11 @@
     const r = vp.getBoundingClientRect();
     if (!r.width || !r.height) { needsFit = true; return; }
     if (!b) { view.z = 1; view.x = 40; view.y = 40; return applyView(); }
-    const pad = 48;
-    const z = Math.min(1.2, (r.width - pad * 2) / b.w, (r.height - pad * 2 - 40) / b.h);
+    const pad = 48, top = 56, bottom = 80; // 위쪽은 범례, 아래쪽은 도구 띠 자리
+    const z = Math.min(1.2, (r.width - pad * 2) / b.w, (r.height - top - bottom) / b.h);
     view.z = Math.max(Z_MIN, z);
     view.x = (r.width - b.w * view.z) / 2 - b.x * view.z;
-    view.y = Math.max(pad, (r.height - b.h * view.z) / 2) - b.y * view.z;
+    view.y = Math.max(top, top + (r.height - top - bottom - b.h * view.z) / 2) - b.y * view.z;
     applyView();
   }
 
@@ -190,7 +214,7 @@
     if (!b) return fit();
     view.z = Math.min(1, (r.width - 24) / Scope.CARD_W);
     view.x = 12 - b.x * view.z;
-    view.y = 16 - b.y * view.z;
+    view.y = 56 - b.y * view.z; // 왼쪽 위 범례 아래부터
     applyView();
   }
 
@@ -280,13 +304,8 @@
   }
 
   function cardHtml(c, index) {
+    if (c.kind === 'note') return noteHtml(c);
     const style = `left:${c.x || 0}px;top:${c.y || 0}px;--c:${esc(c.color || '#4a7fd4')}`;
-    if (c.kind === 'note') {
-      return `<div class="bcard note" data-id="${esc(c.id)}" style="${style}">
-        <div class="bnote-head" data-drag="${esc(c.id)}"><span>메모</span><button class="bmenu" data-menu="${esc(c.id)}" aria-label="메모 메뉴">⋯</button></div>
-        <div class="bnote-text" data-note="${esc(c.id)}">${esc(c.title) || '<span class="muted">두 번 눌러 메모 쓰기</span>'}</div>
-      </div>`;
-    }
     const kids = index.get(c.id) || [];
     const p = Scope.progress(st().topics, c.id, index);
     const folded = !!c.collapsed && kids.length > 0;
@@ -308,6 +327,20 @@
       ${folded ? '' : listMode ? addFormHtml(c.id) : `<button class="badd" data-add="${esc(c.id)}">＋ 공부할 내용 추가</button>`}
       ${doneAll ? '<div class="bstamp" aria-hidden="true">♛ 승급</div>' : ''}
     </div>`;
+  }
+
+  // 메모 한 장: 누르면 그 자리에서 고친다. 끌어서 옮기고, 오른쪽 아래 모서리를 끌어 폭을 바꾼다
+  function noteHtml(c) {
+    const text = isText(c);
+    const col = noteColor(c);
+    const editing = !!noteEdit && noteEdit.id === c.id;
+    const w = +c.w > 0 && mode !== 'list' ? `width:${Math.round(c.w)}px;` : '';
+    const cls = `bcard note ${text ? 'text' : 'sticky'} sz-${noteSize(c)}${editing ? ' editing' : ''}${w ? ' fixed-w' : ''}`;
+    const what = text ? '글 상자' : '메모';
+    const body = editing
+      ? `<div class="bnote-grow" data-value="${esc(noteEdit.value)}"><textarea class="bnote-edit" data-keep="note:${esc(c.id)}" data-note-edit="${esc(c.id)}" maxlength="2000" rows="1" placeholder="${text ? '글을 적어 보세요' : '메모를 적어 보세요'}" aria-label="${what} 내용" autocomplete="off">${esc(noteEdit.value)}</textarea></div>`
+      : `<div class="bnote-text" data-note="${esc(c.id)}" role="button" tabindex="0" aria-label="${what} 고치기">${esc(c.title) || '<span class="muted">눌러서 메모 쓰기</span>'}</div>`;
+    return `<div class="${cls}" data-id="${esc(c.id)}" data-drag="${esc(c.id)}" style="left:${c.x || 0}px;top:${c.y || 0}px;${w}${col ? `--c:${esc(col)}` : ''}">${body}<span class="bnote-grip" data-resize="${esc(c.id)}" aria-hidden="true"></span></div>`;
   }
 
   function strokePath(points) {
@@ -359,9 +392,9 @@
     const left = p.total - p.done;
     $('#board-legend').innerHTML = p.total ? `
       <span>남은 항목 <b>${left}</b></span>
-      <span class="f-star">★ 중요 ${count('star')}</span>
-      <span class="f-hard">! 어려움 ${count('hard')}</span>
-      <span class="f-review">↻ 다시 보기 ${count('review')}</span>
+      <span class="f-star${count('star') ? '' : ' zero'}">★ 중요 ${count('star')}</span>
+      <span class="f-hard${count('hard') ? '' : ' zero'}">! 어려움 ${count('hard')}</span>
+      <span class="f-review${count('review') ? '' : ' zero'}">↻ 다시 보기 ${count('review')}</span>
       <label class="bl-toggle"><input type="checkbox" id="bl-only-left"${onlyLeft ? ' checked' : ''}> 남은 것만</label>` : '';
     return { p, plan, pc };
   }
@@ -374,6 +407,7 @@
   // 시험 시간 페이스 띠
   function renderPace(plan, p) {
     const el = $('#board-pace');
+    el.classList.toggle('hint', !plan); // 안내만 있는 띠는 전체 화면 보드에서 숨긴다
     if (!plan) {
       el.hidden = !(p.total && !p.timeTotal);
       el.innerHTML = el.hidden ? '' : `<div class="bp-row"><span>${A.ic('timer')} 항목 옆 시계 버튼을 눌러 걸리는 시간을 적으면, 시험까지 하루에 몇 시간씩 해야 하는지 계산해 드려요.</span></div>`;
@@ -435,6 +469,10 @@
       examId = pickExam();
       const has = !!examId;
       const list = mode === 'list';
+      if (prevExam !== examId) { noteEdit = null; draftNote = null; }
+      if (noteEdit && !noteById(noteEdit.id)) noteEdit = null; // 쓰던 메모가 다른 기기에서 지워졌으면 쓰기를 접는다
+      syncFull();
+      dock.classList.toggle('disabled', !has);
       $('#view-board').classList.toggle('list-mode', list);
       vp.classList.toggle('list-mode', list);
       $$('[data-scope-mode]').forEach((b) => { const on = b.dataset.scopeMode === mode; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
@@ -448,6 +486,7 @@
         $('#bb-pct').textContent = '';
         $('#bb-track').innerHTML = '';
         $('#board-pace').hidden = true;
+        renderNoteBar();
         vp.style.backgroundPosition = '0 0';
         vp.style.backgroundSize = `${GRID * 4}px ${GRID * 4}px`; // 시험이 없을 때 체스판 무늬가 화면만 한 큰 네 칸으로 늘어나지 않게
         wizard.draw();
@@ -472,7 +511,8 @@
       }
       const info = renderBar();
       const index = Scope.indexByParent(st().topics);
-      const cards = index.get('root:' + examId) || [];
+      let cards = index.get('root:' + examId) || [];
+      if (draftNote && draftNote.examId === examId) cards = cards.concat(draftNote); // 아직 저장하지 않은 새 메모
       if (list) {
         const subjects = cards.filter((c) => c.kind !== 'note');
         const notes = cards.filter((c) => c.kind === 'note');
@@ -490,6 +530,16 @@
         focusAddTarget = false;
         const input = cardsEl.querySelector('.badd-input');
         if (input) { input.focus({ preventScroll: true }); ensureVisible(input); }
+      }
+      renderNoteBar();
+      if (focusNote) {
+        focusNote = false;
+        const ta = cardsEl.querySelector('[data-note-edit]');
+        if (ta) {
+          ta.focus({ preventScroll: true });
+          try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (e) { /* 무시 */ }
+          revealNote(ta);
+        }
       }
     } finally {
       renderingNow = false;
@@ -524,10 +574,17 @@
   }
 
   // 보기 방식 바꾸기
-  function setScopeMode(m, remember) {
+  // 지금 화이트보드가 화면 전체로 열려 있는지 (보드 보기 + 시험이 있을 때). body.board-full로 앱 바·탭을 숨긴다
+  function syncFull() {
+    const on = A.view === 'board' && mode === 'board' && !!examId;
+    document.body.classList.toggle('board-full', on);
+    return on;
+  }
+
+  function setScopeMode(m) {
     if (m !== 'list' && m !== 'board') return;
-    if (remember !== false) { modePref = m; try { localStorage.setItem(MODE_KEY, m); } catch (e) { /* 무시 */ } }
     closeMenu();
+    if (noteEdit) commitNote(true);
     if (mode === m) return render();
     mode = m;
     addTarget = null;
@@ -536,6 +593,11 @@
     if (m === 'board') { settleAll = true; if (examId && !st().boardView[examId]) needsFit = true; }
     render();
     vp.scrollTop = 0;
+    if (m === 'board' && syncFull()) {
+      let seen = true;
+      try { seen = !!localStorage.getItem(FULL_TIP_KEY); localStorage.setItem(FULL_TIP_KEY, '1'); } catch (e) { /* 무시 */ }
+      if (!seen) toast('화이트보드를 전체 화면으로 열었어요. ‘목록’이나 뒤로 가기를 누르면 돌아가요');
+    }
   }
   $('#view-board').addEventListener('click', (e) => {
     const b = e.target.closest('[data-scope-mode]');
@@ -575,6 +637,9 @@
     if (add) { openAdd(add.dataset.add); return; }
     const m = e.target.closest('[data-menu]');
     if (m) { openMenu(m.dataset.menu, m); return; }
+    // 메모를 누르면 그 자리에서 고친다 (보드에서는 끌기와 구분하려고 포인터 쪽에서 처리)
+    const note = e.target.closest('[data-note]');
+    if (note && mode === 'list') startNoteEdit(note.dataset.note);
   });
 
   // 추가 버튼을 눌러도 입력칸의 커서(휴대폰 키보드)가 그대로 있게
@@ -780,8 +845,6 @@
   cardsEl.addEventListener('dblclick', (e) => {
     const t = e.target.closest('[data-rename]');
     if (t) return startRename(t.dataset.rename, t);
-    const note = e.target.closest('[data-note]');
-    if (note) return startNoteEdit(note.dataset.note, note);
   });
 
   function startRename(id, el) {
@@ -810,26 +873,178 @@
     input.addEventListener('blur', () => commit(true));
   }
 
-  function startNoteEdit(id, el) {
-    const n = byId(id);
-    if (!n || el.querySelector('textarea')) return;
-    const ta = document.createElement('textarea');
-    ta.className = 'bnote-edit';
-    ta.value = n.title || '';
-    ta.maxLength = 2000;
-    el.textContent = '';
-    el.appendChild(ta);
-    ta.focus();
-    let done = false;
-    const commit = (save) => {
-      if (done) return;
-      done = true;
-      if (save && ta.value !== n.title) mutate((s) => { s.topics.find((x) => x.id === id).title = ta.value.trim(); });
-      else render();
-    };
-    ta.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') commit(false); if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) commit(true); });
-    ta.addEventListener('blur', () => commit(true));
+  /* ---------- 메모 쓰기·꾸미기 ---------- */
+  const noteById = (id) => (draftNote && draftNote.id === id ? draftNote : byId(id));
+
+  function startNoteEdit(id) {
+    const n = noteById(id);
+    if (!n || n.kind !== 'note' || (noteEdit && noteEdit.id === id)) return;
+    if (noteEdit) commitNote(true); // 다른 메모를 쓰던 중이면 먼저 저장
+    noteEdit = { id, value: n.title || '' };
+    focusNote = true;
+    render();
   }
+
+  // 쓰기를 끝낸다. save가 false면 고치기 전 내용으로 둔다. 빈 메모는 남기지 않는다
+  function commitNote(save) {
+    const ed = noteEdit;
+    if (!ed) return;
+    noteEdit = null;
+    const ta = cardsEl.querySelector('[data-note-edit]');
+    const value = String(ta ? ta.value : ed.value).replace(/\s+$/, '').slice(0, 2000);
+    const draft = draftNote && draftNote.id === ed.id ? draftNote : null;
+    draftNote = null;
+    if (draft) {
+      if (save && value.trim()) mutate((s) => s.topics.push(Object.assign({}, draft, { title: value, order: Scope.nextOrder(s.topics, null, draft.examId) })));
+      else render();
+      return;
+    }
+    const n = byId(ed.id);
+    if (!n) return render();
+    if (save && !value.trim()) {
+      mutate((s) => { s.topics = Scope.removeSubtree(s.topics, ed.id); });
+      toast('빈 메모를 지웠어요 · 되돌리기로 복구할 수 있어요');
+    } else if (save && value !== (n.title || '')) {
+      mutate((s) => { const t = s.topics.find((x) => x.id === ed.id); if (t) t.title = value; });
+    } else render();
+  }
+
+  // 색·크기·폭: 새 메모(아직 저장 전)는 그 자리에서, 이미 있는 메모는 바로 저장
+  function setNoteProp(id, props) {
+    const n = noteById(id);
+    if (!n) return;
+    if ('color' in props) lastNote[isText(n) ? 'ink' : 'paper'] = props.color;
+    if ('size' in props) lastNote.size = props.size;
+    if (draftNote && draftNote.id === id) { Object.assign(draftNote, props); return render(); }
+    mutate((s) => { const t = s.topics.find((x) => x.id === id); if (t) Object.assign(t, props); });
+  }
+
+  function deleteNote(id) {
+    const draft = draftNote && draftNote.id === id;
+    if (noteEdit && noteEdit.id === id) noteEdit = null;
+    if (draft) { draftNote = null; return render(); }
+    if (!byId(id)) return render();
+    mutate((s) => { s.topics = Scope.removeSubtree(s.topics, id); });
+    toast('메모를 지웠어요 · 되돌리기로 복구할 수 있어요');
+  }
+
+  // 메모를 쓸 때 가리지 않고 보이는 높이: 위쪽은 메모 꾸미기 띠, 아래쪽은 도구 띠(손가락으로 쓰는 화면은 자판) 자리를 뺀다
+  function noteZone(r) {
+    const top = r.top + 60;
+    const bottom = coarse() ? Math.max(top + 90, r.top + Math.min(r.height * 0.45, 320)) : r.bottom - 76;
+    return { top, bottom };
+  }
+  // 메모 좌표: 보드 왼쪽·위쪽 바깥으로도 조금 나갈 수 있다 (과목 카드가 보드 맨 위에서 시작해도 그 위에 붙일 수 있게)
+  const noteX = (x) => clamp(Math.round(x / SNAP) * SNAP, -3000, WORLD_W - NOTE_MIN_W);
+  const noteY = (y) => clamp(Math.round(y / SNAP) * SNAP, -3000, WORLD_H - 60);
+
+  // 새 메모: 보이는 화면에서 카드·다른 메모와 겹치지 않는 빈 곳에 놓고 바로 쓴다. 빈 곳이 없으면 가운데 위쪽
+  function addNote(style) {
+    if (!examId || mode !== 'board') return;
+    if (noteEdit) commitNote(true);
+    const text = style === 'text';
+    const r = vp.getBoundingClientRect();
+    if (view.z < 0.6) zoomAt(1, r.width / 2, r.height / 2); // 너무 작게 보는 중이면 글자가 읽히는 크기로
+    const zone = noteZone(r);
+    const w = (text ? 200 : NOTE_W) * view.z, h = (text ? 44 : 96) * view.z; // 화면에서 차지할 크기
+    const want = { x: r.left + (r.width - w) / 2, y: coarse() ? zone.top + 8 : Math.max(zone.top, r.top + r.height * 0.38 - h / 2) };
+    const rects = $$('#board-cards .bcard').map((el) => el.getBoundingClientRect());
+    let best = null;
+    for (let y = zone.top; y + h <= zone.bottom; y += 20) {
+      for (let x = r.left + 12; x + w <= r.right - 12; x += 20) {
+        if (rects.some((b) => x < b.right + 10 && x + w > b.left - 10 && y < b.bottom + 10 && y + h > b.top - 10)) continue;
+        const d = Math.hypot(x - want.x, y - want.y);
+        if (!best || d < best.d) best = { x, y, d };
+      }
+    }
+    const c = toWorld((best || want).x, (best || want).y);
+    let x = noteX(c.x), y = noteY(c.y);
+    // 빈 곳이 없어 같은 자리에 겹치게 되면 조금씩 비켜 놓는다
+    const taken = Scope.childrenOf(st().topics, null, examId).filter((n) => n.kind === 'note');
+    for (let i = 0; i < 12 && taken.some((n) => Math.abs((n.x || 0) - x) < 12 && Math.abs((n.y || 0) - y) < 12); i++) { x += 20; y += 20; }
+    draftNote = {
+      id: uid(), examId, parentId: null, kind: 'note', title: '', done: false, flags: {}, order: 0, collapsed: false,
+      x, y, color: text ? lastNote.ink : lastNote.paper, size: lastNote.size,
+    };
+    if (text) draftNote.style = 'text'; else draftNote.w = NOTE_W;
+    noteEdit = { id: draftNote.id, value: '' };
+    focusNote = true;
+    if (tool !== 'select') setTool('select');
+    render();
+  }
+
+  // 쓰는 메모가 자판에 가리거나 화면 밖에 있으면 보이는 곳으로 보드를 옮긴다
+  function revealNote(el) {
+    if (mode !== 'board') return ensureVisible(el);
+    const card = el.closest('.bcard');
+    if (!card) return;
+    const r = vp.getBoundingClientRect();
+    const c = card.getBoundingClientRect();
+    const zone = noteZone(r);
+    let dx = 0, dy = 0;
+    if (c.bottom > zone.bottom) dy = zone.bottom - c.bottom;
+    if (c.top + dy < zone.top) dy = zone.top - c.top;
+    if (c.right > r.right - 12) dx = r.right - 12 - c.right;
+    if (c.left + dx < r.left + 12) dx = r.left + 12 - c.left;
+    if (dx || dy) { view.x += dx; view.y += dy; applyView(); }
+  }
+
+  // 메모 꾸미기 띠: 메모를 쓰는 동안 보드 위쪽에 뜬다 (색, 글자 크기, 지우기, 완료)
+  function renderNoteBar() {
+    const n = noteEdit ? noteById(noteEdit.id) : null;
+    noteBar.hidden = !n;
+    if (!n) { noteBar.innerHTML = ''; return; }
+    const cur = noteColor(n), size = noteSize(n), text = isText(n);
+    const names = text ? ['기본', '빨강', '파랑', '초록', '주황'] : ['노랑', '분홍', '연두', '하늘', '보라'];
+    noteBar.innerHTML = noteColors(n).map((c, i) => `<button type="button" class="nb-color${c === cur ? ' active' : ''}${c ? '' : ' auto'}" data-note-color="${c}"${c ? ` style="--c:${c}"` : ''} title="${names[i]}" aria-label="${text ? '글자 색' : '쪽지 색'} ${names[i]}" aria-pressed="${c === cur}"></button>`).join('') +
+      '<span class="bd-sep" aria-hidden="true"></span>' +
+      `<button type="button" class="bb-btn nb-size" data-note-size title="글자 크기 바꾸기" aria-label="글자 크기: ${NOTE_SIZE_LABEL[size]}"><span class="nb-ga" aria-hidden="true">가</span>${NOTE_SIZE_LABEL[size]}</button>` +
+      `<button type="button" class="bb-btn nb-del" data-note-del title="메모 지우기" aria-label="메모 지우기">${A.ic('trash')}</button>` +
+      '<button type="button" class="bb-btn nb-done" data-note-done>완료</button>';
+  }
+  // 띠를 눌러도 쓰던 칸의 커서(휴대폰 자판)가 그대로 있게
+  ['pointerdown', 'mousedown'].forEach((ev) => noteBar.addEventListener(ev, (e) => e.preventDefault()));
+  noteBar.addEventListener('click', (e) => {
+    if (!noteEdit) return;
+    const id = noteEdit.id;
+    const col = e.target.closest('[data-note-color]');
+    if (col) return setNoteProp(id, { color: col.dataset.noteColor });
+    if (e.target.closest('[data-note-size]')) {
+      const n = noteById(id);
+      return setNoteProp(id, { size: NOTE_SIZES[(NOTE_SIZES.indexOf(noteSize(n)) + 1) % NOTE_SIZES.length] });
+    }
+    if (e.target.closest('[data-note-del]')) return deleteNote(id);
+    if (e.target.closest('[data-note-done]')) return commitNote(true);
+  });
+
+  cardsEl.addEventListener('input', (e) => {
+    const ta = e.target.closest && e.target.closest('[data-note-edit]');
+    if (!ta || !noteEdit) return;
+    noteEdit.value = ta.value;
+    ta.parentNode.dataset.value = ta.value; // 글자 수만큼 칸이 자란다 (styles.css .bnote-grow)
+  });
+  cardsEl.addEventListener('keydown', (e) => {
+    const ta = e.target.closest && e.target.closest('[data-note-edit]');
+    if (!ta) return;
+    if (e.key === 'Escape') { e.stopPropagation(); commitNote(false); }
+    else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitNote(true); }
+  });
+  // 다른 곳을 누르면 쓰기 끝 (다시 그리느라 잠깐 빠진 커서, 꾸미기 띠를 누른 것은 빼고)
+  cardsEl.addEventListener('focusout', (e) => {
+    const ta = e.target.closest && e.target.closest('[data-note-edit]');
+    if (!ta || renderingNow) return;
+    const id = ta.dataset.noteEdit;
+    setTimeout(() => {
+      if (!noteEdit || noteEdit.id !== id) return;
+      const a = document.activeElement;
+      if (a && a.matches && a.matches('[data-note-edit]')) return;
+      commitNote(true);
+    }, 0);
+  });
+  cardsEl.addEventListener('keydown', (e) => {
+    const note = e.target.closest && e.target.closest('[data-note]');
+    if (note && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); startNoteEdit(note.dataset.note); }
+  });
 
   /* ---------- 메뉴 ---------- */
   // ⋯ 메뉴: 첫 화면에는 자주 쓰는 것만 두고, 표시(중요·어려움·다시 보기)와 옮기기는 눌러서 들어가는 하위 메뉴로
@@ -859,9 +1074,8 @@
     const kidsOf = (x) => index.get(x) || [];
     const hasKids = kidsOf(id).length > 0;
     let html = '';
-    if (n.kind === 'note') {
-      html = mItem('edit-note', '메모 고치기') + colorItem(n, '메모 색 바꾸기') + mItem('delete', '메모 삭제', { cls: 'danger' });
-    } else if (page === 'flags') {
+    if (n.kind === 'note') return;
+    if (page === 'flags') {
       html = mHead('표시') + Object.keys(FLAG_INFO).map((k) => mItem('flag:' + k, `${FLAG_INFO[k].icon}  ${FLAG_INFO[k].label}`, { check: true, on: !!(n.flags && n.flags[k]) })).join('');
     } else if (page === 'move') {
       const sib = Scope.childrenOf(st().topics, n.parentId, examId).filter((x) => (x.kind === 'note') === (n.kind === 'note'));
@@ -991,9 +1205,6 @@
     else if (act === 'rename') {
       const el = cardsEl.querySelector(`[data-rename="${CSS.escape(id)}"]`);
       if (el) startRename(id, el);
-    } else if (act === 'edit-note') {
-      const el = cardsEl.querySelector(`[data-note="${CSS.escape(id)}"]`);
-      if (el) startNoteEdit(id, el);
     } else if (act === 'uncheck-all') {
       mutate((s) => Scope.setDone(s.topics, id, false));
     } else if (act === 'focus') {
@@ -1013,7 +1224,7 @@
       mutate((s) => s.topics.forEach((t) => { if (ids.has(t.id) && t.id !== id) t.collapsed = act === 'collapse-all'; }), false);
     } else if (act === 'colors') {
       // 색 계열별 팔레트에서 고른다
-      const c = window.UI ? await UI.pickColor({ title: n.kind === 'note' ? '메모 색' : '과목 색', current: n.color }) : null;
+      const c = window.UI ? await UI.pickColor({ title: '과목 색', current: n.color }) : null;
       if (c) mutate((s) => { const t = s.topics.find((x) => x.id === id); if (t) t.color = c; });
     } else if (act === 'move-to') {
       openMoveDialog(id);
@@ -1170,7 +1381,8 @@
       addSubjectCards([name]);
     });
   });
-  $('#bb-add-note').addEventListener('click', () => addCardAtCenter('note'));
+  $('#bb-add-note').addEventListener('click', () => addNote());
+  $('#bb-add-text').addEventListener('click', () => addNote('text'));
   $('#bb-zoom-in').addEventListener('click', () => zoomBy(1.25));
   $('#bb-zoom-out').addEventListener('click', () => zoomBy(0.8));
   $('#bb-zoom-label').addEventListener('click', () => { const r = vp.getBoundingClientRect(); zoomAt(1, r.width / 2, r.height / 2); });
@@ -1198,7 +1410,8 @@
     if (store.undo()) toast('되돌렸어요');
   }
 
-  $('#board-bar').addEventListener('click', (e) => {
+  // 아래 도구 띠: 선택·펜·형광펜·지우개, 붙임쪽지·글 상자, 되돌리기. 펜 색은 펜·형광펜을 고르면 띠 위에 뜬다
+  dock.addEventListener('click', (e) => {
     const t = e.target.closest('[data-tool]');
     if (t) return setTool(t.dataset.tool);
     const c = e.target.closest('[data-color]');
@@ -1215,34 +1428,14 @@
 
   function setToolClass() {
     ['select', 'pen', 'marker', 'eraser'].forEach((t) => vp.classList.toggle('tool-' + t, t === tool));
+    dock.classList.toggle('inking', tool === 'pen' || tool === 'marker');
   }
 
   function setTool(t) {
     tool = t;
-    $$('#board-bar [data-tool]').forEach((b) => b.classList.toggle('active', b.dataset.tool === t));
+    $$('#board-dock [data-tool]').forEach((b) => { const on = b.dataset.tool === t; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
     setToolClass();
     renderBar();
-  }
-
-  function addCardAtCenter(kind) {
-    if (!examId) return;
-    const r = vp.getBoundingClientRect();
-    const c = toWorld(r.left + r.width / 2, r.top + r.height / 2);
-    const id = uid();
-    const used = Scope.childrenOf(st().topics, null, examId).length;
-    mutate((s) => s.topics.push({
-      id, examId, parentId: null, kind, title: kind === 'note' ? '' : '새 카드', done: false, flags: {},
-      order: Scope.nextOrder(s.topics, null, examId), collapsed: false,
-      x: Math.round(c.x - Scope.CARD_W / 2 + (used % 5) * 16), y: Math.round(c.y - 60 + (used % 5) * 16),
-      color: kind === 'note' ? '#f5d65b' : Scope.COLORS[used % Scope.COLORS.length],
-    }));
-    setTool('select');
-    requestAnimationFrame(() => {
-      const el = cardsEl.querySelector(kind === 'note' ? `[data-note="${id}"]` : `[data-rename="${id}"]`);
-      if (!el) return;
-      if (kind === 'note') startNoteEdit(id, el);
-      else startRename(id, el);
-    });
   }
 
   /* ---------- 시험 만들기·편집 ---------- */
@@ -1297,7 +1490,7 @@
   // 새 시험 + 고른 과목 → 목록 보기에서 과목마다 공부할 내용 적기
   function startExam(name, date, subjects) {
     createExam(name, date);
-    if (!modePref) mode = 'list';
+    mode = 'list';
     if (subjects.length) addSubjectCards(subjects, { quiet: true });
     render();
     if (mode === 'list') {
@@ -1528,10 +1721,21 @@
       return;
     }
 
+    // 메모 폭 바꾸기 (오른쪽 아래 모서리)
+    const grip = e.target.closest('[data-resize]');
+    if (grip && tool === 'select' && !panKey) {
+      e.preventDefault(); // 쓰던 중이면 커서를 그대로 둔다
+      const card = grip.closest('.bcard');
+      gesture = { type: 'resize', id: grip.dataset.resize, el: card, sx: e.clientX, ow: card.offsetWidth, w: card.offsetWidth, pid: e.pointerId };
+      try { vp.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+      vp.classList.add('dragging');
+      return;
+    }
+
     const drag = e.target.closest('[data-drag]');
     if (drag && !isInteractive(e.target) && tool === 'select' && !panKey) {
       const card = drag.closest('.bcard');
-      gesture = { type: 'maybe-card', id: drag.dataset.drag, el: card, sx: e.clientX, sy: e.clientY, ox: parseFloat(card.style.left), oy: parseFloat(card.style.top), pid: e.pointerId };
+      gesture = { type: 'maybe-card', id: drag.dataset.drag, el: card, note: card.classList.contains('note'), sx: e.clientX, sy: e.clientY, ox: parseFloat(card.style.left), oy: parseFloat(card.style.top), pid: e.pointerId };
       return;
     }
     if (isInteractive(e.target) && !panKey) return;
@@ -1569,8 +1773,16 @@
 
     const dx = e.clientX - gesture.sx;
     const dy = e.clientY - gesture.sy;
+    // 누른 뒤에 화면이 다시 그려졌으면(쓰던 메모가 저장되는 등) 새로 그려진 카드를 잡는다
+    if (gesture.el && !gesture.el.isConnected && gesture.id) gesture.el = cardsEl.querySelector(`.bcard[data-id="${CSS.escape(gesture.id)}"]`) || gesture.el;
+    if (gesture.type === 'resize') {
+      gesture.w = clamp(gesture.ow + dx / view.z, NOTE_MIN_W, NOTE_MAX_W);
+      gesture.el.style.width = gesture.w + 'px';
+      gesture.el.classList.add('fixed-w');
+      return;
+    }
     if (gesture.type === 'maybe-card' || gesture.type === 'maybe-pan') {
-      if (Math.hypot(dx, dy) < 4) return;
+      if (Math.hypot(dx, dy) < (gesture.note && e.pointerType === 'touch' ? 8 : 4)) return;
       gesture.type = gesture.type === 'maybe-card' ? 'card' : 'pan';
       try { vp.setPointerCapture(gesture.pid); } catch (err) { /* 무시 */ }
       vp.classList.add('dragging');
@@ -1602,9 +1814,14 @@
       mutate((s) => s.strokes.push({ id, examId, points: g.points, color: inkColor, width: g.marker ? 18 : 3, marker: g.marker }));
     } else if (g.type === 'card') {
       g.el.classList.remove('lifted');
-      const x = Math.round(parseFloat(g.el.style.left) / SNAP) * SNAP;
-      const y = Math.round(parseFloat(g.el.style.top) / SNAP) * SNAP;
-      mutate((s) => { const c = s.topics.find((t) => t.id === g.id); if (c) { c.x = Math.max(0, Math.min(WORLD_W - Scope.CARD_W, x)); c.y = Math.max(0, Math.min(WORLD_H - 60, y)); } });
+      const x = g.note ? noteX(parseFloat(g.el.style.left)) : clamp(Math.round(parseFloat(g.el.style.left) / SNAP) * SNAP, 0, WORLD_W - Scope.CARD_W);
+      const y = g.note ? noteY(parseFloat(g.el.style.top)) : clamp(Math.round(parseFloat(g.el.style.top) / SNAP) * SNAP, 0, WORLD_H - 60);
+      if (draftNote && draftNote.id === g.id) { draftNote.x = x; draftNote.y = y; render(); }
+      else mutate((s) => { const c = s.topics.find((t) => t.id === g.id); if (c) { c.x = x; c.y = y; } });
+    } else if (g.type === 'resize') {
+      setNoteProp(g.id, { w: Math.round(g.w / SNAP) * SNAP });
+    } else if (g.type === 'maybe-card' && g.note && e.type === 'pointerup') {
+      startNoteEdit(g.id); // 끌지 않고 눌렀다 뗀 메모: 그 자리에서 고치기
     }
   }
   vp.addEventListener('pointerup', endPointer);
@@ -1648,6 +1865,10 @@
 
   /* ---------- 키보드 ---------- */
   let spaceDown = false;
+  // Esc로 전체 화면에서 나가기: 같은 Esc로 방금 닫힌 창·메뉴가 있었으면 나가지 않는다 (먼저 잡아 둔다)
+  let escBusy = false;
+  const overlayOpen = () => !menu.hidden || !!document.querySelector('.ask-backdrop:not([hidden]), .ui-back:not(.out)') || document.body.classList.contains('ai-open');
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') escBusy = overlayOpen() || !!noteEdit; }, true);
   document.addEventListener('keydown', (e) => {
     if (A.view !== 'board' || !examId) return;
     if (e.target.closest('input, textarea, select, [contenteditable]')) return;
@@ -1663,7 +1884,13 @@
     else if (k === '0') fit();
     else if (k === '=' || k === '+') zoomBy(1.25);
     else if (k === '-') zoomBy(0.8);
-    else if (k === 'escape' && tool !== 'select') setTool('select');
+    else if (k === 'n') { e.preventDefault(); addNote(); }
+    else if (k === 't') { e.preventDefault(); addNote('text'); }
+    else if (k === 'escape') {
+      if (escBusy) return;
+      if (tool !== 'select') setTool('select');
+      else setScopeMode('list'); // 전체 화면에서 나가기
+    }
     else if (k === '/' || k === 'f') { e.preventDefault(); $('#bb-search-input').focus(); }
   });
   document.addEventListener('keyup', (e) => {
@@ -1682,6 +1909,9 @@
     applyView();
   });
 
-  window.Board = { render, fit, get view() { return Object.assign({}, view); }, get mode() { return mode; }, setMode: setScopeMode, setTool, zoomAt };
+  window.Board = {
+    render, fit, get view() { return Object.assign({}, view); }, get mode() { return mode; }, get full() { return document.body.classList.contains('board-full'); },
+    setMode: setScopeMode, setTool, zoomAt, addNote,
+  };
   if (A.view === 'board') render();
 })();

@@ -119,6 +119,9 @@
       else if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
     });
     document.body.classList.toggle('board-mode', view === 'board');
+    // 범위 탭은 늘 목록부터 연다. 화이트보드(전체 화면)는 '보드'를 눌렀을 때만 (js/board.js)
+    if (view !== 'board') document.body.classList.remove('board-full');
+    else if (prev !== 'board' && window.Board) window.Board.setMode('list');
     if (location.hash !== '#' + view) { try { history.replaceState(history.state, '', '#' + view); } catch (e) { /* 방문 기록을 못 쓰는 환경 */ } }
     if (prev === 'about' && view !== 'about') stopAboutTrack();
     render();
@@ -151,6 +154,7 @@
       return true;
     }
     if (currentView === 'review' && openDeckId) { $('#deck-back').click(); return true; }
+    if (currentView === 'board' && window.Board && window.Board.full) { window.Board.setMode('list'); return true; } // 전체 화면 화이트보드 → 목록으로
     return false;
   }
   const isInstalled = () => { try { return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true; } catch (e) { return false; } };

@@ -1914,3 +1914,119 @@ body:has(.lock-screen:not([hidden])) .ai-fab { display: none; }
   .ui-day, .ui-back.pop .ui-day { max-height: 32px; }
   .ui-cal-foot { padding-top: 8px; }
 }
+
+/* ===================== 화이트보드 전체 화면 + 메모 (v3.3) ===================== */
+/* 보드 보기 = 전체 화면: 위 앱 바와 아래 탭을 숨기고 보드가 화면을 다 쓴다. '목록'·뒤로 가기·Esc로 돌아간다 (js/board.js syncFull) */
+body.board-full .topbar { display: none; }
+body.board-full main { padding-bottom: 0; }
+body.board-full .toast { bottom: calc(120px + env(safe-area-inset-bottom)); }
+body.board-full #board-pace.hint { display: none; }
+.board-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* 위 띠: ⋯는 늘 오른쪽 끝. 휴대폰은 띠를 옆으로 밀어도 ⋯가 따라온다 */
+.board-bar .bb-end { margin-left: auto; }
+@media (max-width: 720px) {
+  #view-board:not(.list-mode) .board-bar .bb-end { position: sticky; right: -8px; margin-right: -8px; padding: 0 8px 0 4px; background: var(--surface); box-shadow: -12px 0 10px -6px var(--surface); }
+}
+/* 범례는 왼쪽 위로 (아래는 도구 띠 자리). 좁은 화면에서는 0개인 표시를 뺀다 */
+#view-board:not(.list-mode) .board-legend { top: 10px; bottom: auto; left: 10px; max-width: calc(100% - 20px); }
+@media (max-width: 720px) {
+  #view-board:not(.list-mode) .board-legend { top: 8px; left: 8px; max-width: calc(100% - 16px); }
+  .board-legend .zero { display: none; }
+}
+
+/* 아래 도구 띠: 선택·펜·형광펜·지우개 | 붙임쪽지·글 상자 | 되돌리기 */
+.board-dock {
+  position: absolute; left: 50%; bottom: calc(12px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 6;
+  display: flex; align-items: center; gap: 2px; padding: 5px; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, .16);
+}
+.board-dock.disabled { display: none; }
+.board-dock .bb-btn { flex: none; width: 42px; min-width: 0; height: 42px; padding: 0; border-radius: 12px; }
+.board-dock .bb-btn .ic { width: 22px; height: 22px; }
+.bd-sep { flex: none; width: 1px; height: 22px; margin: 0 4px; background: var(--line); }
+@media (max-width: 380px) {
+  .board-dock .bb-btn { width: 38px; height: 40px; }
+  .board-dock .bd-sep { margin: 0 2px; }
+}
+/* 펜 색: 펜·형광펜을 고르면 도구 띠 위에 뜬다 */
+.board-dock .bb-colors {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); display: none; gap: 8px; margin: 0;
+  padding: 7px 10px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(0, 0, 0, .14);
+}
+.board-dock.inking .bb-colors { display: inline-flex; }
+.board-dock .bb-color { flex: none; width: 26px; height: 26px; }
+/* AI 도우미 단추: 휴대폰에서는 도구 띠 바로 위 */
+@media (max-width: 720px) { body.board-full .ai-fab { bottom: calc(74px + env(safe-area-inset-bottom)); } }
+
+/* 메모: 붙임쪽지 (누르면 그 자리에서 쓰고, 끌어서 옮기고, 오른쪽 아래 모서리로 폭을 바꾼다) */
+.bcard.note {
+  --fs: 16px; width: 220px; padding: 0; border: 0; border-radius: 3px; background: var(--c, #fff3a8); color: #2b2a26; transform: none; cursor: grab;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .1), 0 10px 18px -8px rgba(0, 0, 0, .28);
+}
+.bcard.note.sz-s { --fs: 13px; }
+.bcard.note.sz-l { --fs: 23px; }
+.bcard.note .bnote-text, .bcard.note .bnote-edit, .bcard.note .bnote-grow::after {
+  box-sizing: border-box; margin: 0; padding: 14px 14px 20px; min-height: 88px; font: inherit; font-size: var(--fs); line-height: 1.45;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word;
+}
+.bcard.note .bnote-text .muted { color: inherit; opacity: .45; }
+.bcard.note .bnote-text:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 글 상자: 종이 없이 보드에 바로 쓰는 글. 폭은 글자만큼 */
+.bcard.note.text { width: max-content; min-width: 40px; max-width: 520px; background: none; box-shadow: none; border-radius: 8px; color: var(--c, var(--text)); }
+.bcard.note.text.fixed-w { max-width: none; }
+.bcard.note.text .bnote-text, .bcard.note.text .bnote-edit, .bcard.note.text .bnote-grow::after { padding: 6px 10px; min-height: 0; font-weight: 500; }
+.bcard.note.text.lifted { background: var(--card); }
+/* 쓰는 중 */
+.bcard.note.editing { cursor: auto; outline: 2px solid var(--accent); outline-offset: 2px; z-index: 4; }
+.bcard.note.text.editing { min-width: 190px; background: var(--card); }
+.bnote-grow { display: grid; }
+.bnote-grow::after { content: attr(data-value) " "; grid-area: 1 / 1; visibility: hidden; pointer-events: none; }
+.bcard.note .bnote-edit {
+  grid-area: 1 / 1; display: block; width: 100%; height: 100%; min-width: 0; resize: none; overflow: hidden;
+  border: 0; border-radius: 0; background: none; color: inherit; outline: none; box-shadow: none; -webkit-appearance: none; appearance: none;
+  user-select: text; -webkit-user-select: text; cursor: text;
+}
+.bcard.note .bnote-edit::placeholder { color: currentColor; opacity: .42; }
+/* 폭 바꾸는 모서리 */
+.bnote-grip {
+  position: absolute; right: 0; bottom: 0; width: 18px; height: 18px; cursor: ew-resize; opacity: .4; touch-action: none;
+  background: linear-gradient(135deg, transparent 52%, currentColor 52%, currentColor 60%, transparent 60%, transparent 72%, currentColor 72%, currentColor 80%, transparent 80%);
+}
+.bnote-grip::after { content: ''; position: absolute; inset: -8px -4px -4px -8px; }
+@media (pointer: coarse) { .bnote-grip::after { inset: -14px -6px -6px -14px; } }
+.bcard.note.text .bnote-grip { opacity: 0; }
+.bcard.note.text.editing .bnote-grip { opacity: .4; }
+@media (hover: hover) { :where(:root:not(.touch)) .bcard.note.text:hover .bnote-grip { opacity: .4; } }
+/* 목록 보기: 메모는 과목 아래에 한 장씩 */
+.list-mode .bcard.note { width: auto; max-width: none; cursor: pointer; box-shadow: none; }
+.list-mode .bcard.note.editing { cursor: auto; }
+.list-mode .bcard.note.text { background: var(--card); border: 1px dashed var(--line); }
+.list-mode .bcard.note .bnote-text, .list-mode .bcard.note .bnote-edit, .list-mode .bcard.note .bnote-grow::after { min-height: 0; padding: 12px 14px; }
+.list-mode .bnote-grip { display: none; }
+
+/* 메모 꾸미기 띠: 메모를 쓰는 동안 보드 위쪽에 뜬다 (자판에 가리지 않는 자리) */
+.note-bar {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 7; display: flex; align-items: center; gap: 6px;
+  padding: 5px 6px 5px 10px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, .16);
+  max-width: calc(100% - 16px); overflow-x: auto; scrollbar-width: none; white-space: nowrap;
+}
+.note-bar::-webkit-scrollbar { display: none; }
+.nb-color { flex: none; width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid var(--surface); background: var(--c, var(--text)); box-shadow: 0 0 0 1px var(--line); cursor: pointer; }
+.nb-color.active { box-shadow: 0 0 0 2px var(--text); }
+.note-bar .bd-sep { margin: 0 2px; }
+.note-bar .bb-btn { flex: none; height: 36px; }
+.nb-size { gap: 5px; font-size: 13px; padding: 0 8px; }
+.nb-ga { font-size: 16px; font-weight: 700; line-height: 1; }
+.nb-del { width: 36px; padding: 0; color: var(--danger); }
+.nb-done { padding: 0 12px; font-size: 13.5px; font-weight: 700; background: var(--ink); color: var(--ink-text); }
+@media (hover: hover) { :where(:root:not(.touch)) .note-bar .nb-done:hover { background: var(--ink); opacity: .86; } }
+
+@media print { .board-dock, .note-bar, .bnote-grip { display: none !important; } }
+/* 높이가 낮은 화면(가로로 눕힌 폰)의 전체 화면 보드: 위 띠는 한 줄로 두고 옆으로 민다 */
+@media (max-height: 520px) and (min-width: 721px) {
+  #view-board:not(.list-mode) .board-bar { flex-wrap: nowrap; overflow-x: auto; gap: 10px; padding: 6px 8px; scrollbar-width: none; }
+  #view-board:not(.list-mode) .board-bar::-webkit-scrollbar { display: none; }
+  #view-board:not(.list-mode) .board-bar .bb-end { position: sticky; right: -8px; margin-right: -8px; padding: 0 8px 0 4px; background: var(--surface); box-shadow: -12px 0 10px -6px var(--surface); }
+  #view-board:not(.list-mode) .bb-modes { order: -1; }
+}
