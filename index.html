@@ -210,7 +210,7 @@
         <input id="t-title" placeholder="무엇을 공부할까요? 예: 수학 문제집 3단원" required maxlength="120">
         <select id="t-subject" aria-label="과목"></select>
         <input id="t-due" type="date" aria-label="마감일">
-        <input id="t-est" type="number" min="5" step="5" placeholder="예상(분)" aria-label="예상 시간(분)">
+        <input id="t-est" type="number" min="1" step="1" placeholder="예상(분)" aria-label="예상 시간(분)">
         <button class="btn primary" type="submit">추가</button>
       </form>
       <div class="filters" id="task-filters">
@@ -494,7 +494,7 @@
           </div>
         </div>
         <form class="settings" id="settings-form">
-          <label class="field">하루 목표(분)<input type="number" id="set-goal" min="10" step="10" inputmode="numeric"></label>
+          <label class="field">하루 목표(분)<input type="number" id="set-goal" min="10" step="1" inputmode="numeric"></label>
           <label class="field">집중 시간(분)<input type="number" id="set-focus" min="1" max="180" inputmode="numeric"></label>
           <label class="field">휴식 시간(분)<input type="number" id="set-break" min="1" max="60" inputmode="numeric"></label>
           <label class="field full">하루 시작 시각
@@ -630,7 +630,7 @@
         </details>
         <details>
           <summary><svg class="sum-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3.6l1.7 4.7a2 2 0 0 0 1.2 1.2l4.7 1.7-4.7 1.7a2 2 0 0 0-1.2 1.2L11 18.8l-1.7-4.7a2 2 0 0 0-1.2-1.2l-4.7-1.7 4.7-1.7a2 2 0 0 0 1.2-1.2z"/><path d="M18.6 15.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"/></svg>AI 도우미 세컨드</summary>
-          <p>오른쪽 아래 둥근 단추를 누르면 AI 도우미 <b>세컨드</b>와 이야기할 수 있어요. 지금은 먼저 써 보는 중이라 단추가 보이는 계정에서만 쓸 수 있고, 곧 로그인한 모두에게 열려요.</p>
+          <p>오른쪽 아래 둥근 단추를 누르면 AI 도우미 <b>세컨드</b>와 이야기할 수 있어요. 로그인하면 누구나 쓸 수 있어요.</p>
           <ul>
             <li><b>물어보기</b>: 모르는 단어나 표현, 문장 해석을 물어보세요. 예: ‘echar de menos가 무슨 뜻이야?’ 외워 둘 만한 표현은 답 아래 <b>복습 카드로 저장</b>을 누르면 복습 덱에 들어가요.</li>
             <li><b>말로 앱 쓰기</b>: ‘내일까지 영어 단어 50개 할 일 추가해 줘’, ‘매주 월수금 4시부터 6시까지 수학 학원 넣어 줘’, ‘이번 주에 수학 몇 시간 했어?’처럼 말하면 할 일·일정·공부 기록·시험 날짜를 바꾸거나 알려 줘요.</li>
@@ -678,6 +678,13 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="3.1.1" data-date="2026년 11월 15일">
+            <ul class="news">
+              <li><b>시각을 1분 단위로</b>: 공부 시간 직접 기록이나 일정에서 분을 01, 12처럼 5분 단위가 아니게 넣으면 ‘유효한 값을 입력해 주세요’가 뜨며 기록이 막히던 문제를 고쳤어요. 할 일 예상 시간과 하루 목표도 1분 단위로 넣을 수 있어요</li>
+              <li><b>세컨드 답의 번호</b>: 번호 목록 사이에 설명 줄이 끼면 번호가 모두 1로 나오던 문제를 고쳤어요. 이제 1, 2, 3으로 이어지고 설명은 그 번호 아래에 들어가요</li>
+              <li><b>AI 도우미를 모두에게</b>: 이제 로그인하면 누구나 세컨드를 쓸 수 있어요. 한 사람이 하루 20번까지 쓸 수 있고, 매일 오전 9시에 다시 채워져요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="3.1" data-date="2026년 11월 15일">
             <ul class="news">
               <li><b>AI 도우미가 더 빨리, 끝까지 답해요</b>: 답하기 전에 속으로 오래 생각하다가 답이 잘리거나 빈 채로 오던 문제를 고쳤어요</li>
@@ -806,7 +813,7 @@
       <h2 id="time-title">소요시간·진행률</h2>
       <p class="muted small" id="time-item"></p>
       <label class="field">이 항목에 걸리는 시간
-        <span class="time-input"><input type="number" id="time-h" min="0" max="99" inputmode="numeric" aria-label="시간"> 시간 <input type="number" id="time-m" min="0" max="59" step="5" inputmode="numeric" aria-label="분"> 분</span>
+        <span class="time-input"><input type="number" id="time-h" min="0" max="99" inputmode="numeric" aria-label="시간"> 시간 <input type="number" id="time-m" min="0" max="59" step="1" inputmode="numeric" aria-label="분"> 분</span>
       </label>
       <div class="lock-chips" id="time-quick">
         <button class="chip" type="button" data-min="15">15분</button><button class="chip" type="button" data-min="30">30분</button><button class="chip" type="button" data-min="60">1시간</button><button class="chip" type="button" data-min="90">1시간 30분</button><button class="chip" type="button" data-min="120">2시간</button><button class="chip" type="button" data-min="180">3시간</button>
@@ -874,10 +881,10 @@
       <label class="field">날짜<input type="date" id="ev-date"></label>
       <div class="log-clock">
         <label class="field">시작
-          <span class="time-input clock-input"><input type="number" id="ev-sh" min="0" max="23" inputmode="numeric" placeholder="시" aria-label="시작 시"><b aria-hidden="true">:</b><input type="number" id="ev-sm" min="0" max="59" step="5" inputmode="numeric" placeholder="분" aria-label="시작 분"></span>
+          <span class="time-input clock-input"><input type="number" id="ev-sh" min="0" max="23" inputmode="numeric" placeholder="시" aria-label="시작 시"><b aria-hidden="true">:</b><input type="number" id="ev-sm" min="0" max="59" step="1" inputmode="numeric" placeholder="분" aria-label="시작 분"></span>
         </label>
         <label class="field">끝
-          <span class="time-input clock-input"><input type="number" id="ev-eh" min="0" max="24" inputmode="numeric" placeholder="시" aria-label="끝 시"><b aria-hidden="true">:</b><input type="number" id="ev-em" min="0" max="59" step="5" inputmode="numeric" placeholder="분" aria-label="끝 분"></span>
+          <span class="time-input clock-input"><input type="number" id="ev-eh" min="0" max="24" inputmode="numeric" placeholder="시" aria-label="끝 시"><b aria-hidden="true">:</b><input type="number" id="ev-em" min="0" max="59" step="1" inputmode="numeric" placeholder="분" aria-label="끝 분"></span>
         </label>
       </div>
       <p class="log-sum small" id="ev-sum" aria-live="polite" hidden></p>
@@ -911,14 +918,14 @@
       <label class="field">과목<select id="log-subject"></select></label>
       <div class="log-clock" id="log-clock" hidden>
         <label class="field">시작
-          <span class="time-input clock-input"><input type="number" id="log-sh" min="0" max="23" inputmode="numeric" placeholder="시" aria-label="시작 시"><b aria-hidden="true">:</b><input type="number" id="log-sm" min="0" max="59" step="5" inputmode="numeric" placeholder="분" aria-label="시작 분"></span>
+          <span class="time-input clock-input"><input type="number" id="log-sh" min="0" max="23" inputmode="numeric" placeholder="시" aria-label="시작 시"><b aria-hidden="true">:</b><input type="number" id="log-sm" min="0" max="59" step="1" inputmode="numeric" placeholder="분" aria-label="시작 분"></span>
         </label>
         <label class="field">끝
-          <span class="time-input clock-input"><input type="number" id="log-eh" min="0" max="24" inputmode="numeric" placeholder="시" aria-label="끝 시"><b aria-hidden="true">:</b><input type="number" id="log-em" min="0" max="59" step="5" inputmode="numeric" placeholder="분" aria-label="끝 분"></span>
+          <span class="time-input clock-input"><input type="number" id="log-eh" min="0" max="24" inputmode="numeric" placeholder="시" aria-label="끝 시"><b aria-hidden="true">:</b><input type="number" id="log-em" min="0" max="59" step="1" inputmode="numeric" placeholder="분" aria-label="끝 분"></span>
         </label>
       </div>
       <label class="field" id="log-dur">공부한 시간
-        <span class="time-input"><input type="number" id="log-h" min="0" max="24" inputmode="numeric" aria-label="시간"> 시간 <input type="number" id="log-m" min="0" max="59" step="5" inputmode="numeric" aria-label="분"> 분</span>
+        <span class="time-input"><input type="number" id="log-h" min="0" max="24" inputmode="numeric" aria-label="시간"> 시간 <input type="number" id="log-m" min="0" max="59" step="1" inputmode="numeric" aria-label="분"> 분</span>
       </label>
       <div class="lock-chips" id="log-quick">
         <button class="chip" type="button" data-min="30">30분</button><button class="chip" type="button" data-min="60">1시간</button><button class="chip" type="button" data-min="90">1시간 30분</button><button class="chip" type="button" data-min="120">2시간</button><button class="chip" type="button" data-min="180">3시간</button>
