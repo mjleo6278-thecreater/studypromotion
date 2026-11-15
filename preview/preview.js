@@ -87,12 +87,20 @@
       { id: id('k'), title: '국어 수행평가 보고서 초안', subjectId: 's-kor', due: Stats.dayKey(now + 3 * DAY), estimateMin: 120, done: false, createdAt: now - 2 * DAY },
       { id: id('k'), title: '한국사 요약 노트', subjectId: 's-hist', due: null, estimateMin: null, done: false, createdAt: now - DAY },
     ];
+    // 일정: 매주 월·수·금 수학 학원, 오늘 저녁 영어, 내일 친구 약속, 모레 국어 (AI 도우미에게 옮겨 달라고 해 볼 수 있게)
+    const ev = (o) => Object.assign({ id: id('ev'), kind: 'study', title: '', subjectId: null, taskId: null, repeat: null, skip: [], createdAt: now - 5 * DAY }, o);
+    const events = [
+      ev({ title: '학원', subjectId: 's-math', date: Stats.dayKey(now - 21 * DAY), start: '16:00', end: '18:00', repeat: { freq: 'weekly', days: [1, 3, 5], until: null } }),
+      ev({ subjectId: 's-eng', taskId: tasks[1].id, date: Stats.dayKey(now), start: '20:00', end: '21:00' }),
+      ev({ kind: 'other', title: '친구 약속', date: Stats.dayKey(now + DAY), start: '18:30', end: '20:00' }),
+      ev({ subjectId: 's-kor', title: '수행평가', date: Stats.dayKey(now + 2 * DAY), start: '21:00', end: '22:00' }),
+    ];
     const decks = [{ id: 'd1', name: '영단어 Day 1', createdAt: now - 9 * DAY }];
     const today0 = window.SRS ? window.SRS.startOfDay(now) : now;
     const cards = [['abandon', '버리다, 포기하다'], ['benevolent', '자비로운'], ['candid', '솔직한'], ['diligent', '성실한'], ['eloquent', '유창한'], ['frugal', '검소한']]
       .map(([front, back], i) => ({ id: id('c'), deckId: 'd1', front, back, createdAt: now - 9 * DAY, ease: 2.5, interval: i < 3 ? 0 : 3, reps: i < 3 ? 0 : 2, lapses: 0, due: i < 4 ? today0 : today0 + 3 * DAY }));
     return {
-      version: 2, subjects, tasks, sessions, decks, cards, reviewLog: [{ cardId: cards[0].id, grade: 'good', at: now - DAY }],
+      version: 2, subjects, tasks, events, sessions, decks, cards, reviewLog: [{ cardId: cards[0].id, grade: 'good', at: now - DAY }],
       exams, topics, strokes: [], boardView: {}, activeExamId: 'ex1',
       settings: { dailyGoalMin: 180, focusMin: 25, breakMin: 5, monthlyGoalMin: 60 * 60, keepAwake: true, dayStartHour: 0 },
     };
@@ -113,9 +121,32 @@
     setTimeout(() => el.classList.remove('pv-hit'), 2600);
   };
   const later = (fn, ms) => setTimeout(fn, ms || 260);
-  // 미리 보기에만 있는 변경을 여기에 적는다. 지금은 없다: 전에 있던 개선안은 실제 앱(v2.9)에 들어갔다.
+  // 미리 보기에만 있는 변경을 여기에 적는다.
   // 항목 모양: { title, before(지금 앱), after(미리 보기), tryLabel(써 보기 단추 글자), hint, run() }
-  const ITEMS = [];
+  const ask = (text) => () => { if (!window.AI) return; window.AI.open(); later(() => window.AI.send(text), 320); };
+  const ITEMS = [
+    {
+      title: 'AI 도우미 세컨드: 모르는 표현 물어보기',
+      before: 'AI 기능이 없어요.',
+      after: '어느 화면에서나 오른쪽 아래 둥근 단추를 누르면 대화 창이 열려요. 스페인어 문장을 물으면 뜻, 구문 풀이, 단어, 문법 순서로 답하고, 외울 표현은 복습 카드로 바로 저장할 수 있어요.',
+      tryLabel: '문장 풀이 물어보기', hint: '답 아래의 ＋를 누르면 복습 카드가 돼요.',
+      run: ask('Ojalá no llueva mañana 구문 해석해 줘'),
+    },
+    {
+      title: '말로 일정과 할 일 바꾸기',
+      before: '일정과 할 일은 화면에서 하나씩 눌러 고쳐요.',
+      after: '말로 시키면 무엇을 바꿀지 먼저 보여 줘요. 적용을 눌러야 기록이 바뀌고, 바꾼 뒤에도 되돌릴 수 있어요. 지우는 일은 AI가 하지 못해요.',
+      tryLabel: '일정 넣어 달라고 하기', hint: "'못 끝낸 할 일을 내일로 미뤄 줘'도 해 보세요.",
+      run: ask('내일 오후 4시부터 6시까지 수학 일정 넣어 줘'),
+    },
+    {
+      title: '공부 시간 물어보기, 타이머 켜기',
+      before: '통계 화면과 타이머 화면에 가서 직접 봐요.',
+      after: "'이번 주 공부 시간 보여 줘'라고 하면 앱이 기록에서 직접 계산해 보여 줘요(AI가 숫자를 지어내지 않아요). '영어 25분 집중 시작해 줘'라고 하면 타이머를 켤 수 있어요.",
+      tryLabel: '이번 주 공부 시간 보기', hint: '',
+      run: ask('이번 주 공부 시간 보여 줘'),
+    },
+  ];
 
   function openPanel() {
     const body =
@@ -126,7 +157,7 @@
         `<dl class="pv-diff"><dt>지금 앱</dt><dd>${esc(it.before)}</dd><dt>미리 보기</dt><dd class="pv-after">${esc(it.after)}</dd></dl>` +
         `<div class="pv-try"><button type="button" class="btn primary" data-pv-try="${i}">${esc(it.tryLabel)}</button>${it.hint ? `<span>${esc(it.hint)}</span>` : ''}</div></li>`).join('') + '</ol>' +
       '<div class="pv-foot"><div class="pv-row"><button type="button" class="btn" data-pv-sample>예시 기록 다시 넣기</button><button type="button" class="btn" data-pv-empty>기록 비우고 처음부터 써 보기</button></div>' +
-      '<p>미리 보기에서는 로그인(계정 동기화), 앱 설치, 파일 내보내기·저장이 동작하지 않아요. 나머지는 실제 앱과 같아요.</p></div>';
+      '<p>미리 보기에서는 로그인(계정 동기화), 앱 설치, 파일 내보내기·저장이 동작하지 않아요. AI 도우미는 진짜 AI가 아니라 정해 둔 예시에만 답하는 가짜예요. 나머지는 실제 앱과 같아요.</p></div>';
     UI.openSheet({
       title: ITEMS.length ? `미리 보기에서 달라진 점 ${ITEMS.length}가지` : '미리 보기', body, cls: 'pv-sheet', focusSel: '[data-ui-close]',
       onClick: async (e, close) => {

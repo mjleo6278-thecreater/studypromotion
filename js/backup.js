@@ -8,7 +8,7 @@
   const DB_NAME = 'studypromotion-backup';
   const OS = 'snaps';
   // 까닭별로 남기는 개수 (오래된 것부터 지움)
-  const KEEP = { daily: 7, update: 5, import: 3, cloud: 3, 'cloud-remote': 3, reset: 3, restore: 3, broken: 2 };
+  const KEEP = { daily: 7, update: 5, import: 3, cloud: 3, 'cloud-remote': 3, reset: 3, restore: 3, broken: 2, ai: 5 };
   const MAX_TOTAL = 25 * 1024 * 1024; // 모두 합쳐 25MB를 넘으면 오래된 것부터
   const REASON = {
     daily: '하루 자동 백업',
@@ -18,6 +18,7 @@
     'cloud-remote': '계정에 있던 기록 (이 기기 기록으로 바꾸기 전)',
     reset: '모든 데이터 초기화 전',
     restore: '자동 백업으로 되돌리기 전',
+    ai: 'AI 도우미가 기록을 바꾸기 전',
     broken: '읽지 못한 기록 원본',
   };
 

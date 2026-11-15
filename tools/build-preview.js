@@ -25,6 +25,10 @@ must(html, /<body>/, '<body>');
 const headInline = (html.match(/<head>[\s\S]*?<\/head>/)[0].match(/<script>[\s\S]*?<\/script>/g) || []).join('\n');
 let body = html.slice(html.indexOf('<body>') + '<body>'.length, html.lastIndexOf('</body>'));
 
+// AI 도우미: 진짜 AI 대신 가짜 AI(preview/ai-mock.js)를 ai.js 바로 앞에 넣는다. 실제 서버로는 아무것도 보내지 않는다
+must(body, /<script src="js\/ai\.js"><\/script>/, 'AI 도우미 스크립트');
+body = body.replace('<script src="js/ai.js"></script>', `<script>\n${read('preview/ai-mock.js').replace(/<\/script/gi, '<\\/script')}\n</script>\n<script src="js/ai.js"></script>`);
+
 // CSS·JS를 안에 담는다
 body = body.replace(/<script src="(js\/[\w.]+)"><\/script>/g, (_, src) => `<script>\n${read(src).replace(/<\/script/gi, '<\\/script')}\n</script>`);
 body = body.replace(/(href|src)="icons\/favicon-64.png"/g, (_, attr) => `${attr}="${favicon}"`);
@@ -54,6 +58,9 @@ page = must(page, /const FIREBASE_CONFIG = \{[\s\S]*?\n {2}\};/, 'Firebase 설�
 page = must(page, /계정 기능 준비 중이에요\. 곧 구글 계정이나 이메일로 로그인해서 여러 기기에서 같은 기록을 쓸 수 있어요\./, '로그인 안내 문구')
   .replace('계정 기능 준비 중이에요. 곧 구글 계정이나 이메일로 로그인해서 여러 기기에서 같은 기록을 쓸 수 있어요.', '미리 보기에서는 로그인하지 않아요. 실제 계정의 기록을 건드리지 않도록 막아 두었어요.');
 
+// 2-1) AI 서버 주소 지우기: 미리 보기는 가짜 AI만 쓴다
+page = must(page, /const AI_ENDPOINT = '[^']*';/, 'AI 서버 주소').replace(/const AI_ENDPOINT = '[^']*';/, "const AI_ENDPOINT = '';");
+
 // 3) 서비스 워커 등록 끄기
 page = must(page, /navigator\.serviceWorker\.register\('sw\.js'/, '서비스 워커 등록').replace(/if \(\/\^https\?:\$\/\.test\(location\.protocol\) && 'serviceWorker' in navigator\) \{/, "if (false && 'serviceWorker' in navigator) { // 미리 보기: 서비스 워커를 쓰지 않는다");
 
@@ -67,6 +74,7 @@ for (const [re, what] of [
   [/apiKey: '/, 'Firebase 설정'],
   [/studygambit\.v1/, '예전 저장 위치'],
   [/<link rel="manifest"/, '설치 정보(manifest)'],
+  [/const AI_ENDPOINT = '[^']/, 'AI 서버 주소'],
   [/if \(\/\^https\?:\$\/\.test\(location\.protocol\) && 'serviceWorker' in navigator\)/, '서비스 워커 등록'],
 ]) if (re.test(page)) throw new Error('미리 보기 빌드: ' + what + '이(가) 남아 있습니다');
 
