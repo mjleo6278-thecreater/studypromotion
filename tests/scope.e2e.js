@@ -219,11 +219,10 @@ const server = http.createServer((req, res) => {
   assert((await topic('물질의 규칙성')).parentId === (await topic('통합과학')).id, '보드: 새 과목에 바로 항목 입력');
   await page.keyboard.press('Escape');
 
-  // 선택한 보기 방식 기억
+  // 범위는 늘 목록부터 연다 (보드는 누를 때만 전체 화면으로, v3.3)
   await page.reload();
   await page.waitForTimeout(150);
-  assert((await page.evaluate(() => Board.mode)) === 'board', '보기 방식 기억');
-  await page.tap('[data-scope-mode=list]');
+  assert((await page.evaluate(() => Board.mode)) === 'list' && !(await page.evaluate(() => Board.full)), '다시 열면 목록부터');
 
   // 한글 마지막 글자가 아직 조합 중일 때 ‘추가’를 눌러도 바로 추가 (전에는 다른 곳을 눌러야 추가됐음)
   const cdp = await ctx.newCDPSession(page);
