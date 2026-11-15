@@ -2030,3 +2030,31 @@ body.board-full #board-pace.hint { display: none; }
   #view-board:not(.list-mode) .board-bar .bb-end { position: sticky; right: -8px; margin-right: -8px; padding: 0 8px 0 4px; background: var(--surface); box-shadow: -12px 0 10px -6px var(--surface); }
   #view-board:not(.list-mode) .bb-modes { order: -1; }
 }
+
+/* ===== 목록 ↔ 보드(전체 화면) 전환 효과 (v3.3.1, js/board.js setScopeMode) =====
+   들어갈 때: 위 앱 바는 위로, 아래 탭은 아래로 빠지고, 위 띠·보드 칸은 제자리로 커지며, 도구 띠는 아래에서 올라온다. 나올 때는 반대로. */
+html.vt-full .topbar { view-transition-name: sp-top; }
+html.vt-full .board-bar { view-transition-name: sp-bar; }
+html.vt-full .board-stage { view-transition-name: sp-stage; }
+html.vt-full .board-dock { view-transition-name: sp-dock; }
+html.vt-full .ai-fab { view-transition-name: sp-fab; }
+@media (max-width: 720px) { html.vt-full .tabs { view-transition-name: sp-tabs; } } /* 넓은 화면의 탭은 앱 바 안에 있어 같이 올라간다 */
+html.vt-full::view-transition-group(*),
+html.vt-full::view-transition-old(*),
+html.vt-full::view-transition-new(*) { animation-duration: .34s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+html.vt-in::view-transition-old(sp-top) { animation-name: vt-up-out; }
+html.vt-in::view-transition-old(sp-tabs) { animation-name: vt-down-out; }
+html.vt-in::view-transition-new(sp-dock) { animation-name: vt-down-in; animation-delay: .06s; animation-fill-mode: both; }
+html.vt-out::view-transition-new(sp-top) { animation-name: vt-up-in; }
+html.vt-out::view-transition-new(sp-tabs) { animation-name: vt-down-in; }
+html.vt-out::view-transition-old(sp-dock) { animation-name: vt-down-out; animation-duration: .22s; }
+@keyframes vt-up-out { to { transform: translateY(-100%); } }
+@keyframes vt-up-in { from { transform: translateY(-100%); } }
+@keyframes vt-down-out { to { transform: translateY(calc(100% + 24px)); } }
+@keyframes vt-down-in { from { transform: translateY(calc(100% + 24px)); } }
+/* 목록 내용과 보드 내용이 반투명하게 겹쳐 보이지 않게: 바뀌기 전 내용은 먼저 빨리 사라지고, 새 내용은 조금 뒤에 나타난다 */
+html.vt-full::view-transition-old(sp-stage), html.vt-full::view-transition-old(sp-bar) { animation: vt-fade-out .12s ease-out both; }
+html.vt-full::view-transition-new(sp-stage) { animation: vt-fade-in .24s ease-out .09s both; }
+html.vt-full::view-transition-new(sp-bar) { animation: vt-fade-in .2s ease-out .06s both; }
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; } }
