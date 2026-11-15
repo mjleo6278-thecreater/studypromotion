@@ -25,8 +25,18 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.click('#exam-form button[type=submit]');
   assert((await page.evaluate(() => Board.mode)) === 'list', '시험을 만들면 목록 보기(과목 고르기)');
   assert(await page.isVisible('#subj-picker'), '과목 고르기 칸');
+  assert(await page.isVisible('.topbar'), '목록 보기에서는 위 앱 바가 보임');
   await page.click('[data-scope-mode=board]');
   assert((await page.evaluate(() => Board.mode)) === 'board', '보드 보기로 전환');
+  assert((await page.evaluate(() => Board.full)) && !(await page.isVisible('.topbar')) && (await page.isVisible('#board-dock')), '보드는 전체 화면: 앱 바를 숨기고 아래 도구 띠');
+  await page.waitForTimeout(50);
+  assert(await page.isVisible('#toast.show') && /전체 화면/.test(await page.textContent('#toast')), '처음 한 번 돌아가는 방법 안내');
+  await page.keyboard.press('Escape');
+  assert((await page.evaluate(() => Board.mode)) === 'list' && (await page.isVisible('.topbar')), 'Esc로 전체 화면에서 나와 목록으로');
+  await page.click('[data-scope-mode=board]');
+  await page.click('#bb-paste');
+  await page.keyboard.press('Escape');
+  assert(!(await page.isVisible('#paste-dlg')) && (await page.evaluate(() => Board.mode)) === 'board', 'Esc로 창만 닫으면 보드는 그대로');
   await page.click('#bb-paste');
   assert(await page.isVisible('#paste-dlg'), '범위 붙여넣기 창');
   await page.fill('#paste-text', '# 수학\n- 1단원\n  - 다항식\n  - 인수분해\n- 2단원\n  - 복소수\n# 영어\n- [x] 본문 1과\n- 본문 2과\n# 국어');
@@ -169,12 +179,64 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   assert((await state()).strokes.length === 2, '지운 자국 되돌리기');
   await page.keyboard.press('v');
 
-  // 메모
+  // 메모: 붙임쪽지
+  const notes = async () => (await state()).topics.filter((t) => t.kind === 'note');
   await page.click('#bb-add-note');
   await page.waitForSelector('.bnote-edit');
+  assert(await page.isVisible('#note-bar'), '메모를 쓰는 동안 꾸미기 띠');
+  assert((await notes()).length === 0, '새 메모는 글을 적기 전에는 저장하지 않음');
   await page.keyboard.type('수학 2단원 오답노트 다시 보기');
+  await page.click('#note-bar [data-note-color="#ffd3df"]');
+  await page.click('#note-bar [data-note-size]');
+  assert(await page.evaluate(() => document.activeElement.matches('[data-note-edit]')), '띠를 눌러도 쓰던 칸에 커서');
   await page.mouse.click(vpb.x + 20, vpb.y + vpb.height - 100);
-  assert((await state()).topics.some((t) => t.kind === 'note' && t.title.includes('오답노트')), '메모 붙이기');
+  let n1 = (await notes()).find((t) => t.title.includes('오답노트'));
+  assert(n1 && n1.color === '#ffd3df' && n1.size === 'l' && !n1.style, '메모 붙이기 (분홍 쪽지, 큰 글자)');
+  assert(!(await page.isVisible('#note-bar')), '바깥을 누르면 쓰기 끝');
+  // 눌러서 고치기
+  await page.click(`.bcard.note[data-id="${n1.id}"] .bnote-text`);
+  await page.waitForSelector('.bnote-edit');
+  await page.keyboard.press('End');
+  await page.keyboard.type(' 금요일까지');
+  await page.click('#note-bar [data-note-done]');
+  n1 = (await notes()).find((t) => t.id === n1.id);
+  assert(n1.title.endsWith('금요일까지'), '메모를 눌러 그 자리에서 고치기');
+  // 끌어서 옮기기
+  const nb = await page.locator(`.bcard.note[data-id="${n1.id}"]`).boundingBox();
+  await page.mouse.move(nb.x + 30, nb.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(nb.x + 130, nb.y + 70, { steps: 6 });
+  await page.mouse.up();
+  const n1b = (await notes()).find((t) => t.id === n1.id);
+  assert(Math.abs(n1b.x - n1.x - 100 / z) <= 12 && Math.abs(n1b.y - n1.y - 50 / z) <= 12 && !(await page.isVisible('#note-bar')), '메모 끌어서 옮기기 (끌면 쓰기가 열리지 않음)');
+  // 모서리로 폭 바꾸기
+  const gb = await page.locator(`.bcard.note[data-id="${n1.id}"] .bnote-grip`).boundingBox();
+  await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(gb.x + gb.width / 2 + 80, gb.y + gb.height / 2, { steps: 5 });
+  await page.mouse.up();
+  const n1c = (await notes()).find((t) => t.id === n1.id);
+  assert(n1c.w > 220 && n1c.x === n1b.x, `메모 폭 넓히기 (${n1c.w})`);
+  // 글 상자 (T 키)
+  await page.keyboard.press('t');
+  await page.waitForSelector('.bnote-edit');
+  await page.keyboard.type('이번 주 목표');
+  await page.click('#note-bar [data-note-color="#1c7ed6"]');
+  await page.click('#note-bar [data-note-done]');
+  const tb = (await notes()).find((t) => t.title === '이번 주 목표');
+  assert(tb && tb.style === 'text' && tb.color === '#1c7ed6', '글 상자 (파란 글자)');
+  // 비우면 지움, 빈 새 메모는 남지 않음
+  await page.click(`.bcard.note[data-id="${tb.id}"] .bnote-text`);
+  await page.keyboard.press('Control+a');
+  await page.keyboard.press('Backspace');
+  await page.click('#note-bar [data-note-done]');
+  assert(!(await notes()).some((t) => t.id === tb.id), '내용을 다 지우면 메모도 지움');
+  await page.keyboard.press('Control+z');
+  assert((await notes()).some((t) => t.id === tb.id), '지운 메모 되돌리기');
+  await page.click('#bb-add-note');
+  await page.waitForSelector('.bnote-edit');
+  await page.keyboard.press('Escape');
+  assert((await notes()).length === 2 && !(await page.locator('.bnote-edit').count()) && (await page.evaluate(() => Board.mode)) === 'board', '빈 새 메모는 Esc로 사라지고 보드는 그대로');
 
   // 남은 것만 보기
   await page.check('#bl-only-left');
@@ -202,22 +264,27 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   assert((await page.locator('.bcard').count()) === 5, '두 번째 시험 예시 범위');
   const ids = (await state()).exams.map((e) => e.id);
   await page.selectOption('#bb-exam', ids[0]);
-  assert((await page.locator('.bcard').count()) === 4, '시험 전환');
+  assert((await page.locator('.bcard').count()) === 5, '시험 전환 (과목 3 + 메모 2)');
 
-  // 홈 연동
-  await page.click('[data-view=home]');
+  // 홈 연동 (전체 화면에는 앱 바가 없으니 목록으로 나와서)
+  await page.click('[data-scope-mode=list]');
+  await page.click('.topbar [data-view=home]');
   assert((await page.locator('.exam-row').count()) === 2, '홈에 시험 준비 표시');
   assert((await page.textContent('#h-exams')).includes('2학기 기말고사'), '홈 시험 이름');
   await page.locator('.exam-row', { hasText: '모의고사' }).click();
   assert((await page.textContent('#bb-exam option:checked')) === '모의고사', '홈에서 시험 눌러 보드 열기');
 
   // 새로고침 후 유지 (보기 위치 포함) — 화면 맞춤(다음 프레임)과 저장(0.3초 뒤)이 끝난 뒤에 비교
+  assert((await page.evaluate(() => Board.mode)) === 'list', '홈에서 열어도 범위는 목록부터');
+  await page.click('[data-scope-mode=board]');
   await page.waitForTimeout(500);
   const vBefore = await page.evaluate(() => window.Board.view);
   await page.reload();
   await page.waitForTimeout(200);
+  assert((await page.evaluate(() => Board.mode)) === 'list', '새로고침해도 범위는 목록부터');
+  await page.click('[data-scope-mode=board]');
   const vAfter = await page.evaluate(() => window.Board.view);
-  assert((await page.locator('.bcard').count()) === 5 && Math.abs(vAfter.x - vBefore.x) < 2, '새로고침 후 보드와 보기 위치 유지');
+  assert((await page.locator('.bcard').count()) === 5 && Math.abs(vAfter.x - vBefore.x) < 2 && Math.abs(vAfter.z - vBefore.z) < 0.01, '새로고침 후 보드와 보기 위치 유지');
 
   // 텍스트로 내보내기 형식
   const outline = await page.evaluate(() => Scope.toOutline(App.store.get().topics, App.store.get().exams[0].id));
@@ -227,7 +294,7 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.click('#bb-exam-edit');
   await page.click('#ee-delete');
   await page.click('#ask-ok');
-  assert((await state()).exams.length === 1 && (await page.locator('.bcard').count()) === 4, '시험 삭제');
+  assert((await state()).exams.length === 1 && (await page.locator('.bcard').count()) === 5, '시험 삭제');
 
   // 하루 분량
   assert(/하루 \d+개씩/.test(await page.textContent('#bb-pace')), '하루 분량 표시: ' + (await page.textContent('#bb-pace')));
@@ -265,15 +332,19 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.waitForTimeout(400);
   const ses = (await state()).sessions.pop();
   assert(ses && ses.label === '수학 · 인수분해', '집중 기록에 범위 이름 저장');
-  await page.click('[data-view=board]');
+  assert(!(await page.evaluate(() => Board.full)) && (await page.isVisible('.topbar')), '다른 화면으로 가면 전체 화면이 풀림');
+  await page.click('.tab[data-view=board]');
+  assert((await page.evaluate(() => Board.mode)) === 'list', '범위 탭으로 돌아오면 목록부터');
 
   // 화면 밝기 전환
   await page.click('#theme-btn');
   assert((await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', '밝게');
   await page.click('#theme-btn');
   assert((await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark', '어둡게');
+  await page.click('[data-scope-mode=board]');
   await page.click('#bb-fit');
   await shot(page, 'b5-dark');
+  await page.click('[data-scope-mode=list]');
   await page.click('#theme-btn');
   assert(!(await page.evaluate(() => document.documentElement.dataset.theme)), '자동');
 
@@ -281,6 +352,10 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.setViewportSize({ width: 390, height: 800 });
   await page.reload();
   await page.waitForTimeout(200);
+  await page.click('[data-scope-mode=board]');
+  assert(!(await page.isVisible('.tabs')) && (await page.isVisible('#board-dock')), '휴대폰: 보드는 아래 탭도 숨기고 도구 띠');
+  const fullH = await page.evaluate(() => document.querySelector('#board-viewport').getBoundingClientRect().height);
+  assert(fullH > 700, '휴대폰: 보드 칸이 화면을 거의 다 씀 (' + Math.round(fullH) + 'px)');
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   assert(!overflow, '휴대폰: 가로 스크롤 없음');
   await shot(page, 'b3-mobile');
@@ -289,6 +364,10 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.click('#bb-fit');
   await shot(page, 'b4-mobile-fit');
   assert((await page.evaluate(() => window.Board.view)).z <= mz, '휴대폰 한눈에 보기');
+  // 휴대폰 뒤로 가기: 전체 화면 → 목록 (범위 화면은 그대로)
+  await page.goBack();
+  await page.waitForTimeout(150);
+  assert((await page.evaluate(() => ({ m: Board.mode, v: App.view }))).m === 'list' && (await page.evaluate(() => App.view)) === 'board' && (await page.isVisible('.tabs')), '뒤로 가기: 보드 전체 화면에서 목록으로');
 
   assert(errors.length === 0, '콘솔 오류 없음 ' + errors.join(' | '));
   await browser.close();

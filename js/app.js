@@ -1781,8 +1781,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.2.2';
-  const APP_DATE = '2026년 11월 15일';
+  const APP_VERSION = '3.3';
+  const APP_DATE = '2026년 11월 16일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */

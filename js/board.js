@@ -948,15 +948,20 @@
     const zone = noteZone(r);
     const w = (text ? 200 : NOTE_W) * view.z, h = (text ? 44 : 96) * view.z; // 화면에서 차지할 크기
     const want = { x: r.left + (r.width - w) / 2, y: coarse() ? zone.top + 8 : Math.max(zone.top, r.top + r.height * 0.38 - h / 2) };
-    const rects = $$('#board-cards .bcard').map((el) => el.getBoundingClientRect());
-    let best = null;
-    for (let y = zone.top; y + h <= zone.bottom; y += 20) {
-      for (let x = r.left + 12; x + w <= r.right - 12; x += 20) {
-        if (rects.some((b) => x < b.right + 10 && x + w > b.left - 10 && y < b.bottom + 10 && y + h > b.top - 10)) continue;
-        const d = Math.hypot(x - want.x, y - want.y);
-        if (!best || d < best.d) best = { x, y, d };
+    // 먼저 카드·메모 모두와 안 겹치는 곳, 없으면(휴대폰처럼 카드가 화면을 덮을 때) 다른 메모와만 안 겹치는 곳
+    const spot = (sel) => {
+      const rects = $$(sel).map((el) => el.getBoundingClientRect());
+      let best = null;
+      for (let y = zone.top; y + h <= zone.bottom; y += 20) {
+        for (let x = r.left + 12; x + w <= r.right - 12; x += 20) {
+          if (rects.some((b) => x < b.right + 10 && x + w > b.left - 10 && y < b.bottom + 10 && y + h > b.top - 10)) continue;
+          const d = Math.hypot(x - want.x, y - want.y);
+          if (!best || d < best.d) best = { x, y, d };
+        }
       }
-    }
+      return best;
+    };
+    const best = spot('#board-cards .bcard') || spot('#board-cards .bcard.note');
     const c = toWorld((best || want).x, (best || want).y);
     let x = noteX(c.x), y = noteY(c.y);
     // 빈 곳이 없어 같은 자리에 겹치게 되면 조금씩 비켜 놓는다
@@ -1489,8 +1494,7 @@
 
   // 새 시험 + 고른 과목 → 목록 보기에서 과목마다 공부할 내용 적기
   function startExam(name, date, subjects) {
-    createExam(name, date);
-    mode = 'list';
+    createExam(name, date); // 보기 방식은 그대로 (범위 탭은 늘 목록부터 열리고, 보드에서 만들면 보드에 남는다)
     if (subjects.length) addSubjectCards(subjects, { quiet: true });
     render();
     if (mode === 'list') {
@@ -1687,6 +1691,8 @@
 
   vp.addEventListener('pointerdown', (e) => {
     if (mode === 'list' || !examId || e.target.closest('.board-empty, .board-legend')) return;
+    // 쓰던 메모 바깥을 누르면 바로 저장 (커서가 빠지길 기다리지 않는다)
+    if (noteEdit && !e.target.closest('.bcard.note.editing')) commitNote(true);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
     if (pointers.size === 2) {
