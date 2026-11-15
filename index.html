@@ -66,6 +66,10 @@
     <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M6 4.4l12.6 5.4-5.3 2.1-2.1 5.5z"/><path d="m13.6 13.6 4.6 4.6"/></symbol>
     <symbol id="i-marker" viewBox="0 0 24 24"><path d="m9.3 14.9 7.6-9.1 2.9 2.4-7.6 9.1z"/><path d="m9.3 14.9-1.2 3.6 3.9-.9"/><path d="M4.4 20h7"/></symbol>
     <symbol id="i-eraser" viewBox="0 0 24 24"><path d="M9 19.4 4.6 15a1.7 1.7 0 0 1 0-2.4l7.8-7.8a1.7 1.7 0 0 1 2.4 0l4.6 4.6a1.7 1.7 0 0 1 0 2.4l-7.6 7.6z"/><path d="m8.4 8.8 6.8 6.8"/><path d="M9 19.4h10.4"/></symbol>
+    <symbol id="i-note" viewBox="0 0 24 24"><path d="M5 4.8h14v9.4l-5 5H5z"/><path d="M19 14.2h-5v5"/></symbol>
+    <symbol id="i-text" viewBox="0 0 24 24"><path d="M5.6 7.6V5.2h12.8v2.4"/><path d="M12 5.2v13.6"/><path d="M9.2 18.8h5.6"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.8 7.2h14.4"/><path d="M9.4 7.2V4.8h5.2v2.4"/><path d="m6.8 7.2.8 12.2h8.8l.8-12.2"/><path d="M10.2 10.8v5M13.8 10.8v5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5.2 12.6 4.4 4.4 9.2-10"/></symbol>
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.2" y="10.6" width="13.6" height="9.6" rx="2.4"/><path d="M8.4 10.6V8.2a3.6 3.6 0 0 1 7.2 0v2.4"/></symbol>
     <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.8h10.4M9 12h10.4M9 17.2h10.4"/><path d="M4.8 6.8h.1M4.8 12h.1M4.8 17.2h.1" stroke-width="2.4"/></symbol>
     <symbol id="i-pawn" viewBox="0 0 20 20"><g fill="currentColor" stroke="none"><circle cx="10" cy="5.2" r="3"/><path d="M7.6 8.6h4.8l-.6 1.3c1.4 1.6 2.4 3.6 2.6 6H5.6c.2-2.4 1.2-4.4 2.6-6z"/><rect x="4.2" y="15.6" width="11.6" height="2.6" rx="1"/></g></symbol>
@@ -167,30 +171,24 @@
         <div class="bb-group board-only">
           <button class="bb-btn text" id="bb-add-card" title="과목 추가">＋ 과목</button>
           <button class="bb-btn text" id="bb-paste" title="범위 목록을 붙여넣어 한 번에 추가">붙여넣기</button>
-          <button class="bb-btn text" id="bb-add-note" title="메모 붙이기">＋ 메모</button>
           <form class="bb-search" id="bb-search" role="search">
             <input id="bb-search-input" type="search" placeholder="범위 검색" aria-label="범위에서 항목 찾기" autocomplete="off">
             <span class="bb-search-count muted" id="bb-search-count"></span>
           </form>
         </div>
-        <div class="bb-group board-only" role="group" aria-label="도구">
-          <button class="bb-btn tool active" data-tool="select" title="선택·이동 (V)" aria-label="선택"><svg class="ic" aria-hidden="true"><use href="#i-cursor"/></svg></button>
-          <button class="bb-btn tool" data-tool="pen" title="펜 (P) — 체크 표시·밑줄" aria-label="펜"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg></button>
-          <button class="bb-btn tool" data-tool="marker" title="형광펜 (H)" aria-label="형광펜"><svg class="ic" aria-hidden="true"><use href="#i-marker"/></svg></button>
-          <button class="bb-btn tool" data-tool="eraser" title="지우개 (E)" aria-label="지우개"><svg class="ic" aria-hidden="true"><use href="#i-eraser"/></svg></button>
-          <span class="bb-colors" id="bb-colors"></span>
+        <div class="bb-group board-only">
+          <button class="bb-btn" id="bb-zoom-out" title="축소" aria-label="축소">−</button>
+          <button class="bb-btn text" id="bb-zoom-label" title="100%로">100%</button>
+          <button class="bb-btn" id="bb-zoom-in" title="확대" aria-label="확대">＋</button>
+          <button class="bb-btn text" id="bb-fit" title="전체 범위가 한눈에 보이게">한눈에 보기</button>
+          <button class="bb-btn text" id="bb-arrange" title="카드 자동 정렬">정렬</button>
         </div>
-        <div class="bb-group">
-          <button class="bb-btn board-only" id="bb-zoom-out" title="축소" aria-label="축소">−</button>
-          <button class="bb-btn text board-only" id="bb-zoom-label" title="100%로">100%</button>
-          <button class="bb-btn board-only" id="bb-zoom-in" title="확대" aria-label="확대">＋</button>
-          <button class="bb-btn text board-only" id="bb-fit" title="전체 범위가 한눈에 보이게">한눈에 보기</button>
-          <button class="bb-btn text board-only" id="bb-arrange" title="카드 자동 정렬">정렬</button>
-          <button class="bb-btn board-only" id="bb-undo" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></button>
+        <div class="bb-group bb-end">
           <button class="bb-btn" id="bb-more" title="더 보기" aria-label="더 보기">⋯</button>
         </div>
       </div>
       <div class="board-pace" id="board-pace" hidden></div>
+      <div class="board-stage">
       <div class="board-viewport" id="board-viewport" tabindex="0" aria-label="시험 범위 화이트보드">
         <div class="board-world" id="board-world">
           <svg class="board-ink" id="board-ink" width="12000" height="8000"></svg>
@@ -213,6 +211,20 @@
           </div>
         </div>
         <div class="board-legend" id="board-legend"></div>
+      </div>
+      <div class="note-bar" id="note-bar" role="toolbar" aria-label="메모 꾸미기" hidden></div>
+      <div class="board-dock board-only" id="board-dock" role="toolbar" aria-label="화이트보드 도구">
+        <span class="bb-colors" id="bb-colors" role="group" aria-label="펜 색"></span>
+        <button class="bb-btn tool active" data-tool="select" title="선택·이동 (V)" aria-label="선택"><svg class="ic" aria-hidden="true"><use href="#i-cursor"/></svg></button>
+        <button class="bb-btn tool" data-tool="pen" title="펜 (P) — 체크 표시·밑줄" aria-label="펜"><svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg></button>
+        <button class="bb-btn tool" data-tool="marker" title="형광펜 (H)" aria-label="형광펜"><svg class="ic" aria-hidden="true"><use href="#i-marker"/></svg></button>
+        <button class="bb-btn tool" data-tool="eraser" title="지우개 (E)" aria-label="지우개"><svg class="ic" aria-hidden="true"><use href="#i-eraser"/></svg></button>
+        <span class="bd-sep" aria-hidden="true"></span>
+        <button class="bb-btn" id="bb-add-note" title="붙임쪽지 붙이기 (N)" aria-label="붙임쪽지 붙이기"><svg class="ic" aria-hidden="true"><use href="#i-note"/></svg></button>
+        <button class="bb-btn" id="bb-add-text" title="글 상자 넣기 (T)" aria-label="글 상자 넣기"><svg class="ic" aria-hidden="true"><use href="#i-text"/></svg></button>
+        <span class="bd-sep" aria-hidden="true"></span>
+        <button class="bb-btn" id="bb-undo" title="되돌리기 (Ctrl+Z)" aria-label="되돌리기"><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg></button>
+      </div>
       </div>
     </section>
 
@@ -603,7 +615,8 @@
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-board"/></svg>범위 — 목록과 보드</summary>
           <ul>
             <li><b>목록 보기</b>: 과목 아래에 공부할 내용이 차례로 놓여요. 휴대폰에서 쓰기 편해요.</li>
-            <li><b>보드 보기</b>: 넓은 화이트보드에 과목 카드를 펼쳐 두고, 끌어서 옮기거나 펜·형광펜으로 표시할 수 있어요. 두 손가락으로 확대·이동해요.</li>
+            <li><b>보드 보기</b>: ‘보드’를 누르면 화이트보드가 화면 전체로 열려요. 과목 카드를 펼쳐 두고, 끌어서 옮기거나 펜·형광펜으로 표시할 수 있어요. 두 손가락으로 확대·이동해요. ‘목록’이나 뒤로 가기를 누르면 돌아와요.</li>
+            <li><b>메모</b>: 보드 아래 도구 띠의 쪽지 버튼으로 붙임쪽지를, T 버튼으로 글 상자를 붙여요. 누르면 그 자리에서 쓰고, 위에 뜨는 띠에서 색과 글자 크기를 바꿔요. 끌어서 옮기고, 오른쪽 아래 모서리를 끌어 폭을 넓혀요. 내용을 다 지우면 메모도 지워져요.</li>
             <li><b>체크</b>: 끝낸 항목을 체크해요. 단원을 체크하면 안에 든 항목이 모두 체크돼요. 과목을 다 끝내면 ‘♛ 승급’ 도장이 찍혀요.</li>
             <li><b>단계 나누기</b>: 항목 옆 <b>＋</b>를 누르면 그 항목 바로 아래에 넣을 수 있어요. 국어 › 비문학 › 수특 주제통합 1강 › 분석처럼 몇 단계든 나눌 수 있어요.</li>
             <li><b>⋯ 메뉴</b>: 하위 항목 추가, 이름 바꾸기, 소요시간·진행률, 이 범위로 타이머 시작, 오늘 할 일로 보내기, 삭제. <b>표시 ›</b> 안에서 ★ 중요·! 어려움·↻ 다시 보기를 켜고 끄고, <b>옮기기 ›</b> 안에서 위로·아래로, 한 단계 안으로·밖으로, 다른 곳으로 옮길 수 있어요.</li>
@@ -691,6 +704,13 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="3.3" data-date="2026년 11월 16일">
+            <ul class="news">
+              <li><b>화이트보드 전체 화면</b>: 범위에서 ‘보드’를 누르면 화이트보드가 화면 전체로 열려요. 위쪽 앱 바와 아래 탭이 숨어 보드를 넓게 쓰고, 도구는 아래쪽 떠 있는 띠에 모였어요. ‘목록’이나 휴대폰 뒤로 가기를 누르면 돌아와요</li>
+              <li><b>붙임쪽지와 글 상자</b>: 화이트보드에 메모를 붙일 수 있어요. 누르면 그 자리에서 바로 쓰고, 쪽지 색과 글자 크기를 바꾸고, 끌어서 옮기고, 오른쪽 아래 모서리를 끌어 폭을 넓혀요. 글 상자는 종이 없이 보드에 바로 쓰는 글이에요</li>
+              <li><b>범위는 목록부터</b>: 범위 탭은 늘 목록 보기로 열려요. 화이트보드는 ‘보드’를 누를 때만 열려요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="3.2.2" data-date="2026년 11월 15일">
             <ul class="news">
               <li><b>세컨드의 새 대화 단추</b>: 대화가 비어 있을 때는 새 대화 단추를 숨겨요. 지울 대화가 없는데 단추가 보여서, 눌러도 아무 일이 없어 고장처럼 보였어요</li>
