@@ -296,8 +296,11 @@
 
   const nearEnd = () => log.scrollHeight - log.scrollTop - log.clientHeight < 80;
   const toEnd = () => { log.scrollTop = log.scrollHeight; };
+  // 새 대화 단추는 지울 대화가 있을 때만 보인다 (비어 있을 때 눌러도 아무 일이 없어 고장처럼 보였다)
+  const renderNew = () => { $('#ai-new', back).hidden = !S.msgs.length; };
   function renderAll() {
     log.innerHTML = S.msgs.length ? S.msgs.map(msgHTML).join('') : emptyHTML();
+    renderNew();
     renderLeft();
     toEnd();
   }
@@ -416,6 +419,7 @@
     Object.keys(live).forEach((k) => delete live[k]);
     save();
     renderAll();
+    sheet.focus({ preventScroll: true }); // 단추가 숨으니 초점은 창으로
   });
 
   /* ---------- 보내기 ---------- */
@@ -455,6 +459,7 @@
     const m = { id: newId(), role: 'ai', text: '', pending: true };
     if (!S.msgs.length) log.innerHTML = '';
     S.msgs.push(mine, m);
+    renderNew();
     log.insertAdjacentHTML('beforeend', msgHTML(mine) + msgHTML(m));
     toEnd();
     save();
