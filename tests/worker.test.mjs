@@ -72,7 +72,7 @@ function world(opts) {
     if (tok) headers.Authorization = 'Bearer ' + tok;
     const req = new Request('https://ai.example' + (o.path || '/chat'), {
       method: o.method || 'POST', headers,
-      body: (o.method || 'POST') === 'POST' ? (o.raw != null ? o.raw : JSON.stringify({ messages: o.messages || [{ role: 'user', content: '안녕' }] })) : undefined,
+      body: (o.method || 'POST') === 'POST' ? (o.raw != null ? o.raw : JSON.stringify({ messages: o.messages || [{ role: 'user', content: '안녕' }], v: o.v })) : undefined,
     });
     const res = await handle(req, w.env, { now: w.now, fetch: w.fetch });
     const text = await res.text();
@@ -170,7 +170,11 @@ test('로그인한 사람: 답이 조금씩 오고 남은 횟수가 온다', asy
   assert.equal(r.done, true);
   assert.equal(w.runs.length, 1);
   assert.equal(w.runs[0].model, 'test-model');
-  assert.deepEqual(w.runs[0].input, { messages, stream: true, max_tokens: 1200 });
+  // 생각하기는 끄고(켜 두면 생각에 답 길이를 다 쓴다), 쓴 양을 마지막 줄에 붙여 달라고 한다
+  assert.deepEqual(w.runs[0].input, {
+    messages, stream: true, max_tokens: 1200, max_completion_tokens: 1200,
+    chat_template_kwargs: { enable_thinking: false }, stream_options: { include_usage: true },
+  });
   assert.equal(w.keyCalls, 1);
   await w.ask(await token());
   assert.equal(w.keyCalls, 1); // 구글 열쇠는 기억해 둔다
@@ -235,10 +239,12 @@ test('앱 전체의 하루 무료 양을 다 쓰면 limit(all), 횟수는 돌려
   const r = await w.ask(me);
   assert.equal(r.status, 429);
   assert.deepEqual(r.json, { error: 'limit', scope: 'all' });
+  assert.equal(w.runs.length, 2); // 무료 양을 다 썼을 때는 다시 묻지 않는다
   w.answer = () => { throw new Error('boom'); };
   const s = await w.ask(me);
   assert.equal(s.status, 503);
-  assert.deepEqual(s.json, { error: 'server' });
+  assert.deepEqual(s.json, { error: 'server' }); // 주인이 아닌 사람에게는 까닭을 적어 보내지 않는다
+  assert.equal(w.runs.length, 4); // 덧붙인 설정을 빼고 한 번 더 물었다
   w.answer = () => sse(['다시']);
   assert.equal((await w.ask(me)).left, 18); // 실패한 두 번은 세지 않았다
 });
@@ -347,7 +353,7 @@ test('설정이 이상해도 버틴다: 하루 횟수 기본값, 프로젝트가
   const r = await w.ask(await token());
   assert.equal(r.left, 19);
   assert.equal(w.runs[0].model, '@cf/google/gemma-4-26b-a4b-it');
-  assert.equal(w.runs[0].input.max_tokens, 1200);
+  assert.equal(w.runs[0].input.max_tokens, 2000);
   forgetKeys();
   const zero = world({ env: { DAILY_LIMIT: '0' } });
   assert.equal((await zero.ask(await token())).status, 429); // 0이면 주인만 쓴다
@@ -394,4 +400,83 @@ test('GET /me: AI 버튼을 보여 줄지, 남은 횟수가 몇 번인지 알려
   assert.equal((await open.ask(await token())).left, 17); // 물어보는 것은 횟수를 쓰지 않는다
   assert.deepEqual((await me(open, await token({ sub: 'owner-1', email: OWNER }))).json, { open: true, signedIn: true, unlimited: true });
   assert.equal(open.runs.length, 3);
+});
+
+/* ---------- 새 앱(v 2): 모델이 보내는 줄을 그대로 넘긴다 ---------- */
+test('v 2: 모델의 답을 손대지 않고 넘기고, 남은 횟수는 머리말로 알린다', async () => {
+  const chunks = [
+    { choices: [{ delta: { reasoning_content: '생각' } }] },
+    { choices: [{ delta: { content: '안녕' } }] },
+    { choices: [{ delta: { content: '하세요' }, finish_reason: 'stop' }] },
+    { choices: [], usage: { prompt_tokens: 30, completion_tokens: 12 } },
+  ];
+  const w = world({ answer: () => sse(chunks, 7) });
+  const r = await w.ask(await token(), { v: 2 });
+  assert.equal(r.status, 200);
+  assert.match(r.headers.get('content-type'), /text\/event-stream/);
+  assert.equal(r.raw, chunks.map((c) => 'data: ' + JSON.stringify(c) + '\n\n').join('') + 'data: [DONE]\n\n');
+  assert.equal(r.headers.get('x-ai-left'), '19');
+  assert.equal(r.headers.get('x-ai-unlimited'), null);
+  assert.equal(r.headers.get('x-ai-mode'), 'full');
+  assert.match(r.headers.get('access-control-expose-headers'), /X-AI-Left.*X-AI-Unlimited.*X-AI-Mode/);
+  assert.equal(r.headers.get('access-control-allow-origin'), ORIGIN);
+
+  const boss = await w.ask(await token({ sub: 'owner-1', email: OWNER }), { v: 2 });
+  assert.equal(boss.headers.get('x-ai-unlimited'), '1');
+  assert.equal(boss.headers.get('x-ai-left'), null);
+
+  // 예전 앱(v 없음)에는 예전 모양으로 보낸다
+  const old = await w.ask(await token());
+  assert.equal(old.text, '안녕하세요');
+  assert.equal(old.left, 18);
+  assert.equal(old.done, true);
+});
+
+test('v 2: 한꺼번에 온 답도 같은 모양으로, 빈 답은 오류로 알리고 횟수를 돌려준다', async () => {
+  const w = world({ answer: () => ({ response: '한꺼번에' }) });
+  const me = await token();
+  const r = await w.ask(me, { v: 2 });
+  assert.equal(r.raw, 'data: {"response":"한꺼번에"}\n\ndata: [DONE]\n\n');
+  assert.equal(r.headers.get('x-ai-left'), '19');
+  w.answer = () => ({});
+  const none = await w.ask(me, { v: 2 });
+  assert.equal(none.status, 503);
+  assert.deepEqual(none.json, { error: 'server' });
+  w.answer = () => sse(['응']);
+  assert.equal((await w.ask(me, { v: 2 })).headers.get('x-ai-left'), '18'); // 빈 답은 세지 않았다
+});
+
+test('생각하기: 기본은 끄고 THINKING이 on일 때만 켠다', async () => {
+  const w = world();
+  await w.ask(await token());
+  assert.deepEqual(w.runs[0].input.chat_template_kwargs, { enable_thinking: false });
+  forgetKeys();
+  const on = world({ env: { THINKING: 'on' } });
+  await on.ask(await token());
+  assert.deepEqual(on.runs[0].input.chat_template_kwargs, { enable_thinking: true });
+});
+
+test('모델이 덧붙인 설정을 받지 않으면 꼭 필요한 것만으로 한 번 더 묻는다', async () => {
+  const w = world();
+  let n = 0;
+  w.answer = () => { if (!n++) throw new Error('5006: unknown field chat_template_kwargs'); return sse(['됐어요']); };
+  const messages = [{ role: 'user', content: '안녕' }];
+  const r = await w.ask(await token(), { v: 2, messages });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('x-ai-mode'), 'plain');
+  assert.equal(r.headers.get('x-ai-left'), '19'); // 한 번만 센다
+  assert.equal(w.runs.length, 2);
+  assert.deepEqual(w.runs[1].input, { messages, stream: true, max_tokens: 1200 });
+});
+
+test('모델이 오류를 내면 주인 계정에만 까닭을 적어 보낸다', async () => {
+  const w = world({ answer: () => { throw new Error('3040: capacity temporarily exceeded'); } });
+  const boss = await w.ask(await token({ sub: 'owner-1', email: OWNER }), { v: 2 });
+  assert.equal(boss.status, 503);
+  assert.deepEqual(boss.json, { error: 'server', detail: '3040: capacity temporarily exceeded' });
+  const other = await w.ask(await token(), { v: 2 });
+  assert.equal(other.status, 503);
+  assert.deepEqual(other.json, { error: 'server' });
+  w.answer = () => sse(['응']);
+  assert.equal((await w.ask(await token(), { v: 2 })).headers.get('x-ai-left'), '19'); // 실패는 세지 않았다
 });

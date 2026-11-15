@@ -37,8 +37,9 @@ const FAKE = `
   const browser = await chromium.launch();
   const errors = [];
   // 가짜 서버의 상태: 테스트가 바꿔 가며 쓴다
-  const srv = { openTo: 'owner', owners: ['tok-g1'], used: 0, limit: 20, calls: [], meDelay: 0, down: false, answer: '**echar de menos**는 그리워하다라는 뜻이에요.' };
-  const cors = { 'Access-Control-Allow-Origin': HOME, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
+  //  chunks: 모델이 보내는 줄을 직접 정할 때 / fail: 모델이 오류를 낼 때 서버가 보내는 답 / old: 예전 서버처럼 답하기
+  const srv = { openTo: 'owner', owners: ['tok-g1'], used: 0, limit: 20, calls: [], meDelay: 0, down: false, answer: '**echar de menos**는 그리워하다라는 뜻이에요.', chunks: null, fail: null, old: false };
+  const cors = { 'Access-Control-Allow-Origin': HOME, 'Access-Control-Allow-Headers': 'Authorization, Content-Type', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Expose-Headers': 'X-AI-Left, X-AI-Unlimited, X-AI-Mode' };
   const json = (route, body, status) => route.fulfill({ status: status || 200, headers: Object.assign({ 'Content-Type': 'application/json' }, cors), body: JSON.stringify(body) });
 
   async function open(extra) {
@@ -72,15 +73,27 @@ const FAKE = `
       if (!token) return json(route, { error: 'login' }, 401);
       if (!owner && !everyone) return json(route, { error: 'closed' }, 403);
       if (!owner && srv.used >= srv.limit) return json(route, { error: 'limit' }, 429);
+      if (srv.fail) return json(route, srv.fail, 503);
       if (!owner) srv.used++;
       const half = Math.ceil(srv.answer.length / 2);
-      const lines = [{ t: srv.answer.slice(0, half) }, { t: srv.answer.slice(half) }, owner ? { unlimited: true } : { left: srv.limit - srv.used }];
-      route.fulfill({ headers: Object.assign({ 'Content-Type': 'text/event-stream; charset=utf-8' }, cors), body: lines.map((l) => 'data: ' + JSON.stringify(l) + '\n\n').join('') + 'data: [DONE]\n\n' });
+      const sse = (lines) => lines.map((l) => 'data: ' + JSON.stringify(l) + '\n\n').join('') + 'data: [DONE]\n\n';
+      const type = { 'Content-Type': 'text/event-stream; charset=utf-8' };
+      if (srv.old || srv.calls[srv.calls.length - 1].body.v !== 2) {
+        // 예전 서버: 글 조각을 다시 적어 보내고 남은 횟수는 답의 끝에
+        return route.fulfill({ headers: Object.assign({}, type, cors), body: sse([{ t: srv.answer.slice(0, half) }, { t: srv.answer.slice(half) }, owner ? { unlimited: true } : { left: srv.limit - srv.used }]) });
+      }
+      // 새 서버(v 2): 모델이 보내는 줄 그대로, 남은 횟수는 머리말로
+      const chunks = srv.chunks || [
+        { choices: [{ index: 0, delta: { role: 'assistant', content: srv.answer.slice(0, half) } }] },
+        { choices: [{ index: 0, delta: { content: srv.answer.slice(half) }, finish_reason: 'stop' }] },
+        { choices: [], usage: { prompt_tokens: 500, completion_tokens: 40 } },
+      ];
+      route.fulfill({ headers: Object.assign({}, type, cors, { 'X-AI-Mode': 'full' }, owner ? { 'X-AI-Unlimited': '1' } : { 'X-AI-Left': String(srv.limit - srv.used) }), body: sse(chunks) });
     });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(e.message));
     // 일부러 낸 실패(인터넷 끊김, 횟수 다 씀, 아직 안 열림)를 브라우저가 적는 줄은 뺀다
-    page.on('console', (m) => m.type() === 'error' && !/ERR_INTERNET_DISCONNECTED|status of (429|403)/.test(m.text()) && errors.push(m.text()));
+    page.on('console', (m) => m.type() === 'error' && !/ERR_INTERNET_DISCONNECTED|status of (429|403|503)/.test(m.text()) && errors.push(m.text()));
     await page.goto(APP);
     await page.waitForFunction(() => window.App && window.AICore && window.Cloud);
     return page;
@@ -120,9 +133,61 @@ const FAKE = `
   assert((await page.textContent('#ai-left')) === '횟수 제한 없음', "주인 계정은 묻기 전부터 '횟수 제한 없음'");
   await ask(page, 'echar de menos가 무슨 뜻이야?');
   const sent = chat()[0];
+  assert(sent.body.v === 2, '새 약속(v 2)으로 묻는다: 서버가 모델의 답을 손대지 않고 넘겨 준다');
   assert(sent.token === 'tok-g1' && sent.body.messages[0].role === 'system' && sent.body.messages[sent.body.messages.length - 1].content === 'echar de menos가 무슨 뜻이야?', '질문을 로그인 확인표와 함께 서버로 보냄');
   assert((await page.locator('#ai-log .ai-msg.ai').last().locator('.ai-text b').textContent()) === 'echar de menos' && /그리워하다/.test(await page.locator('#ai-log .ai-msg.ai').last().locator('.ai-text').textContent()), '조금씩 온 답을 이어 붙여 보여 줌');
   assert((await page.textContent('#ai-left')) === '횟수 제한 없음' && srv.used === 0, '주인 계정은 횟수를 쓰지 않음');
+
+  /* ===== 2-1) 반복 일정을 말로 넣는다 (2026-11-15에 실제로 실패했던 말) ===== */
+  const last = () => page.locator('#ai-log .ai-msg.ai').last();
+  const WEEKLY = '{"type":"add_event","kind":"other","title":"정아름 영어","start":"18:30","end":"22:00","repeat":"weekly","days":["일"]}';
+  const word = (t, more) => ({ choices: [Object.assign({ index: 0, delta: { content: t } }, more || {})] });
+  const think = (t) => ({ choices: [{ index: 0, delta: { content: null, reasoning_content: t } }] });
+  srv.chunks = [word('매주 일요일 18시 30분부터 22시까지 '), word('넣을게요.\n<actions>[' + WEEKLY), word(']</actions>', { finish_reason: 'stop' })];
+  await ask(page, '매주 일요일 18시 30분부터 22시까지 정아름 영어 일정을 추가해줘. 이건 학원 일정이야.');
+  assert(/일정 추가: 정아름 영어/.test(await last().locator('.ai-plan').textContent()) && /18:30~22:00 · 매주 일 · 다른 일정/.test(await last().locator('.ai-plan').textContent()), '매주 반복 일정을 제안 한 줄로 보여 줌');
+  assert((await last().locator('.ai-diag').count()) === 0, "문제가 없으면 '자세히'가 없음");
+  await last().locator('[data-plan-apply]').tap();
+  const added = await page.evaluate(() => App.store.get().events.filter((e) => e.title === '정아름 영어'));
+  assert(added.length === 1 && added[0].kind === 'other' && added[0].start === '18:30' && added[0].end === '22:00' && added[0].repeat.freq === 'weekly' && String(added[0].repeat.days) === '0' && new Date(added[0].date + 'T12:00').getDay() === 0, '적용하면 가장 가까운 일요일부터 매주 반복하는 일정 하나가 생김');
+
+  /* ===== 2-2) 답이 온전히 오지 않을 때: 받은 데까지 살리고 까닭을 보여 준다 ===== */
+  // 모델이 생각에 답 길이를 다 써서 동작 목록이 중간에 끊김
+  srv.chunks = [think('사용자가 일정을 원한다. '), think('매주 일요일이다.'), word('넣을게요.\n<actions>[' + WEEKLY.replace('정아름 영어', '끊긴 답') + ',{"type":"add_event","title":"둘째","sta', { finish_reason: 'length' }), { choices: [], usage: { prompt_tokens: 900, completion_tokens: 2000, completion_tokens_details: { reasoning_tokens: 1800 } } }];
+  await ask(page, '일정 두 개 넣어 줘');
+  assert((await last().locator('.ai-plan .ai-op').count()) === 1 && /끊긴 답/.test(await last().locator('.ai-plan').textContent()) && /읽은 데까지만/.test(await last().locator('.ai-plan .ai-rej').textContent()), '끊긴 동작 목록에서 끝까지 온 것만 제안하고 그 사실을 알림');
+  let diag = await last().locator('.ai-diag p').textContent();
+  assert(/응답 200 full/.test(diag) && /생각 \d+자/.test(diag) && /끝 length/.test(diag) && /쓴 양 2000\(생각 1800\)/.test(diag) && /끝부분: .*"sta$/.test(diag), "'자세히'에 까닭을 찾을 숫자가 있음 (생각한 양, 끝난 까닭, 쓴 양, 답의 끝부분)");
+  assert(!(await last().locator('.ai-diag').evaluate((el) => el.open)), "'자세히'는 접혀 있음");
+  // 하나도 끝까지 오지 않음
+  srv.chunks = [word('넣을게요.\n<actions>[{"type":"add_event","tit', { finish_reason: 'length' })];
+  await ask(page, '일정 넣어 줘');
+  assert(/답이 길어서 제안이 끝까지 오지 못했어요/.test(await last().locator('.ai-rej').textContent()) && (await last().locator('.ai-plan').count()) === 0 && (await last().locator('.ai-diag').count()) === 1, '제안을 하나도 못 읽으면 까닭과 함께 알림');
+  // 글만 오다가 길이 제한에 걸림
+  srv.chunks = [word('**뜻** 그리워하다. 구문 풀이는', { finish_reason: 'length' })];
+  await ask(page, 'echar de menos 길게 풀이');
+  assert(/그리워하다/.test(await last().locator('.ai-text').textContent()) && /답이 길어서 끝까지 오지 못했어요/.test(await last().locator('.ai-rej').textContent()), '글이 길이 제한에 걸려 끊기면 받은 데까지 보여 주고 알림');
+  // 생각만 하다가 한 글자도 못 보냄
+  srv.chunks = [think('음...'), think('아직 생각 중'), { choices: [{ index: 0, delta: {}, finish_reason: 'length' }] }];
+  await ask(page, '일정 추가가 안됐어');
+  assert(/AI가 빈 답을 보냈어요/.test(await last().locator('.ai-err').textContent()) && await last().locator('[data-retry]').isVisible(), '빈 답이면 알리고 다시 보내기를 보여 줌');
+  diag = await last().locator('.ai-diag p').textContent();
+  assert(/글 0자/.test(diag) && /생각 \d+자/.test(diag) && /끝 length/.test(diag), "빈 답의 '자세히'에 생각만 하다 끝났다는 것이 보임");
+  // 모델이 오류를 냄: 서버가 주인 계정에만 까닭을 적어 보낸다
+  srv.chunks = null;
+  srv.fail = { error: 'server', detail: '3040: capacity temporarily exceeded' };
+  await ask(page, '지금 돼?');
+  assert(/AI가 지금 답하지 못했어요/.test(await last().locator('.ai-err').textContent()) && /응답 503/.test(await last().locator('.ai-diag p').textContent()) && /3040: capacity temporarily exceeded/.test(await last().locator('.ai-diag p').textContent()), "서버 오류면 '자세히'에 서버가 알려 준 까닭이 보임");
+  srv.fail = null;
+  await last().locator('[data-retry]').tap();
+  await page.waitForFunction(() => !AI.busy && /그리워하다/.test((document.querySelector('#ai-log .ai-msg.ai:last-child .ai-text') || {}).textContent || ''));
+  assert((await page.locator('#ai-log .ai-err').count()) === 1, '다시 보내기로 답을 받으면 그 알림은 사라짐 (앞의 빈 답 알림만 남음)');
+  // 예전 서버(답을 다시 적어 보내는 모양)와도 통한다
+  srv.old = true;
+  await ask(page, '예전 서버야?');
+  assert(/그리워하다/.test(await last().locator('.ai-text').textContent()) && (await page.textContent('#ai-left')) === '횟수 제한 없음', '예전 서버의 답도 읽음');
+  srv.old = false;
+  await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('studypromotion.ai')); s.msgs = []; localStorage.setItem('studypromotion.ai', JSON.stringify(s)); });
 
   /* ===== 3) 다시 열면 기억해 둔 답으로 단추가 바로 보인다 ===== */
   let before = me().length;
