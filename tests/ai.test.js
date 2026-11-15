@@ -111,6 +111,47 @@ test('읽지 못한 동작 목록은 버리고 알린다', () => {
   assert.strictEqual(r.broken, true);
   assert.strictEqual(r.text, '바꿀게요');
 });
+test('답이 중간에 끊긴 동작 목록에서는 끝까지 온 동작만 건진다', () => {
+  const one = '{"type":"add_event","title":"글자 } 와 \\" 따옴표","start":"18:30","end":"22:00","repeat":"weekly","days":["일"]}';
+  const r = AI.parseReply('매주 일요일에 넣을게요.\n<actions>[' + one + ',{"type":"add_event","title":"둘째","sta');
+  assert.deepStrictEqual(r.actions, [JSON.parse(one)]);
+  assert.deepStrictEqual([r.partial, r.broken], [true, false]);
+  assert.strictEqual(r.text, '매주 일요일에 넣을게요.');
+  // 하나도 끝까지 오지 않았으면 읽지 못한 것으로 알린다
+  const none = AI.parseReply('넣을게요.\n<actions>[{"type":"add_event","tit');
+  assert.deepStrictEqual([none.actions.length, none.partial, none.broken], [0, false, true]);
+  // 온전한 목록은 그대로
+  assert.strictEqual(AI.parseReply('<actions>[' + one + ']</actions>').partial, false);
+});
+test('모델이 속으로 한 생각은 글에서 지운다', () => {
+  const r = AI.parseReply('<think>사용자가 일정을 원한다.\n<actions>[]</actions></think>내일로 옮길게요.\n<actions>[{"type":"move_task","task":"t1","due":"2026-11-15"}]</actions>');
+  assert.strictEqual(r.text, '내일로 옮길게요.');
+  assert.strictEqual(r.actions.length, 1);
+  assert.strictEqual(AI.parseReply('<|channel>thought\n뜻을 풀어 보자<channel|>hola는 안녕이에요').text, 'hola는 안녕이에요');
+  assert.strictEqual(AI.parseReply('<think>아직 생각하는 중').text, '');
+  assert.strictEqual(AI.visibleText('<think>아직 생각하는 중'), '');
+  assert.strictEqual(AI.visibleText('<think>끝</think>답이에요 <thi'), '답이에요');
+});
+test('서버가 넘겨 준 한 줄을 읽는다: 모델마다 다른 모양, 생각, 끝난 까닭, 쓴 양', () => {
+  const pick = (j) => { const c = AI.readChunk(j); return [c.text, c.think, c.finish, c.usage, c.error, c.left, c.unlimited]; };
+  assert.deepStrictEqual(pick({ response: '안녕' }), ['안녕', '', '', null, '', null, false]);
+  assert.deepStrictEqual(pick({ choices: [{ delta: { content: '하세요' } }] }), ['하세요', '', '', null, '', null, false]);
+  assert.deepStrictEqual(pick({ choices: [{ delta: { reasoning_content: '음' } }] }), ['', '음', '', null, '', null, false]);
+  assert.deepStrictEqual(pick({ choices: [{ delta: { content: null, reasoning: '흠' } }] }), ['', '흠', '', null, '', null, false]);
+  assert.deepStrictEqual(pick({ choices: [{ delta: {}, finish_reason: 'length' }] }), ['', '', 'length', null, '', null, false]);
+  assert.deepStrictEqual(pick({ choices: [{ message: { content: '한꺼번에' }, finish_reason: 'stop' }] }), ['한꺼번에', '', 'stop', null, '', null, false]);
+  assert.deepStrictEqual(pick({ choices: [{ text: '옛 모양' }] }), ['옛 모양', '', '', null, '', null, false]);
+  assert.deepStrictEqual(pick({ choices: [], usage: { prompt_tokens: 900, completion_tokens: 2000, completion_tokens_details: { reasoning_tokens: 1700 } } }), ['', '', '', { out: 2000, think: 1700 }, '', null, false]);
+  assert.deepStrictEqual(pick({ response: '', usage: { completion_tokens: 12 } }), ['', '', '', { out: 12, think: 0 }, '', null, false]);
+  // 예전 서버가 보내던 모양
+  assert.deepStrictEqual(pick({ t: '조각' }), ['조각', '', '', null, '', null, false]);
+  assert.deepStrictEqual(pick({ left: 7 }), ['', '', '', null, '', 7, false]);
+  assert.deepStrictEqual(pick({ unlimited: true }), ['', '', '', null, '', null, true]);
+  // 오류
+  assert.deepStrictEqual([AI.readChunk({ error: 'limit', scope: 'all' }).error, AI.readChunk({ error: 'limit', scope: 'all' }).scope], ['limit', 'all']);
+  assert.deepStrictEqual([AI.readChunk({ error: { message: '모델이 멈춤' } }).error, AI.readChunk({ error: { message: '모델이 멈춤' } }).detail], ['server', '모델이 멈춤']);
+  for (const odd of [null, 'x', 3, [], { choices: 'x' }, { choices: [null] }]) assert.strictEqual(AI.readChunk(odd).text, '');
+});
 test('카드 후보는 다섯 개까지, 앞뒤가 다 있는 것만', () => {
   const cards = Array.from({ length: 7 }, (_, i) => ({ front: 'f' + i, back: 'b' + i })).concat([{ front: '', back: 'x' }]);
   const r = AI.parseReply('설명입니다.\n<cards>' + JSON.stringify(cards) + '</cards>');
@@ -340,6 +381,28 @@ test('반복 일정: 요일은 글자로 받고, 요일이 없으면 그 날짜�
   ]);
   assert.deepStrictEqual(res.ops[0].data.ev.repeat, { freq: 'weekly', days: [1, 3], until: '2026-12-31' });
   assert.deepStrictEqual(res.rejected, ['반복이 끝나는 날을 읽지 못했어요']);
+});
+test('반복 일정: 시작하는 날이 없거나 다른 요일이면 가장 가까운 그 요일부터', () => {
+  // 오늘은 2026-11-14(토)
+  const { res } = check([
+    { type: 'add_event', kind: 'other', title: '정아름 영어', start: '18:30', end: '22:00', repeat: 'weekly', days: ['일'] }, // 날짜 없음
+    { type: 'add_event', kind: 'other', title: '정아름 영어', date: '2026-11-16', start: '18:30', end: '22:00', repeat: 'weekly', days: ['일'] }, // 월요일을 적음
+    { type: 'add_event', subject: '수학 I', date: '오늘 날짜', start: '19:00', end: '20:00', repeat: 'weekly', days: ['월', '수'] }, // 날짜를 글로 적음
+    { type: 'add_event', kind: 'other', title: '운동', date: '언젠가', start: '6:30', end: '7:00', repeat: 'daily' },
+    { type: 'add_event', subject: '국어', date: '언젠가', start: '8:00', end: '9:00' }, // 한 번짜리는 날짜가 꼭 있어야 한다
+  ]);
+  assert.deepStrictEqual(res.ops.map((o) => o.sub), [
+    '내일 11/15(일) 18:30~22:00 · 매주 일 · 다른 일정',
+    '11/22(일) 18:30~22:00 · 매주 일 · 다른 일정',
+    '11/16(월) 19:00~20:00 · 매주 월·수',
+    '오늘 11/14(토) 6:30~7:00 · 매일 · 다른 일정',
+  ]);
+  assert.deepStrictEqual(res.ops.map((o) => o.data.ev.date), ['2026-11-15', '2026-11-22', '2026-11-16', '2026-11-14']);
+  assert.deepStrictEqual(res.rejected, ['일정 날짜를 읽지 못했어요']);
+});
+test('지시문: 반복 일정은 날짜마다 적지 말고 한 줄로 적게 한다', () => {
+  assert.match(AI.PROMPT_APP, /되풀이되는 일정은 날짜마다 따로 적지 않는다/);
+  assert.match(AI.PROMPT_APP, /"repeat":"weekly","days":\["월","수"\]/);
 });
 test('일정 추가: 겹치는 일정을 알려 주고, 잘못 적은 것은 뺀다', () => {
   const { res } = check([

@@ -6,6 +6,10 @@ compatibility_date = "2026-11-01"
 workers_dev = true
 preview_urls = false
 
+# 서버가 남긴 기록(오류 등)을 Cloudflare 화면의 Logs에서 볼 수 있게 한다
+[observability]
+enabled = true
+
 # Workers AI: 모델을 비밀 키 없이 부른다
 [ai]
 binding = "AI"
@@ -29,7 +33,9 @@ DAILY_LIMIT = "20"
 OPEN_TO = "owner"
 # Workers AI 모델과 답의 최대 길이
 MODEL = "@cf/google/gemma-4-26b-a4b-it"
-MAX_TOKENS = "1200"
+MAX_TOKENS = "2000"
+# 모델이 답하기 전에 속으로 생각하게 둘지. "off"가 빠르고, 생각에 답 길이를 다 써서 답이 잘리는 일이 없다
+THINKING = "off"
 # 앱 주소 (쉼표로 여러 개)
 ALLOWED_ORIGINS = "https://mjleo6278-thecreater.github.io"
 

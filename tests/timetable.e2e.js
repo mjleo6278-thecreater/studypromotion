@@ -306,11 +306,11 @@ const SW = 'studypromotion.stopwatch';
   await page.waitForFunction(() => window.App);
   const tabs = await page.$$eval('#ver-tabs [data-ver-tab]', (els) => els.map((e) => ({ v: e.dataset.verTab, on: e.classList.contains('active'), sel: e.getAttribute('aria-selected') })));
   assert(tabs.length >= 9 && tabs[0].v === await page.evaluate(() => App.version) && tabs[0].on && tabs[0].sel === 'true' && tabs.filter((t) => t.on).length === 1, '버전마다 탭 하나, 맨 앞이 지금 버전(' + tabs[0].v + ')이고 처음에 골라져 있음: ' + tabs.map((t) => t.v).join(' '));
-  assert(/버전 3\.0/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
+  assert(/버전 3\.1/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
   const shown = () => page.$$eval('#about-news .ver', (els) => els.filter((e) => !e.hidden && e.offsetParent !== null).map((e) => ({ v: e.dataset.ver, when: e.querySelector('.ver-when').textContent, n: e.querySelectorAll('.news li').length })));
   let sh = await shown();
-  assert(sh.length === 1 && sh[0].v === '3.0' && /버전 3\.0 · 2026년 11월 15일 업데이트/.test(sh[0].when) && sh[0].n >= 3, '고른 버전의 내용만 보이고, 업데이트한 날이 적혀 있음: ' + sh[0].when);
-  assert(/AI 도우미 세컨드/.test(await page.textContent('#about-news .ver:not([hidden])')) && /말로 앱 쓰기/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.0 소식에 AI 도우미');
+  assert(sh.length === 1 && sh[0].v === '3.1' && /버전 3\.1 · 2026년 11월 15일 업데이트/.test(sh[0].when) && sh[0].n >= 3, '고른 버전의 내용만 보이고, 업데이트한 날이 적혀 있음: ' + sh[0].when);
+  assert(/AI 도우미가 더 빨리/.test(await page.textContent('#about-news .ver:not([hidden])')) && /반복 일정을 한 번에/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.1 소식에 AI 도우미 고친 것');
   await page.tap('#ver-tabs [data-ver-tab="2.11"]');
   sh = await shown();
   assert(sh.length === 1 && sh[0].v === '2.11' && /버전 2\.11 · 2026년 11월 14일 업데이트/.test(sh[0].when) && /일정 추가/.test(await page.textContent('#about-news .ver:not([hidden])')) && /주간 스케줄 표/.test(await page.textContent('#about-news .ver:not([hidden])')), '2.11 소식(일정 추가, 주간 스케줄 표)도 그대로');
@@ -337,7 +337,7 @@ const SW = 'studypromotion.stopwatch';
   await page.tap('#toast .toast-act');
   await page.waitForTimeout(300);
   sh = await shown();
-  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '3.0' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
+  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '3.1' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
   await page.context().close();
 
   /* ===== 8) PC 화면, 어두운 화면 ===== */

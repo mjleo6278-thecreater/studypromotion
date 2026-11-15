@@ -36,49 +36,79 @@
   };
 
   /* ---------- AI를 부르는 쪽 ---------- */
-  // ask(messages, { signal, onText }) → { text, left, unlimited } (left: 오늘 남은 횟수, 모르면 null. unlimited: 횟수 제한이 없는 계정). 실패하면 err.aiCode에 까닭
+  // ask(messages, { signal, onText }) → { text, left, unlimited, cut, diag }
+  //  left: 오늘 남은 횟수(모르면 null), unlimited: 횟수 제한이 없는 계정, cut: 답이 오다가 연결이 끊김,
+  //  diag: 무슨 일이 있었는지 알려 주는 숫자들(문제가 생겼을 때 '자세히'에 보여 준다). 실패하면 err.aiCode에 까닭
   const fail = (code, more) => Object.assign(new Error(code), { aiCode: code }, more || {});
   const remote = {
     needsLogin: true,
     async ask(messages, opts) {
       const user = window.Cloud && window.Cloud.user;
       if (!user) throw fail('login');
+      const t0 = Date.now();
+      const d = { status: 0, mode: '', n: 0, chars: 0, think: 0, finish: '', usage: null, ms: 0, cut: '', detail: '' };
+      const done = () => { d.ms = Date.now() - t0; return d; };
       let token, res;
       try { token = await user.getIdToken(); } catch (e) { throw fail('offline'); }
       try {
         res = await fetch(AI_ENDPOINT.replace(/\/+$/, '') + '/chat', {
           method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-          body: JSON.stringify({ messages }), signal: opts.signal,
+          body: JSON.stringify({ messages, v: 2 }), signal: opts.signal, // v 2: 서버가 모델의 답을 손대지 않고 넘겨 준다
         });
       } catch (e) { if (e && e.name === 'AbortError') throw e; throw fail('offline'); }
+      d.status = res.status;
       if (!res.ok) {
         let j = {};
         try { j = await res.json(); } catch (e) { /* 글이 아닌 답 */ }
-        throw fail(j.error || (res.status === 429 ? 'limit' : res.status === 401 ? 'login' : 'server'), { scope: j.scope });
+        if (typeof j.detail === 'string') d.detail = j.detail.slice(0, 200);
+        throw fail(j.error || (res.status === 429 ? 'limit' : res.status === 401 ? 'login' : 'server'), { scope: j.scope, diag: done() });
       }
-      // 답은 조금씩 온다: 한 줄에 data: {"t":"글 조각"} 또는 data: {"left":19}·{"unlimited":true}, 끝은 data: [DONE]
+      // 남은 횟수는 머리말로 온다 (예전 서버는 답의 끝에 적어 보낸다)
+      const head = (k) => { try { return res.headers.get(k); } catch (e) { return null; } };
+      let text = '', left = null, unlimited = head('X-AI-Unlimited') === '1', cut = false;
+      if (/^\d+$/.test(head('X-AI-Left') || '')) left = +head('X-AI-Left');
+      d.mode = head('X-AI-Mode') || '';
+      // 답은 조금씩 온다: 한 줄에 data: { 글 조각 }, 끝은 data: [DONE]. 줄의 모양은 AICore.readChunk가 읽는다
+      const take = (line) => {
+        if (!line.startsWith('data:')) return;
+        const data = line.slice(5).trim();
+        if (!data || data === '[DONE]') return;
+        let j = null;
+        try { j = JSON.parse(data); } catch (e) { return; }
+        const c = Core.readChunk(j);
+        d.n++;
+        if (c.error) { d.detail = c.detail; throw fail(c.error, { scope: c.scope || undefined, diag: done() }); }
+        if (c.think) d.think += c.think.length;
+        if (c.finish) d.finish = c.finish;
+        if (c.usage) d.usage = c.usage;
+        if (c.left !== null) left = c.left;
+        if (c.unlimited) unlimited = true;
+        if (c.text) { text += c.text; d.chars = text.length; opts.onText(text); }
+      };
       const reader = res.body.getReader(), dec = new TextDecoder();
-      let buf = '', text = '', left = null, unlimited = false;
+      let buf = '';
       for (;;) {
-        const part = await reader.read();
+        let part;
+        try { part = await reader.read(); }
+        catch (e) {
+          if (e && e.name === 'AbortError') throw e;
+          // 답이 오다가 연결이 끊김: 받은 데까지는 보여 준다
+          d.cut = String((e && e.message) || e).slice(0, 80);
+          cut = true;
+          break;
+        }
         if (part.done) break;
         buf += dec.decode(part.value, { stream: true });
         let i;
         while ((i = buf.indexOf('\n')) >= 0) {
           const line = buf.slice(0, i).trim();
           buf = buf.slice(i + 1);
-          if (!line.startsWith('data:')) continue;
-          const data = line.slice(5).trim();
-          if (!data || data === '[DONE]') continue;
-          let j = null;
-          try { j = JSON.parse(data); } catch (e) { continue; }
-          if (j.error) throw fail(j.error, { scope: j.scope });
-          if (typeof j.t === 'string') { text += j.t; opts.onText(text); }
-          if (typeof j.left === 'number') left = j.left;
-          if (j.unlimited === true) unlimited = true;
+          take(line);
         }
       }
-      return { text, left, unlimited };
+      if (!cut) take(buf.trim()); // 줄바꿈 없이 끝난 마지막 줄
+      if (!text.trim()) throw fail(cut ? 'server' : 'empty', { diag: done() }); // 한 글자도 못 받음
+      return { text, left, unlimited, cut, diag: done() };
     },
   };
   const useRemote = !!AI_ENDPOINT && location.origin === AI_HOME;
@@ -221,10 +251,26 @@
     closed: 'AI 도우미는 지금 먼저 써 보는 중이라 곧 열려요.',
     offline: '인터넷에 연결되지 않아 답을 받지 못했어요.',
     server: 'AI가 지금 답하지 못했어요. 잠시 뒤에 다시 해 주세요.',
+    empty: 'AI가 빈 답을 보냈어요. 다시 보내 주세요.',
   };
+  // 문제가 생겼을 때 '자세히'에 보여 줄 글: 서버와 모델이 어떻게 답했는지 (고칠 때 이 글을 보고 까닭을 찾는다)
+  function diagText(d, raw) {
+    if (!d) return '';
+    const bits = [];
+    if (d.status) bits.push('응답 ' + d.status + (d.mode ? ' ' + d.mode : ''));
+    bits.push(`조각 ${d.n}`, `글 ${d.chars}자`);
+    if (d.think) bits.push(`생각 ${d.think}자`);
+    if (d.finish) bits.push('끝 ' + d.finish);
+    if (d.usage) bits.push(`쓴 양 ${d.usage.out}` + (d.usage.think ? `(생각 ${d.usage.think})` : ''));
+    bits.push((d.ms / 1000).toFixed(1) + '초');
+    if (d.cut) bits.push('끊김 ' + d.cut);
+    if (d.detail) bits.push(d.detail);
+    const tail = String(raw || '').replace(/\s+/g, ' ').trim().slice(-140);
+    return bits.join(' · ') + (tail ? '\n끝부분: ' + tail : '');
+  }
   function errorHTML(m) {
     const code = m.error === 'limit' && m.scope === 'all' ? 'limit-all' : m.error;
-    const retry = code === 'offline' || code === 'server' || !ERR[code];
+    const retry = code === 'offline' || code === 'server' || code === 'empty' || !ERR[code];
     return `<div class="ai-card ai-err"><p>${esc(ERR[code] || ERR.server)}</p><div class="ai-card-act">` +
       (code === 'login' ? '<button type="button" class="btn primary" data-ai-go="account">로그인하러 가기</button>' : '') +
       (retry ? '<button type="button" class="btn primary" data-retry>다시 보내기</button>' : '') +
@@ -241,6 +287,7 @@
     (m.stats || []).forEach((d) => { h += statsHTML(d); });
     if (m.plan) h += planHTML(m);
     if (m.note && m.note.length) h += `<p class="ai-rej">${m.note.map(esc).join('<br>')}</p>`;
+    if (m.diag) h += `<details class="ai-diag"><summary>자세히</summary><p>${lines(m.diag)}</p></details>`;
     if (m.nav) h += `<div class="ai-card-act"><button type="button" class="btn primary" data-ai-go="${esc(m.nav.view)}"${m.nav.date ? ` data-date="${esc(m.nav.date)}"` : ''}>${esc(Core.VIEWS[m.nav.view] || '화면')} 열기</button></div>`;
     if (m.cards && m.cards.length) h += cardsHTML(m);
     return h + '</div>';
@@ -438,7 +485,7 @@
       }
       if (out.unlimited) { S.left = 'unlimited'; S.leftAt = Date.now(); }
       else if (typeof out.left === 'number') { S.left = out.left; S.leftAt = Date.now(); }
-      finish(m, r, ctx);
+      finish(m, r, ctx, out);
     } catch (e) {
       if (e && e.name === 'AbortError') {
         m.text = Core.parseReply(Core.visibleText(raw)).text;
@@ -448,6 +495,8 @@
         m.text = '';
         m.error = (e && e.aiCode) || 'server';
         if (e && e.scope) m.scope = e.scope;
+        if (e && e.diag) m.diag = diagText(e.diag, raw);
+        else if (e && !e.aiCode) m.diag = String(e.message || e).slice(0, 200); // 앱 안에서 난 오류
         m.q = text;
       }
     } finally {
@@ -462,7 +511,9 @@
   }
 
   // AI의 답을 화면에 낼 모양으로: 글, 카드 후보, 그리고 검사를 통과한 동작(제안·보여 주기·화면 열기)
-  function finish(m, r, ctx) {
+  function finish(m, r, ctx, out) {
+    out = out || {};
+    const d = out.diag;
     m.text = r.text;
     if (r.cards.length) m.cards = r.cards.map((c) => ({ front: c.front, back: c.back, saved: false }));
     if (r.actions.length) {
@@ -476,7 +527,17 @@
         live[m.id] = { ops: rest, inv: null };
       }
       if (!m.plan && res.rejected.length) m.note = res.rejected;
-    } else if (r.broken) m.note = ['제안을 읽지 못했어요. 한 번 더 말해 주세요.'];
+    }
+    // 답이 온전히 오지 않았으면 알린다
+    const long = d && d.finish === 'length';
+    const odd = r.partial ? '답이 중간에 끊겨서 읽은 데까지만 보여 드려요. 빠진 것이 있으면 한 번 더 말해 주세요.'
+      : r.broken ? (long ? '답이 길어서 제안이 끝까지 오지 못했어요. 나눠서 한 번 더 말해 주세요.' : '제안을 읽지 못했어요. 한 번 더 말해 주세요.')
+      : out.cut ? '답이 오는 중에 연결이 끊겼어요. 다시 보내면 끝까지 받을 수 있어요.'
+      : long ? '답이 길어서 끝까지 오지 못했어요. 나눠서 물어보면 끝까지 받을 수 있어요.' : '';
+    if (odd) {
+      if (m.plan) m.plan.rejected = (m.plan.rejected || []).concat(odd); else m.note = (m.note || []).concat(odd);
+      if (d) m.diag = diagText(d, out.text);
+    }
     if (!m.text && !m.plan && !m.stats && !m.nav && !m.cards && !m.note) m.text = '답을 받지 못했어요. 한 번 더 말해 주세요.';
   }
 

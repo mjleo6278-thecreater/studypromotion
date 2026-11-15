@@ -4,9 +4,12 @@
  * 비밀 키가 없다. 모델은 env.AI(Workers AI 연결)로 부르고, 로그인은 구글이 공개한 열쇠로 확인한다.
  *
  * 앱과 주고받는 약속 (앱 쪽은 js/ai.js)
- *   POST /chat   Authorization: Bearer <Firebase 로그인 확인표>   { "messages": [{ role, content }] }
- *   답(조금씩):  data: {"t":"글 조각"} ... data: {"left":19} 또는 data: {"unlimited":true} ... data: [DONE]
- *   못 할 때:    { "error": "login" | "limit" | "closed" | "bad" | "server", "scope": "all" }
+ *   POST /chat   Authorization: Bearer <Firebase 로그인 확인표>   { "messages": [{ role, content }], "v": 2 }
+ *   답 (v 2):    Workers AI가 보내는 줄을 손대지 않고 그대로 넘긴다(data: {"response":"글 조각"} ... data: [DONE]).
+ *                남은 횟수는 머리말로: X-AI-Left: 19 또는 X-AI-Unlimited: 1
+ *                (서버가 조각마다 읽고 다시 쓰면 무료 요금제의 요청당 계산 시간 10ms를 넘겨 답이 중간에 끊길 수 있다)
+ *   답 (v 없음): 예전 앱용. data: {"t":"글 조각"} ... data: {"left":19} 또는 data: {"unlimited":true} ... data: [DONE]
+ *   못 할 때:    { "error": "login" | "limit" | "closed" | "bad" | "server", "scope": "all", "detail": "주인 계정에만: 모델이 낸 오류 글" }
  *                limit + scope "all" = 앱 전체의 하루 무료 양을 다 씀. closed = 아직 이 사람에게 열지 않음
  *   GET /me      (로그인 확인표는 있어도 되고 없어도 된다) AI 버튼을 보여 줄지 앱이 묻는 곳
  *   답:          { "open": true|false, "signedIn": true|false, "unlimited": true|false, "left": 19, "limit": 20 }
@@ -15,6 +18,8 @@
  *   FIREBASE_PROJECT_ID  로그인 확인에 쓰는 Firebase 프로젝트
  *   DAILY_LIMIT          한 사람이 하루에 쓸 수 있는 횟수. 0시 UTC(한국 오전 9시)에 다시 채운다
  *   MODEL, MAX_TOKENS    Workers AI 모델 이름, 답의 최대 길이
+ *   THINKING             "on"이면 모델이 답하기 전에 속으로 생각하게 둔다. 기본은 끔: 켜 두면 보이지 않는 생각에
+ *                        답 길이(MAX_TOKENS)를 다 써서 한참 기다린 뒤 답이 잘리거나 빈 채로 온다
  *   ALLOWED_ORIGINS      앱 주소 (쉼표로 여러 개)
  *   OPEN_TO              "all"이면 로그인한 모든 사람, 그 밖의 값이면 주인 계정만 쓸 수 있다 (먼저 써 보기)
  *   OWNER_EMAILS         횟수 제한이 없는 구글 계정 이메일 (쉼표로 여러 개). 공개 저장소에 적지 않는다
@@ -146,6 +151,7 @@ export async function handle(request, env, deps, ctx) {
     'Access-Control-Allow-Origin': allowed.includes(origin) ? origin : allowed[0] || '*',
     'Access-Control-Allow-Headers': 'Authorization, Content-Type',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Expose-Headers': 'X-AI-Left, X-AI-Unlimited, X-AI-Mode',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
   };
@@ -197,16 +203,48 @@ export async function handle(request, env, deps, ctx) {
   }
   const refund = async () => { if (!counter) return; try { left = (await count('refund')).left; } catch (e) { /* 못 돌려줘도 답은 보낸다 */ } };
 
-  // 5) 모델에 묻기
-  const maxTokens = parseInt(env.MAX_TOKENS, 10) || 1200;
-  let answer;
-  try { answer = await env.AI.run(env.MODEL || DEFAULT_MODEL, { messages, stream: true, max_tokens: maxTokens }); }
-  catch (e) {
+  // 5) 모델에 묻기. 생각하기(reasoning)는 끈다: 이 모델은 기본으로 켜져 있고, 켜 두면 생각에 답 길이를 다 써 버린다
+  const maxTokens = parseInt(env.MAX_TOKENS, 10) || 2000;
+  const model = env.MODEL || DEFAULT_MODEL;
+  const plain = { messages, stream: true, max_tokens: maxTokens };
+  const thinking = /^(on|1|true|yes)$/i.test(String(env.THINKING || '').trim());
+  const full = Object.assign({}, plain, {
+    max_completion_tokens: maxTokens,
+    chat_template_kwargs: { enable_thinking: thinking },
+    stream_options: { include_usage: true }, // 마지막 줄에 쓴 양(usage)을 붙여 달라고 한다: 답이 잘렸을 때 까닭을 알 수 있다
+  });
+  const note = (e) => String((e && e.message) || e).slice(0, 300);
+  let answer, mode = 'full';
+  try {
+    try { answer = await env.AI.run(model, full); }
+    catch (e) {
+      if (usedUp(e)) throw e;
+      // 모델이 위의 덧붙인 설정을 받지 않으면 꼭 필요한 것만으로 한 번 더 묻는다
+      console.error(JSON.stringify({ at: 'ai.run', mode: 'full', error: note(e) })); // Cloudflare 화면의 기록(Logs)에서 볼 수 있다. 사용자의 말은 적지 않는다
+      mode = 'plain';
+      answer = await env.AI.run(model, plain);
+    }
+  } catch (e) {
     await refund(); // 답을 못 받았으니 횟수를 돌려준다
-    return usedUp(e) ? json({ error: 'limit', scope: 'all' }, 429) : json({ error: 'server' }, 503);
+    const why = note(e);
+    console.error(JSON.stringify({ at: 'ai.run', mode, error: why }));
+    if (usedUp(e)) return json({ error: 'limit', scope: 'all' }, 429);
+    return json(owner ? { error: 'server', detail: why } : { error: 'server' }, 503);
   }
 
-  // 6) 답을 조금씩 앱으로
+  // 6) 답을 앱으로. 새 앱(v 2)에는 모델이 보내는 줄을 그대로 넘긴다: 서버가 계산할 것이 없어 길게 답해도 끊기지 않는다
+  if (body.v === 2) {
+    const head = Object.assign({ 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store' }, cors, { 'X-AI-Mode': mode }, owner ? { 'X-AI-Unlimited': '1' } : { 'X-AI-Left': String(left) });
+    if (answer && typeof answer.getReader === 'function') return new Response(answer, { headers: head });
+    if (answer && typeof answer.response === 'string' && answer.response) { // 한꺼번에 답하는 모델
+      return new Response('data: ' + JSON.stringify({ response: answer.response }) + '\n\ndata: [DONE]\n\n', { headers: head });
+    }
+    await refund();
+    console.error(JSON.stringify({ at: 'ai.run', error: 'empty answer' }));
+    return json({ error: 'server' }, 503);
+  }
+
+  // 7) 예전 앱: 조각마다 읽어서 다시 적어 보낸다
   const enc = new TextEncoder(), dec = new TextDecoder();
   const pipe = new TransformStream(), w = pipe.writable.getWriter();
   const send = (obj) => w.write(enc.encode('data: ' + JSON.stringify(obj) + '\n\n'));
