@@ -81,10 +81,10 @@
   // 영상 비밀 단어: 넣으면 함께 공부하는 유튜브 영상을 이 칸에서 틀어 준다 (영상은 남이 올린 것이라 앱에 담지 않고 퍼오기만 함)
   const VIDEOS = {
     chiikawa: {
-      id: 'zo1ZUBwGzsg',
+      id: 'Br9GNe3vLqQ',
       title: '치이카와와 함께 공부해요',
-      text: '치이카와와 함께 1시간 동안 공부하는 영상이에요. 영상을 틀어 두고 같이 공부해 보세요.',
-      credit: 'monchi / study',
+      text: '장작 타는 소리를 들으며 치이카와와 함께 2시간 동안 공부하는 영상이에요. 영상을 틀어 두고 같이 공부해 보세요.',
+      credit: '까르 ASMR',
     },
   };
   const VIDEO_KEYS = { '29r6m1st5o5': 'chiikawa', '1rqyz85hdj0': 'chiikawa', '26kxo5vppdz': 'chiikawa' }; // 한글 / 일본어 / 영어로 적어도 열림
