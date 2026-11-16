@@ -1068,6 +1068,14 @@ a.brand:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
 .egg-list li span:not(.egg-ver) { color: var(--muted); font-size: 13px; line-height: 1.6; }
 .egg-ver { flex: none; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--ink); color: var(--ink-text); margin-top: 1px; }
 @keyframes eggpop { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+/* 영상 비밀 단어 (v3.4): 함께 공부하는 유튜브 영상 */
+.egg-out.egg-video h3 { margin-top: 0; }
+.egg-player { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #000; }
+.egg-player iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+.egg-offline { padding: 14px 0 4px; }
+.egg-video-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.egg-video-foot > span { flex: 1; min-width: 0; }
+.egg-video-foot a.btn { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .egg-out.miss, .egg-out.hit { animation: none; } }
 
 /* ===================== 디자인 v3: 글꼴·선택창·색 고르기 ===================== */

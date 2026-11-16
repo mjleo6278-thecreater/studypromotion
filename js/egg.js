@@ -78,6 +78,24 @@
     return next;
   }
 
+  // 영상 비밀 단어: 넣으면 함께 공부하는 유튜브 영상을 이 칸에서 틀어 준다 (영상은 남이 올린 것이라 앱에 담지 않고 퍼오기만 함)
+  const VIDEOS = {
+    chiikawa: {
+      id: 'zo1ZUBwGzsg',
+      title: '치이카와와 함께 공부해요',
+      text: '치이카와와 함께 1시간 동안 공부하는 영상이에요. 영상을 틀어 두고 같이 공부해 보세요.',
+      credit: 'monchi / study',
+    },
+  };
+  const VIDEO_KEYS = { '29r6m1st5o5': 'chiikawa', '1rqyz85hdj0': 'chiikawa', '26kxo5vppdz': 'chiikawa' }; // 한글 / 일본어 / 영어로 적어도 열림
+  function videoOf(word) {
+    const id = VIDEO_KEYS[key(word)];
+    return id ? Object.assign({ key: id }, VIDEOS[id]) : null;
+  }
+  const ytId = (id) => String(id).replace(/[^A-Za-z0-9_-]/g, '');
+  const embedUrl = (v) => 'https://www.youtube-nocookie.com/embed/' + ytId(v.id) + '?rel=0&playsinline=1&autoplay=1';
+  const watchUrl = (v) => 'https://www.youtube.com/watch?v=' + ytId(v.id);
+
   function find(word) {
     const n = norm(word);
     if (!n) return null;
@@ -85,7 +103,7 @@
     return id ? Object.assign({ id, name: n }, ENTRIES[id]) : null;
   }
 
-  const lib = { norm, hash, key, find, skinOf, ENTRIES, KEYS, SKIN_KEYS };
+  const lib = { norm, hash, key, find, skinOf, videoOf, embedUrl, watchUrl, ENTRIES, KEYS, SKIN_KEYS, VIDEOS, VIDEO_KEYS };
   if (typeof module !== 'undefined' && module.exports) { module.exports = lib; return; }
 
   const App = root.App;
@@ -95,7 +113,7 @@
   function showSkin(on) {
     const out = $('#egg-out');
     out.hidden = false;
-    out.classList.remove('miss', 'hit');
+    out.classList.remove('miss', 'hit', 'egg-video');
     void out.offsetWidth;
     out.classList.add('hit');
     out.innerHTML = on
@@ -103,14 +121,37 @@
       : '<h3>원래 테마로 돌아왔어요</h3><p class="muted small">같은 비밀 단어를 다시 넣으면 핑크 테마가 다시 켜져요.</p>';
   }
 
+  function showVideo(v) {
+    const out = $('#egg-out');
+    out.hidden = false;
+    out.classList.remove('miss', 'hit');
+    void out.offsetWidth;
+    out.classList.add('hit', 'egg-video');
+    const player = (typeof navigator !== 'undefined' && navigator.onLine === false)
+      ? '<p class="egg-miss egg-offline">인터넷에 연결하면 영상이 나와요.</p>'
+      : `<div class="egg-player"><iframe src="${embedUrl(v)}" title="${esc(v.title)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
+    out.innerHTML = `<h3>${esc(v.title)}</h3><p class="muted small">${esc(v.text)}</p>${player}` +
+      `<div class="egg-video-foot"><span class="muted small">영상: ${esc(v.credit)}</span>` +
+      `<a class="btn sm" href="${watchUrl(v)}" target="_blank" rel="noopener">유튜브에서 열기</a>` +
+      '<button class="btn sm" type="button" data-egg-close>닫기</button></div>';
+  }
+  function closeOut() {
+    const out = $('#egg-out');
+    out.innerHTML = ''; // 영상도 함께 멈춘다
+    out.classList.remove('miss', 'hit', 'egg-video');
+    out.hidden = true;
+  }
+
   function show(word) {
     const skin = skinOf(word);
     if (skin) { showSkin(!!toggleSkin(skin)); return true; }
+    const video = videoOf(word);
+    if (video) { showVideo(video); return true; }
     const out = $('#egg-out');
     const typed = String(word || '').trim().replace(/\s*님$/, '');
     const hit = find(word);
     out.hidden = false;
-    out.classList.remove('miss', 'hit');
+    out.classList.remove('miss', 'hit', 'egg-video');
     void out.offsetWidth; // 애니메이션 다시 시작
     if (!hit) {
       out.classList.add('miss');
@@ -134,7 +175,8 @@
     show($('#egg-input').value);
   });
   $('#egg-input').addEventListener('input', () => { if (!$('#egg-out').classList.contains('hit')) $('#egg-out').hidden = true; });
+  $('#egg-out').addEventListener('click', (e) => { if (e.target.closest('[data-egg-close]')) closeOut(); });
 
-  App.egg = { show, find, key, KEYS, toggleSkin, getSkin };
+  App.egg = { show, find, key, KEYS, toggleSkin, getSkin, videoOf, close: closeOut };
   applySkin(getSkin());
 })(typeof window !== 'undefined' ? window : globalThis);

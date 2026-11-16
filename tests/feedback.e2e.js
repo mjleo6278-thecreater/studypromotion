@@ -81,6 +81,40 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   egg = await page.$eval('#egg-out', (o) => o.textContent);
   assert(egg.includes('만든 사람') && egg.includes('기록 지키기'), '만든 사람 이스터에그');
   assert(await page.$$eval('#egg-out .pt-sq', (s) => s.length) === 8, '퀸으로 승급한 체스 칸');
+
+  // 3-1) 치이카와를 넣으면 함께 공부하는 영상 (v3.4). 유튜브는 테스트에서 실제로 부르지 않는다.
+  await page.route(/youtube(-nocookie)?\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>player</title>' }));
+  await page.fill('#egg-input', '치이카와');
+  await page.press('#egg-input', 'Enter');
+  let vid = await page.$eval('#egg-out', (o) => {
+    const f = o.querySelector('.egg-player iframe');
+    const a = o.querySelector('.egg-video-foot a');
+    return { hit: o.classList.contains('hit') && o.classList.contains('egg-video'), text: o.textContent, src: f && f.src, allow: f && f.getAttribute('allow'), href: a && a.href, blank: a && a.target, h: f && f.getBoundingClientRect().height, w: f && f.getBoundingClientRect().width };
+  });
+  assert(vid.hit && vid.text.includes('치이카와와 함께 공부해요'), '치이카와 → 영상 칸');
+  assert(/^https:\/\/www\.youtube-nocookie\.com\/embed\/[A-Za-z0-9_-]{11}\?/.test(vid.src) && vid.allow.includes('fullscreen'), '쿠키 없는 유튜브 퍼오기 ' + vid.src);
+  assert(vid.href.startsWith('https://www.youtube.com/watch?v=') && vid.blank === '_blank', '유튜브에서 열기 링크');
+  assert(Math.abs(vid.w / vid.h - 16 / 9) < 0.02 && vid.w > 250, '16:9 영상 크기 ' + vid.w + 'x' + vid.h);
+  assert(await page.evaluate(() => { const o = document.querySelector('#egg-out'); return document.documentElement.scrollWidth <= innerWidth && o.getBoundingClientRect().right <= innerWidth; }), '폰 화면 밖으로 넘치지 않음');
+  await page.fill('#egg-input', '');
+  assert(await page.$eval('#egg-out', (o) => !o.hidden && !!o.querySelector('iframe')), '입력칸을 고쳐도 영상은 그대로');
+  await page.click('[data-egg-close]');
+  assert(await page.$eval('#egg-out', (o) => o.hidden && !o.querySelector('iframe') && !o.classList.contains('egg-video')), '닫기 → 영상이 사라지고 멈춤');
+  await page.fill('#egg-input', 'ちいかわ');
+  await page.press('#egg-input', 'Enter');
+  assert(await page.$eval('#egg-out', (o) => !!o.querySelector('iframe')), '일본어로 적어도 열림');
+  await page.fill('#egg-input', '만든이');
+  await page.press('#egg-input', 'Enter');
+  assert(await page.$eval('#egg-out', (o) => !o.querySelector('iframe') && !o.classList.contains('egg-video') && o.textContent.includes('만든 사람')), '다른 단어를 넣으면 영상 대신 그 내용');
+  await ctx.setOffline(true);
+  await page.fill('#egg-input', 'chiikawa');
+  await page.press('#egg-input', 'Enter');
+  vid = await page.$eval('#egg-out', (o) => ({ iframe: !!o.querySelector('iframe'), text: o.textContent }));
+  assert(!vid.iframe && vid.text.includes('인터넷에 연결하면'), '인터넷이 없으면 안내만');
+  await ctx.setOffline(false);
+  await page.click('[data-egg-close]');
+  await page.unroute(/youtube(-nocookie)?\.com/);
+
   const ver = await page.evaluate(() => App.version);
   assert(/^\d+\.\d+(\.\d+)?$/.test(ver) && await page.$eval('#app-version', (v, ver) => v.textContent.includes(ver), ver), '버전 ' + ver);
 
