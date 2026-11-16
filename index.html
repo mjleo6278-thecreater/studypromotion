@@ -645,6 +645,7 @@
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-review"/></svg>복습 (플래시카드)</summary>
           <p>덱을 만들고 앞면(질문)과 뒷면(정답)을 적어요. 복습할 때 ‘다시·어려움·보통·쉬움’으로 답하면, 잊어버릴 때쯤 다시 보여 주는 <b>간격 반복</b>으로 오래 기억하게 도와줘요. ‘apple - 사과’처럼 여러 장을 한 번에 넣을 수도 있어요. 잘못 적은 카드는 옆의 ✎로 고쳐요.</p>
+          <p><b>사진으로 카드 만들기</b>: 단어장 사진을 Claude 같은 AI에게 보내고 스터디 프로모션 카드 링크로 만들어 달라고 하세요. 받은 링크를 누르면 앱이 열리면서 넣을 카드와 덱을 보여 주고, 확인하면 들어가요. 같은 덱에 이미 있는 카드는 빼고 넣어요.</p>
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-stats"/></svg>통계와 월 목표</summary>
@@ -704,6 +705,12 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="3.5" data-date="2026년 11월 17일">
+            <ul class="news">
+              <li><b>링크로 카드 가져오기</b>: 단어장이나 교과서 사진을 Claude 같은 AI에게 보내 이 앱의 플래시카드로 만들어 달라고 하면, 카드가 담긴 링크를 받아요. 링크를 누르면 앱이 열리면서 ‘카드 N장을 추가할까요?’ 창이 뜨고, 넣을 덱을 고른 뒤 확인하면 바로 들어가요</li>
+              <li><b>두 번 눌러도 한 벌만</b>: 같은 덱에 이미 있는 카드는 빼고 넣어요. 로그인한 기기에서는 계정에도 함께 저장돼서 다른 기기에서도 보여요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="3.4" data-date="2026년 11월 16일">
             <ul class="news">
               <li><b>이스터에그 새 비밀 단어</b>: 앱 소개의 비밀 입력칸에 ‘작고 귀여운 그 친구’의 이름을 넣어 보세요. 그 친구와 함께 공부하는 영상이 바로 그 자리에서 열려요. ‘닫기’를 누르면 영상이 멈추고, 영상이 안 나오면 ‘유튜브에서 열기’로 볼 수 있어요</li>
@@ -1059,6 +1066,7 @@
   <script src="js/scope.js"></script>
   <script src="js/share.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/cardlink.js"></script>
   <script src="js/app.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/egg.js"></script>

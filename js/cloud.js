@@ -74,6 +74,8 @@
   let busy = false;
   let applyingRemote = false;
   let pushTimer = null;
+  // 전에 로그인한 기기에서 앱을 열면, 계정 기록과 처음 맞추기가 끝날 때까지 true (링크로 카드 가져오기가 기다린다)
+  let starting = !!(FIREBASE_CONFIG && (meta.uid || meta.redirecting));
 
   function render(msg) {
     const on = !!user;
@@ -143,7 +145,7 @@
     user = u;
     try { root.dispatchEvent(new CustomEvent('cloud-user')); } catch (e) { /* 무시 */ } // 로그인이 바뀜을 알린다 (AI 도우미가 듣는다)
     docRef = u ? fb.firestore().collection('users').doc(u.uid) : null;
-    if (!u) { render(); return; }
+    if (!u) { starting = false; render(); return; }
     if (meta.uid !== u.uid) { meta = { uid: u.uid }; saveMeta(); } // 다른 계정이면 처음처럼
     render();
     await syncNow(false);
@@ -202,6 +204,7 @@
       toast(errorText(e));
     } finally {
       busy = false;
+      starting = false;
       render();
     }
   }
@@ -278,8 +281,8 @@
   });
 
   // 전에 로그인했던 기기면 열 때 바로 이어서 연결
-  if (FIREBASE_CONFIG && (meta.uid || meta.redirecting)) { delete meta.redirecting; saveMeta(); init().catch(() => render()); }
+  if (FIREBASE_CONFIG && (meta.uid || meta.redirecting)) { delete meta.redirecting; saveMeta(); init().catch(() => { starting = false; render(); }); }
 
-  root.Cloud = { get meta() { return meta; }, get user() { return user; }, syncNow };
+  root.Cloud = { get meta() { return meta; }, get user() { return user; }, get syncing() { return busy || starting; }, syncNow };
   render();
 })(typeof window !== 'undefined' ? window : globalThis);
