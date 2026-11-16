@@ -310,6 +310,7 @@ const SW = 'studypromotion.stopwatch';
   const shown = () => page.$$eval('#about-news .ver', (els) => els.filter((e) => !e.hidden && e.offsetParent !== null).map((e) => ({ v: e.dataset.ver, when: e.querySelector('.ver-when').textContent, n: e.querySelectorAll('.news li').length })));
   let sh = await shown();
   assert(sh.length === 1 && sh[0].v === '3.3.1' && /버전 3\.3\.1 · 2026년 11월 16일 업데이트/.test(sh[0].when) && /목록 ↔ 보드 전환/.test(await page.textContent('#about-news .ver:not([hidden])')), '고른 버전의 내용만 보이고, 업데이트한 날이 적혀 있음: ' + sh[0].when);
+  assert(sh[0].n >= 5 && /세컨드가 더 잘 알아들어요/.test(await page.textContent('#about-news .ver:not([hidden])')) && /횟수를 두 번 세지 않아요/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.3.1 소식에 세컨드 점검도 함께');
   await page.tap('#ver-tabs [data-ver-tab="3.3"]');
   sh = await shown();
   assert(sh.length === 1 && sh[0].v === '3.3' && sh[0].n >= 2 && /화이트보드 전체 화면/.test(await page.textContent('#about-news .ver:not([hidden])')) && /붙임쪽지와 글 상자/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.3 소식에 화이트보드 전체 화면·메모');

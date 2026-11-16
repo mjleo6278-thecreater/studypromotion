@@ -104,20 +104,37 @@ export function cleanMessages(list) {
 }
 
 /* ---------- 하루 횟수 (사람마다 하나씩 있는 작은 저장소) ---------- */
+const AGAIN_MS = 2 * 60 * 1000; // 다시 묻기를 세지 않는 시간
+// 질문의 짧은 지문: 같은 질문을 다시 묻는지만 알면 되므로 글은 남기지 않는다
+export async function fingerprint(text) {
+  const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(text || ''))));
+  return [...d.slice(0, 8)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 export class Counter {
   constructor(state) { this.state = state; }
-  // { op: 'take' | 'refund' | 'peek', day: '2026-11-14', limit } → { ok, left }
+  // { op: 'take' | 'refund' | 'peek', day: '2026-11-14', limit, q, at, again } → { ok, left, free }
+  //  q: 질문의 짧은 지문(글 자체는 받지 않는다), at: 지금 시각, again: 앱이 '앱 정보를 붙여 같은 질문을 다시 묻는' 것
   async fetch(request) {
-    const { op, day, limit } = await request.json();
+    const { op, day, limit, q, at, again } = await request.json();
     const st = this.state.storage, key = 'n:' + day;
     const n = (await st.get(key)) || 0;
     if (op === 'peek') return Response.json({ ok: true, left: Math.max(0, limit - n) }); // 세지 않고 남은 횟수만
     if (op === 'refund') {
+      await st.delete('last');
       if (n > 0) await st.put(key, n - 1);
       return Response.json({ ok: true, left: Math.max(0, limit - Math.max(0, n - 1)) });
     }
+    // 방금 센 질문을 앱 정보와 함께 한 번 더 묻는 것은 한 번만 세지 않는다 (AI가 '앱 정보가 필요하다'고 답했을 때)
+    if (again && q) {
+      const last = await st.get('last');
+      if (last && last.q === q && last.day === day && at - last.at >= 0 && at - last.at < AGAIN_MS) {
+        await st.delete('last');
+        return Response.json({ ok: true, left: Math.max(0, limit - n), free: true });
+      }
+    }
     if (n >= limit) return Response.json({ ok: false, left: 0 });
     await st.put(key, n + 1);
+    if (q) await st.put('last', { q, day, at });
     const old = [...(await st.list({ prefix: 'n:' })).keys()].filter((k) => k !== key); // 지난날 기록은 지운다
     if (old.length) await st.delete(old);
     return Response.json({ ok: true, left: limit - n - 1 });
@@ -180,7 +197,7 @@ export async function handle(request, env, deps, ctx) {
   const limit = Number.isFinite(parsed) && parsed >= 0 ? parsed : 20;
   const day = new Date(now).toISOString().slice(0, 10);
   const counter = owner ? null : env.COUNTER.get(env.COUNTER.idFromName(user.sub));
-  const count = async (op) => (await counter.fetch('https://counter/', { method: 'POST', body: JSON.stringify({ op, day, limit }) })).json();
+  const count = async (op, more) => (await counter.fetch('https://counter/', { method: 'POST', body: JSON.stringify(Object.assign({ op, day, limit }, more)) })).json();
   if (isMe) {
     if (owner) return json({ open: true, signedIn: true, unlimited: true });
     if (!everyone) return json({ open: false, signedIn: true });
@@ -195,41 +212,41 @@ export async function handle(request, env, deps, ctx) {
   if (!messages) return json({ error: 'bad' }, 400);
 
   // 4) 하루 횟수: 주인 계정은 세지 않는다
-  let left = null;
+  let left = null, free = false;
   if (counter) {
-    const r = await count('take');
+    const r = await count('take', { q: await fingerprint(messages[messages.length - 1].content), at: now, again: body.again === true });
     if (!r.ok) return json({ error: 'limit' }, 429);
     left = r.left;
+    free = r.free === true;
   }
-  const refund = async () => { if (!counter) return; try { left = (await count('refund')).left; } catch (e) { /* 못 돌려줘도 답은 보낸다 */ } };
+  const refund = async () => { if (!counter || free) return; try { left = (await count('refund')).left; } catch (e) { /* 못 돌려줘도 답은 보낸다 */ } };
 
   // 5) 모델에 묻기. 생각하기(reasoning)는 끈다: 이 모델은 기본으로 켜져 있고, 켜 두면 생각에 답 길이를 다 써 버린다
   const maxTokens = parseInt(env.MAX_TOKENS, 10) || 2000;
   const model = env.MODEL || DEFAULT_MODEL;
   const plain = { messages, stream: true, max_tokens: maxTokens };
   const thinking = /^(on|1|true|yes)$/i.test(String(env.THINKING || '').trim());
-  const full = Object.assign({}, plain, {
+  const mid = Object.assign({}, plain, { chat_template_kwargs: { enable_thinking: thinking } });
+  const full = Object.assign({}, mid, {
     max_completion_tokens: maxTokens,
-    chat_template_kwargs: { enable_thinking: thinking },
     stream_options: { include_usage: true }, // 마지막 줄에 쓴 양(usage)을 붙여 달라고 한다: 답이 잘렸을 때 까닭을 알 수 있다
   });
   const note = (e) => String((e && e.message) || e).slice(0, 300);
-  let answer, mode = 'full';
-  try {
-    try { answer = await env.AI.run(model, full); }
+  // 모델이 덧붙인 설정을 받지 않으면 하나씩 덜어 내고 다시 묻는다. 생각하기 끄기(mid)는 되도록 남긴다: 켜지면 생각에 답 길이를 다 쓴다
+  let answer, mode, fail = null;
+  for (const [name, input] of [['full', full], ['mid', mid], ['plain', plain]]) {
+    mode = name;
+    try { answer = await env.AI.run(model, input); fail = null; break; }
     catch (e) {
-      if (usedUp(e)) throw e;
-      // 모델이 위의 덧붙인 설정을 받지 않으면 꼭 필요한 것만으로 한 번 더 묻는다
-      console.error(JSON.stringify({ at: 'ai.run', mode: 'full', error: note(e) })); // Cloudflare 화면의 기록(Logs)에서 볼 수 있다. 사용자의 말은 적지 않는다
-      mode = 'plain';
-      answer = await env.AI.run(model, plain);
+      fail = e;
+      console.error(JSON.stringify({ at: 'ai.run', mode, error: note(e) })); // Cloudflare 화면의 기록(Logs)에서 볼 수 있다. 사용자의 말은 적지 않는다
+      if (usedUp(e)) break;
     }
-  } catch (e) {
+  }
+  if (fail) {
     await refund(); // 답을 못 받았으니 횟수를 돌려준다
-    const why = note(e);
-    console.error(JSON.stringify({ at: 'ai.run', mode, error: why }));
-    if (usedUp(e)) return json({ error: 'limit', scope: 'all' }, 429);
-    return json(owner ? { error: 'server', detail: why } : { error: 'server' }, 503);
+    if (usedUp(fail)) return json({ error: 'limit', scope: 'all' }, 429);
+    return json(owner ? { error: 'server', detail: note(fail) } : { error: 'server' }, 503);
   }
 
   // 6) 답을 앱으로. 새 앱(v 2)에는 모델이 보내는 줄을 그대로 넘긴다: 서버가 계산할 것이 없어 길게 답해도 끊기지 않는다

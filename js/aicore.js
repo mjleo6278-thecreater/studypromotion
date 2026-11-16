@@ -50,8 +50,13 @@
     return word ? `${word} ${base}` : year + base;
   }
   // 받을 수 있는 날짜인지: 형식이 맞고, 오늘에서 너무 멀지 않다
+  // AI가 적은 날짜를 YYYY-MM-DD로 (2026/11/18, 2026.11.18, 2026-11-18T00:00, 2026년 11월 18일)
+  function normDate(s) {
+    const m = /^\s*(\d{4})\s*[-/.년]\s*(\d{1,2})\s*[-/.월]\s*(\d{1,2})\s*일?(?:[T\s].*)?$/.exec(typeof s === 'string' ? s : '');
+    return m ? m[1] + '-' + pad2(m[2]) + '-' + pad2(m[3]) : s;
+  }
   function goodDate(s, today, back, ahead) {
-    const p = parseDate(s);
+    const p = parseDate(normDate(s));
     if (!p) return null;
     const key = keyOf(p.y, p.m, p.d), diff = daysBetween(today, key);
     return diff >= -back && diff <= ahead ? key : null;
@@ -66,24 +71,67 @@
     return new Date(p.y, p.m - 1, p.d + (h < Math.round(Stats.dayOffset() / 3600000) ? 1 : 0), h, m).getTime();
   }
   function parseClock(s) {
-    const m = /^(\d{1,2})(?::(\d{2}))?$/.exec(str(s, 8));
+    let t = str(s, 20).toLowerCase();
+    const pm = /오후|저녁|밤|낮|p\.?\s?m\.?/.test(t), am = /오전|아침|새벽|a\.?\s?m\.?/.test(t);
+    t = t.replace(/오후|오전|저녁|아침|새벽|밤|낮|[ap]\.?\s?m\.?/g, '').trim();
+    const m = /^(\d{1,2})(?::(\d{2}))?(?::\d{2})?$/.exec(t) || /^(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분|\s*(반))?$/.exec(t);
     if (!m) return null;
-    const h = +m[1], mi = +(m[2] || 0);
-    return (h <= 23 && mi <= 59) || (h === 24 && mi === 0) ? { h, m: mi } : null;
+    let h = +m[1];
+    const mi = m[3] === '반' ? 30 : +(m[2] || 0);
+    if (pm && h >= 1 && h <= 11) h += 12;
+    if (am && h === 12) h = 0;
+    return (h <= 23 && mi <= 59) || (h === 24 && mi === 0) ? { h, m: mi, mark: pm || am } : null;
+  }
+  // 끝 시각에 오전·오후가 없고 시작보다 이르면 같은 오후로 읽는다 (저녁 7시~9시 반 → 19:00~21:30, 23시~1시는 그대로 자정 넘김)
+  function laterEnd(s, e) {
+    if (!s || !e || e.mark || e.h >= 12) return e;
+    const a = s.h * 60 + s.m, b = e.h * 60 + e.m;
+    return b <= a && b + 720 > a ? { h: e.h + 12, m: e.m } : e;
   }
   const clockLabel = (t) => { const d = new Date(t); return d.getHours() + ':' + pad2(d.getMinutes()); };
 
   // 일정 시각: '16:00' 저장 모양 ↔ '16:00' 보이는 모양, 요일 글자 → 숫자(0=일)
   const hmText = (s) => Schedule.fmtHM(Schedule.parseHM(s));
   const hmSave = (c) => pad2(c.h) + ':' + pad2(c.m);
+  const WD_EN = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
   function weekdays(v) {
-    const list = Array.isArray(v) ? v : typeof v === 'string' ? v.split(/[\s,·]+/) : [];
+    const list = Array.isArray(v) ? v : typeof v === 'string' || typeof v === 'number' ? String(v).split(/[\s,·/]+|과|와|랑|및/) : [];
     const out = [];
+    const add = (i) => { if (Number.isInteger(i) && i >= 0 && i <= 6 && !out.includes(i)) out.push(i); };
     list.forEach((x) => {
-      const i = typeof x === 'number' ? x : WD.indexOf(String(x).trim().charAt(0));
-      if (Number.isInteger(i) && i >= 0 && i <= 6 && !out.includes(i)) out.push(i);
+      if (typeof x === 'number') return add(x === 7 ? 0 : x);
+      const t = String(x == null ? '' : x).trim().toLowerCase();
+      if (!t) return;
+      if (/^\d$/.test(t)) return add(+t === 7 ? 0 : +t);
+      if (/평일|weekdays?$/.test(t)) return [1, 2, 3, 4, 5].forEach(add);
+      if (/주말|weekends?$/.test(t)) return [6, 0].forEach(add);
+      if (/매일|everyday|daily/.test(t)) return [0, 1, 2, 3, 4, 5, 6].forEach(add);
+      if (WD_EN.includes(t.slice(0, 3))) return add(WD_EN.indexOf(t.slice(0, 3)));
+      const ks = [...t.replace(/요일|마다|에|만/g, '')].map((c) => WD.indexOf(c)); // '월', '월요일', '월수금'
+      if (ks.length && ks.every((i) => i >= 0)) ks.forEach(add);
     });
     return out;
+  }
+  // 반복: "weekly"·"daily"뿐 아니라 "매주", "매일"도
+  function freqOf(v) {
+    const t = String(v == null ? '' : v).toLowerCase().replace(/\s+/g, '');
+    if (/^(daily|day|everyday|매일|날마다)$/.test(t)) return 'daily';
+    if (/^(weekly|week|everyweek|매주|주마다|요일마다)$/.test(t)) return 'weekly';
+    return null;
+  }
+  // AI가 가리킨 할 일·시험·일정. 짧은 번호(t1)가 원칙이지만 'T1', 1, '1번', 제목으로 적어도 찾는다
+  function refId(ctx, group, prefix, v) {
+    const map = (ctx.keys && ctx.keys[group]) || {};
+    const k = str(v, 80).toLowerCase().replace(/\s+/g, '');
+    if (!k) return null;
+    if (map[k]) return map[k];
+    const n = new RegExp('^(?:' + prefix + ')?(\\d{1,3})번?$').exec(k);
+    if (n) return map[prefix + n[1]] || null;
+    const rows = (group === 'tasks' ? ctx.tasks : group === 'exams' ? ctx.exams : ctx.events) || [];
+    const name = (r) => norm(r.title || r.name);
+    const same = rows.filter((r) => name(r) === k);
+    const part = same.length ? same : k.length < 2 ? [] : rows.filter((r) => name(r) && (name(r).includes(k) || k.includes(name(r))));
+    return part.length === 1 ? map[part[0].k] : null;
   }
   // 일정 이름: 과목 · 이름 (events.js의 nameOf와 같게)
   function eventName(state, ev) {
@@ -175,6 +223,7 @@
     '- 외워 둘 만한 표현이 있으면 답 맨 끝에 아래 형식으로 5개까지 적는다. 이 줄은 화면에서 저장 단추로 바뀐다.',
     '<cards>[{"front":"표현","back":"뜻 — 예문 (예문의 뜻)"}]</cards>',
     '다른 과목의 공부 질문에도 답한다. 공부와 관계없는 부탁은 정중히 거절한다.',
+    '지난 대화의 [앱 기록: …] 줄은 앱이 붙인 메모다. 무엇을 제안했는지 알려 줄 뿐이니 이 형식을 따라 쓰지 않는다.',
   ].join('\n');
   const PROMPT_NEED_APP = '사용자가 앱의 기록(할 일, 일정, 공부 기록, 타이머, 시험, 목표)을 바꾸거나 보여 달라고 하거나 자기 일정·할 일을 물으면 다른 말 없이 <need_app/> 한 줄만 답한다.';
   const PROMPT_APP = [
@@ -215,8 +264,18 @@
   // history: [{ role: 'user'|'assistant', text }] (최근 것만 짧게 붙인다)
   function messages(text, ctx, history, withApp) {
     const sys = withApp ? PROMPT_ASK + '\n' + PROMPT_APP + '\n\n[앱 정보]\n' + contextText(ctx) : PROMPT_ASK + '\n' + PROMPT_NEED_APP;
-    const past = (history || []).slice(-6).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: str(m.text, 1200) })).filter((m) => m.content);
-    return [{ role: 'system', content: sys }].concat(past, [{ role: 'user', content: String(text || '').trim().slice(0, 2000) }]);
+    // 질문과 답이 번갈아 오게 맞춘다: 답을 못 받은 질문은 뺀다 (모델에 따라 같은 쪽 말이 이어지면 받지 않는다)
+    const pairs = [];
+    (history || []).forEach((m) => {
+      const role = m.role === 'assistant' ? 'assistant' : 'user';
+      const content = typeof m.text === 'string' ? m.text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, 1200) : '';
+      if (!content) return;
+      const last = pairs[pairs.length - 1];
+      if (role === 'user') { if (last && last.role === 'user') pairs.pop(); pairs.push({ role, content }); }
+      else if (last && last.role === 'user') pairs.push({ role, content });
+    });
+    if (pairs.length && pairs[pairs.length - 1].role === 'user') pairs.pop();
+    return [{ role: 'system', content: sys }].concat(pairs.slice(-6), [{ role: 'user', content: String(text || '').trim().slice(0, 2000) }]);
   }
 
   /* ---------- 2) AI의 답 읽기 ---------- */
@@ -266,7 +325,7 @@
       if (ch === '"') inStr = true;
       else if (ch === '{') { if (depth++ === 0) start = i; }
       else if (ch === '}' && depth > 0 && --depth === 0) {
-        try { out.push(JSON.parse(s.slice(start, i + 1).replace(/,\s*([\]}])/g, '$1'))); } catch (e) { /* 이 묶음은 버린다 */ }
+        try { out.push(JSON.parse(tidyJSON(s.slice(start, i + 1), false))); } catch (e) { /* 이 묶음은 버린다 */ }
       }
     }
     return out.filter((x) => x && typeof x === 'object' && !Array.isArray(x) && typeof x.type === 'string');
@@ -277,12 +336,42 @@
     const m = raw.slice(open).match(new RegExp('^<' + tag + '\\b[^>]*>([\\s\\S]*?)(?:</' + tag + '\\s*>|$)', 'i'));
     return { rest: raw.slice(0, open) + raw.slice(open + m[0].length), body: m[1] };
   }
-  // 모델이 조금 틀리게 적은 JSON도 읽는다 (코드 울타리, 앞뒤 군말, 끝의 쉼표)
+  // 글자 사이(" ")가 아닌 곳의 // 주석과 /* */ 주석을 지우고, 작은따옴표 글자는 큰따옴표로 바꾼다
+  function tidyJSON(src, quotes) {
+    const s = String(src || '');
+    let out = '', i = 0;
+    while (i < s.length) {
+      const ch = s[i];
+      if (ch === '"') {
+        let j = i + 1;
+        while (j < s.length && s[j] !== '"') j += s[j] === '\\' ? 2 : 1;
+        out += s.slice(i, j + 1); i = j + 1;
+      } else if (quotes && ch === "'") {
+        let j = i + 1, body = '';
+        while (j < s.length && s[j] !== "'") {
+          if (s[j] === '\\' && j + 1 < s.length) { body += s[j + 1] === "'" ? "'" : s[j] + s[j + 1]; j += 2; continue; }
+          body += s[j] === '"' ? '\\"' : s[j]; j++;
+        }
+        out += '"' + body + '"'; i = j + 1;
+      } else if (ch === '/' && s[i + 1] === '/') {
+        while (i < s.length && s[i] !== '\n') i++;
+      } else if (ch === '/' && s[i + 1] === '*') {
+        const e = s.indexOf('*/', i + 2);
+        i = e < 0 ? s.length : e + 2;
+      } else { out += ch; i++; }
+    }
+    return out.replace(/,\s*([\]}])/g, '$1');
+  }
+  // 모델이 조금 틀리게 적은 JSON도 읽는다 (코드 울타리, 앞뒤 군말, 끝의 쉼표, 주석, 작은따옴표)
   function looseJSON(body) {
     const s = String(body || '');
     const a = s.search(/[[{]/), b = Math.max(s.lastIndexOf(']'), s.lastIndexOf('}'));
     if (a < 0 || b < a) return undefined;
-    try { return JSON.parse(s.slice(a, b + 1).replace(/,\s*([\]}])/g, '$1')); } catch (e) { return undefined; }
+    const part = s.slice(a, b + 1);
+    for (const q of [false, true]) {
+      try { return JSON.parse(tidyJSON(part, q)); } catch (e) { /* 다음 방법 */ }
+    }
+    return undefined;
   }
   const toList = (v, key) => {
     if (v && !Array.isArray(v) && Array.isArray(v[key])) v = v[key];
@@ -310,7 +399,9 @@
       if (got.length) { av = got; partial = true; } else broken = true;
     }
     const cards = toList(cv, 'cards').map((x) => ({ front: str(x.front, LIMIT.card), back: str(x.back, LIMIT.card) })).filter((x) => x.front && x.back).slice(0, 5);
-    return { text: text.replace(/\n{3,}/g, '\n\n').trim(), actions: toList(av, 'actions'), cards, needApp, broken, partial };
+    // 꼬리표를 코드 울타리로 감쌌으면 빈 울타리가 남는다
+    text = text.replace(/```[a-z]*\s*```/gi, '');
+    return { text: text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim(), actions: toList(av, 'actions'), cards, needApp, broken, partial };
   }
   // 답이 오는 도중에 화면에 보일 글: 꼬리표가 시작되면 거기서 끊는다 (반쯤 온 꼬리표도 숨긴다)
   function visibleText(raw) {
@@ -371,7 +462,7 @@
       return { kind: 'change', line: `할 일 추가: ${title}`, sub: meta, warn: subjectNote(subj), choices: subj.choices, data: { title, subjectId: subj.id, due, est } };
     },
     move_task(a, state, ctx) {
-      const t = state.tasks.find((x) => x.id === ctx.keys.tasks[str(a.task, 8)]);
+      const t = state.tasks.find((x) => x.id === refId(ctx, 'tasks', 't', a.task));
       if (!t || t.done) return '옮길 할 일을 찾지 못했어요';
       const due = goodDate(a.due, ctx.today, 30, 800);
       if (!due) return `'${t.title}'의 새 마감일을 읽지 못했어요`;
@@ -379,7 +470,7 @@
       return { kind: 'change', line: `마감일 옮기기: ${t.title}`, sub: `${t.due ? dateLabel(t.due, ctx.today) : '마감 없음'} → ${dateLabel(due, ctx.today)}`, data: { id: t.id, due, prev: t.due || null } };
     },
     complete_task(a, state, ctx) {
-      const t = state.tasks.find((x) => x.id === ctx.keys.tasks[str(a.task, 8)]);
+      const t = state.tasks.find((x) => x.id === refId(ctx, 'tasks', 't', a.task));
       if (!t) return '완료할 할 일을 찾지 못했어요';
       if (t.done) return { skip: true };
       return { kind: 'change', line: `완료 표시: ${t.title}`, data: { id: t.id } };
@@ -389,7 +480,7 @@
       if (!date) return '공부한 날짜를 읽지 못했어요 (오늘까지의 날짜만 기록할 수 있어요)';
       const subj = findSubject(state, a.subject), memo = str(a.memo, LIMIT.memo);
       const who = subj.name || '과목 없음';
-      const s = parseClock(a.start), e = parseClock(a.end);
+      const s = parseClock(a.start), e = laterEnd(s, parseClock(a.end));
       if (s && e) {
         const from = clockAt(date, s.h, s.m);
         let to = clockAt(date, e.h, e.m), wrapped = false;
@@ -414,34 +505,36 @@
     },
     add_event(a, state, ctx) {
       const kind = a.kind === 'other' ? 'other' : 'study';
-      const task = a.task ? state.tasks.find((x) => x.id === ctx.keys.tasks[str(a.task, 8)] && !x.done) : null;
+      const task = a.task ? state.tasks.find((x) => x.id === refId(ctx, 'tasks', 't', a.task) && !x.done) : null;
       const subj = kind === 'study' ? findSubject(state, a.subject) : { id: null };
       const taskSubj = task && task.subjectId && state.subjects.some((x) => x.id === task.subjectId) ? task.subjectId : null;
       const subjectId = subj.id || taskSubj;
       let title = str(a.title, LIMIT.name), autoTitle = false;
       // 과목을 못 정했고 이름도 없으면, AI가 적은 과목 말을 이름으로 쓴다 (과목을 고르면 지운다)
       if (kind === 'study' && !title && !subjectId && !task) { title = str(a.subject, LIMIT.name); autoTitle = !!subj.choices; }
-      const repeats = a.repeat && typeof a.repeat === 'object' ? a.repeat.freq : a.repeat;
+      const r = a.repeat && typeof a.repeat === 'object' ? a.repeat : { freq: a.repeat, days: a.days, until: a.until };
+      const dayList = weekdays(r.days != null ? r.days : a.days);
+      // 반복: "매주"도 받고, 반복이라고 안 적었어도 날짜 없이 요일만 적었으면 매주
+      const freq = freqOf(r.freq) || (dayList.length && (r.freq === true || !a.date) ? 'weekly' : null);
       // 반복 일정은 시작하는 날을 안 적었거나 읽지 못하면 오늘부터
-      let date = goodDate(a.date || ctx.today, ctx.today, 7, 400) || (repeats === 'daily' || repeats === 'weekly' ? ctx.today : null);
+      let date = goodDate(a.date || ctx.today, ctx.today, 7, 400) || (freq ? ctx.today : null);
       if (!date) return '일정 날짜를 읽지 못했어요';
       const s = parseClock(a.start);
       if (!s || s.h === 24) return '일정의 시작 시각을 읽지 못했어요';
-      let e = parseClock(a.end), noEnd = false;
+      let e = laterEnd(s, parseClock(a.end)), noEnd = false;
       if (!e) {
         const m = int(a.minutes), len = m >= 5 && m < 1440 ? m : 60, t = (s.h * 60 + s.m + len) % 1440;
         noEnd = !(m >= 5 && m < 1440);
         e = t === 0 ? { h: 24, m: 0 } : { h: Math.floor(t / 60), m: t % 60 };
       }
       let repeat = null;
-      const r = a.repeat && typeof a.repeat === 'object' ? a.repeat : { freq: a.repeat, days: a.days, until: a.until };
-      if (r.freq === 'daily' || r.freq === 'weekly') {
+      if (freq) {
         let until = null;
-        if (r.until != null && r.until !== '') { until = goodDate(r.until, ctx.today, 0, 800); if (!until) return '반복이 끝나는 날을 읽지 못했어요'; }
-        const days = weekdays(r.days);
-        repeat = { freq: r.freq, days: r.freq === 'weekly' && !days.length ? [weekdayOf(date)] : days, until };
+        const end = r.until != null ? r.until : a.until;
+        if (end != null && end !== '') { until = goodDate(end, ctx.today, 0, 800); if (!until) return '반복이 끝나는 날을 읽지 못했어요'; }
+        repeat = { freq, days: freq === 'weekly' && !dayList.length ? [weekdayOf(date)] : dayList, until };
         // "매주 일요일"인데 시작하는 날이 다른 요일이면, 그 뒤 가장 가까운 그 요일부터 시작한다
-        for (let i = 0; r.freq === 'weekly' && i < 6 && !repeat.days.includes(weekdayOf(date)); i++) date = addDaysKey(date, 1);
+        for (let i = 0; freq === 'weekly' && i < 6 && !repeat.days.includes(weekdayOf(date)); i++) date = addDaysKey(date, 1);
       }
       const ev = Schedule.clean({ kind, title, subjectId, taskId: task ? task.id : null, date, start: hmSave(s), end: e.h === 24 ? '24:00' : hmSave(e), repeat }, TMP);
       if (ev.error) return '일정을 넣지 못했어요: ' + ev.error;
@@ -455,11 +548,11 @@
       };
     },
     move_event(a, state, ctx) {
-      const ev = (state.events || []).find((x) => x.id === ctx.keys.events[str(a.event, 8)]);
+      const ev = (state.events || []).find((x) => x.id === refId(ctx, 'events', 'p', a.event));
       if (!ev) return '옮길 일정을 찾지 못했어요';
       const name = eventName(state, ev);
       const has = (v) => v != null && v !== '';
-      const s = has(a.start) ? parseClock(a.start) : null, e = has(a.end) ? parseClock(a.end) : null;
+      const s = has(a.start) ? parseClock(a.start) : null, e = has(a.end) ? laterEnd(s, parseClock(a.end)) : null;
       if ((has(a.start) && (!s || s.h === 24)) || (has(a.end) && !e)) return `'${name}' 일정의 새 시각을 읽지 못했어요`;
       let date = null;
       if (has(a.date)) { date = goodDate(a.date, ctx.today, 7, 400); if (!date) return `'${name}' 일정의 새 날짜를 읽지 못했어요`; }
@@ -500,7 +593,7 @@
       return { kind: 'change', line: `시험 추가: ${name}`, sub: dateLabel(date, ctx.today), warn: dup ? '같은 이름의 시험이 이미 있어요' : '', data: { name, date } };
     },
     set_exam_date(a, state, ctx) {
-      const ex = state.exams.find((x) => x.id === ctx.keys.exams[str(a.exam, 8)]);
+      const ex = state.exams.find((x) => x.id === refId(ctx, 'exams', 'e', a.exam));
       if (!ex) return '날짜를 바꿀 시험을 찾지 못했어요';
       const date = goodDate(a.date, ctx.today, 30, 800);
       if (!date) return `'${ex.name}'의 새 날짜를 읽지 못했어요`;
@@ -537,7 +630,8 @@
       return { kind: 'change', line: `복습 카드 추가: ${front}`, sub: `${back} · ${deckName} 덱${deck ? '' : ' (새로 만듦)'}`, data: { front, back, deckName } };
     },
     start_timer(a, state) {
-      const kind = a.kind === 'stopwatch' ? 'stopwatch' : a.kind === 'focus' || a.kind == null ? 'focus' : null;
+      const kw = str(a.kind, 20).toLowerCase();
+      const kind = /stop|스톱|스탑|워치/.test(kw) ? 'stopwatch' : !kw || /focus|집중|뽀모|pomo|타이머/.test(kw) ? 'focus' : null;
       if (!kind) return '어떤 타이머인지 읽지 못했어요';
       const subj = findSubject(state, a.subject);
       const m = int(a.minutes), minutes = kind === 'focus' && m >= 1 && m <= 180 ? m : null;
@@ -548,7 +642,9 @@
       };
     },
     open_view(a, state, ctx) {
-      const view = str(a.view, 12);
+      const vw = str(a.view, 12).toLowerCase().replace(/\s+/g, '');
+      const ALIAS = { 시간표: 'timetable', 스케줄: 'timetable', 일정: 'timetable', 보드: 'board', 화이트보드: 'board', 할일: 'plan', 공부시간: 'stats' };
+      const view = VIEWS[vw] ? vw : Object.keys(VIEWS).find((k) => VIEWS[k] === vw) || ALIAS[vw] || '';
       if (!VIEWS[view]) return '열 화면을 찾지 못했어요';
       const date = view === 'timetable' && a.date ? goodDate(a.date, ctx.today, 400, 400) : null;
       return { kind: 'nav', line: `화면 열기: ${VIEWS[view]}`, sub: date ? dateLabel(date, ctx.today) : '', data: { view, date } };
@@ -571,7 +667,8 @@
     const ops = [], rejected = [];
     const list = Array.isArray(actions) ? actions : [];
     list.slice(0, LIMIT.actions).forEach((a) => {
-      const type = a && typeof a.type === 'string' ? a.type.trim() : '';
+      const t0 = a && (typeof a.type === 'string' ? a.type : typeof a.action === 'string' ? a.action : '');
+      const type = (t0 || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
       if (!Object.prototype.hasOwnProperty.call(CHECK, type)) { rejected.push(type ? `앱에 없는 동작이라 뺐어요: ${str(type, 30)}` : '읽지 못한 동작을 뺐어요'); return; }
       let r;
       try { r = CHECK[type](a, state, ctx, now); } catch (e) { r = '읽지 못한 동작을 뺐어요'; }
@@ -716,16 +813,17 @@
   /* ---------- 글 꾸미기 (AI가 쓴 마크다운을 안전한 HTML로) ---------- */
   // 먼저 전부 글자로 바꾼 뒤(esc), 굵게·목록·표·제목만 다시 살린다. AI의 답에 든 태그는 실행되지 않는다.
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const inline = (s) => s.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s).,!?]|$)/g, '$1<i>$2</i>');
+  const inline = (s) => s.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>').replace(/~~([^~]+)~~/g, '<s>$1</s>').replace(/(^|[\s(])\*([^*\s][^*]*)\*(?=[\s).,!?]|$)/g, '$1<i>$2</i>');
   // 번호 목록은 모델이 적은 번호를 그대로 쓴다(<ol start>). 번호 항목 아래의 글머리표(들여 쓴 것, 또는 바로 이어진 것)는
   // 그 항목 안에 넣고, 빈 줄이 끼어도 번호 목록은 이어 간다. (예전에는 항목마다 새 목록이 되어 번호가 모두 1이었다)
   function md(text) {
     const out = [];
-    let para = [], list = null, table = null, gap = false;
+    let para = [], list = null, table = null, quote = [], gap = false;
     const item = (t) => ({ lines: [t], sub: [] });
     const li = (x) => '<li>' + x.lines.map(inline).join('<br>') + (x.sub.length ? '<ul>' + x.sub.map(li).join('') + '</ul>' : '') + '</li>';
     const flush = () => {
       if (para.length) { out.push('<p>' + para.map(inline).join('<br>') + '</p>'); para = []; }
+      if (quote.length) { out.push('<blockquote>' + quote.map(inline).join('<br>') + '</blockquote>'); quote = []; }
       if (list) { out.push(`<${list.tag}${list.start > 1 ? ` start="${list.start}"` : ''}>` + list.items.map(li).join('') + `</${list.tag}>`); list = null; }
       if (table) {
         const [head, ...rows] = table;
@@ -740,6 +838,14 @@
       if (/^\s*-{3,}\s*$/.test(line)) return flush();
       if (!line.trim()) { if (list) { if (para.length) flush(); else gap = true; } else flush(); return; }
       const indent = /^\s{2,}/.test(line);
+      if ((m = /^\s*&gt;\s?(.*)$/.exec(line))) { // 인용(예문을 이렇게 적는 일이 많다)
+        const last = list && list.items[list.items.length - 1];
+        if (last && (indent || !gap)) { (last.sub.length ? last.sub[last.sub.length - 1] : last).lines.push(m[1].trim()); gap = false; return; } // 항목 아래면 그 항목에
+        if (para.length || list || table) flush();
+        if (m[1].trim()) quote.push(m[1].trim());
+        return;
+      }
+      if (quote.length) flush();
       if ((m = /^\s*#{1,4}\s+(.*)$/.exec(line))) { flush(); out.push('<p class="ai-h"><b>' + inline(m[1].replace(/\*\*/g, '')) + '</b></p>'); return; }
       if ((m = /^\s*\|(.+)\|\s*$/.exec(line))) {
         if (para.length || list) flush();
