@@ -524,7 +524,7 @@
         renderInk();
         applyView();
         settle();
-        if (needsFit) { needsFit = false; requestAnimationFrame(firstView); }
+        if (needsFit) { needsFit = false; if (vtSync) firstView(); else requestAnimationFrame(firstView); }
       }
       if (!restoreFocus(keep) && focusAddTarget) {
         focusAddTarget = false;
@@ -581,10 +581,43 @@
     return on;
   }
 
+  /* 목록 ↔ 보드(전체 화면) 전환 효과: 위 앱 바는 위로, 아래 탭은 아래로 빠지고, 보드 칸이 커지며 도구 띠가 아래에서 올라온다.
+     View Transitions(크롬·삼성 인터넷·사파리 18 이상)로 바뀌기 전·후 화면을 이어 움직인다 (styles.css 'vt-full').
+     안 되는 브라우저, '동작 줄이기' 설정, 자동 테스트(navigator.webdriver, 주소에 ?vt를 붙이면 효과를 씀)는 바로 바뀐다. */
+  let vt = null; // 지금 도는 전환 효과
+  let vtMode = null; // 효과가 끝나면 맞춰 둘 보기 방식 (효과 중에 또 누른 것)
+  let vtSync = false; // 효과 안에서 그릴 때는 화면 맞춤을 다음 프레임으로 미루지 않는다 (바뀐 화면을 바로 찍어야 해서)
+  function canAnimate() {
+    if (!document.startViewTransition || document.hidden) return false;
+    try { if (matchMedia('(prefers-reduced-motion: reduce)').matches) return false; } catch (e) { /* 무시 */ }
+    return !navigator.webdriver || /[?&]vt\b/.test(location.search);
+  }
+
   function setScopeMode(m) {
     if (m !== 'list' && m !== 'board') return;
+    if (vt) { vtMode = m; return; }
     closeMenu();
     if (noteEdit) commitNote(true);
+    if (mode === m) return render();
+    const willFull = m === 'board' && A.view === 'board' && !!examId;
+    if (willFull === document.body.classList.contains('board-full') || !canAnimate()) return applyMode(m);
+    const root = document.documentElement;
+    const done = () => { root.classList.remove('vt-full', 'vt-in', 'vt-out'); vt = null; };
+    vtMode = m;
+    root.classList.add('vt-full', willFull ? 'vt-in' : 'vt-out');
+    try {
+      vt = document.startViewTransition(() => {
+        vtSync = true;
+        try { applyMode(vtMode); } finally { vtSync = false; }
+      });
+    } catch (e) { done(); return applyMode(m); }
+    vt.finished.catch(() => {}).then(() => {
+      done();
+      if (vtMode !== mode) setScopeMode(vtMode); // 효과 중에 다시 바꾼 경우
+    });
+  }
+
+  function applyMode(m) {
     if (mode === m) return render();
     mode = m;
     addTarget = null;

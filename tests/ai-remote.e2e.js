@@ -150,7 +150,7 @@ const FAKE = `
   await last().locator('[data-plan-apply]').tap();
   const added = await page.evaluate(() => App.store.get().events.filter((e) => e.title === '정아름 영어'));
   assert(added.length === 1 && added[0].kind === 'other' && added[0].start === '18:30' && added[0].end === '22:00' && added[0].repeat.freq === 'weekly' && String(added[0].repeat.days) === '0' && new Date(added[0].date + 'T12:00').getDay() === 0, '적용하면 가장 가까운 일요일부터 매주 반복하는 일정 하나가 생김');
-  // 다음 질문에는 앞에서 낸 제안과 그 뒤에 어떻게 됐는지를 붙인다 ("그거 7시로 바꿔 줘"를 알아듣게, v3.3.2)
+  // 다음 질문에는 앞에서 낸 제안과 그 뒤에 어떻게 됐는지를 붙인다 ("그거 7시로 바꿔 줘"를 알아듣게, v3.3.1)
   srv.chunks = null;
   await ask(page, '고마워');
   const prev = chat()[chat().length - 1].body.messages;
