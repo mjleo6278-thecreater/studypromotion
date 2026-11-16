@@ -2068,3 +2068,27 @@ html.vt-full::view-transition-new(sp-stage) { animation: vt-fade-in .24s ease-ou
 html.vt-full::view-transition-new(sp-bar) { animation: vt-fade-in .2s ease-out .06s both; }
 @keyframes vt-fade-out { to { opacity: 0; } }
 @keyframes vt-fade-in { from { opacity: 0; } }
+
+/* ===== 링크로 카드 가져오기 확인 창 (v3.5, js/cardlink.js) ===== */
+.ui-cardlink .ui-sheet-body { padding: 0 8px; }
+.ui-cardlink .ui-group { margin: 0; }
+.ui-cardlink .cl-where, .ui-cardlink .cl-note { margin: 0 12px 6px; line-height: 1.5; word-break: keep-all; }
+.ui-cardlink .cl-note, .ui-cardlink .cl-dup { color: var(--accent-text, var(--accent)); line-height: 1.5; word-break: keep-all; }
+.ui-cardlink .cl-deck small { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 1px; }
+.ui-cardlink .cl-deck .ui-check { visibility: hidden; }
+.ui-cardlink .cl-deck.on .ui-check { visibility: visible; color: var(--accent); }
+.ui-cardlink .cl-name { display: block; padding: 0 12px 8px; }
+.ui-cardlink .cl-name[hidden] { display: none; }
+.ui-cardlink .cl-name input { width: 100%; }
+.ui-cardlink .cl-list { list-style: none; margin: 0 4px; padding: 0; border: 1px solid var(--line); border-radius: 12px; max-height: 34vh; overflow-y: auto; overscroll-behavior: contain; }
+.ui-cardlink .cl-list li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 9px 12px; font-size: 14px; line-height: 1.45; border-top: 1px solid var(--line); }
+.ui-cardlink .cl-list li:first-child { border-top: 0; }
+.ui-cardlink .cl-list b { font-weight: 600; overflow-wrap: anywhere; }
+.ui-cardlink .cl-list span { color: var(--muted); overflow-wrap: anywhere; }
+.ui-cardlink .cl-list li.dup { opacity: .45; }
+.ui-cardlink .cl-list li.dup b::after { content: ' · 이미 있음'; font-weight: 400; font-size: 12px; }
+.ui-cardlink .cl-dup { margin: 8px 12px 0; }
+.ui-cardlink .cl-foot { position: sticky; bottom: 0; display: flex; gap: 8px; padding: 12px 4px; background: var(--surface); }
+.ui-cardlink .cl-foot .btn { flex: 1; min-height: 46px; }
+.ui-cardlink .cl-foot .btn:disabled { opacity: .5; }
+@media (max-height: 520px) { .ui-cardlink .cl-list { max-height: none; overflow: visible; } }

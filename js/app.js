@@ -134,7 +134,9 @@
     const link = e.target.closest('[data-go]');
     if (link) { e.preventDefault(); go(link.dataset.go); }
   });
-  window.addEventListener('hashchange', () => go(location.hash.slice(1)));
+  // 링크로 카드 가져오기(#cards&…, js/cardlink.js): 링크를 맡겨 두고 주소를 #review로 바꾼다. 앱이 열려 있을 때 링크를 눌러도 같게
+  const takeCardLink = () => !!(window.CardLink && window.CardLink.take(location.hash));
+  window.addEventListener('hashchange', () => go(takeCardLink() ? 'review' : location.hash.slice(1)));
 
   /* ---------- 휴대폰 '뒤로' 버튼 ----------
      열린 창이 있으면 그 창만 닫고, 없으면 홈으로 가고, 홈에서는 앱을 나간다(설치한 앱은 한 번 더 눌러야 닫힘).
@@ -1151,6 +1153,14 @@
   });
 
   $('#deck-back').addEventListener('click', () => { openDeckId = null; editingCardId = null; showReviewPane('home'); renderDecks(); });
+  // 복습 화면에서 덱 하나를 연다 (id가 없으면 덱 목록). 링크로 카드를 가져온 뒤 그 덱을 보여 줄 때 쓴다
+  function openDeck(id) {
+    if (currentView !== 'review') go('review');
+    editingCardId = null;
+    openDeckId = id && store.get().decks.some((d) => d.id === id) ? id : null;
+    showReviewPane(openDeckId ? 'detail' : 'home');
+    if (openDeckId) renderDeckDetail(); else renderDecks();
+  }
   $('#deck-delete').addEventListener('click', async () => {
     const d = store.get().decks.find((x) => x.id === openDeckId);
     if (!d || !(await ask(`'${d.name}' 덱과 카드 ${deckCards(d.id).length}장을 삭제할까요?`, { ok: '삭제', danger: true }))) return;
@@ -1781,8 +1791,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.4';
-  const APP_DATE = '2026년 11월 16일';
+  const APP_VERSION = '3.5';
+  const APP_DATE = '2026년 11월 17일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
@@ -2078,14 +2088,15 @@
     toast('테마 색: ' + ACCENTS[accent]);
   });
 
-  window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone,
+  window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone, openDeck,
     // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
     timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null } : null),
     openLog, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
+  const fromCardLink = takeCardLink(); // 방문 기록을 깔기 전에 긴 카드 주소를 #review로 바꿔 둔다 (뒤로 가기로 다시 뜨지 않게)
   initHistory();
-  go(location.hash.slice(1) || 'home');
+  go(fromCardLink ? 'review' : (location.hash.slice(1) || 'home'));
 
   // 테스트/디버그용
   window.__studypromotion = { store, timer, finishPhase, parseBulk, afterFocus };
