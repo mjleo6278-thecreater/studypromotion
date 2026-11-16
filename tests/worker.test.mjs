@@ -468,7 +468,7 @@ test('모델이 덧붙인 설정을 받지 않으면 꼭 필요한 것만으로 
   assert.deepEqual(w.runs[2].input, { messages, stream: true, max_tokens: 1200 });
 });
 
-test('생각하기 끄기는 되도록 남긴다: 다른 설정만 받지 않으면 그것만 빼고 묻는다 (v3.3.1)', async () => {
+test('생각하기 끄기는 되도록 남긴다: 다른 설정만 받지 않으면 그것만 빼고 묻는다 (v3.3.2)', async () => {
   const w = world();
   w.answer = (input) => { if (input.max_completion_tokens || input.stream_options) throw new Error('5006: unknown field stream_options'); return sse(['됐어요']); };
   const messages = [{ role: 'user', content: '안녕' }];
@@ -479,7 +479,7 @@ test('생각하기 끄기는 되도록 남긴다: 다른 설정만 받지 않으
   assert.deepEqual(w.runs[1].input, { messages, stream: true, max_tokens: 1200, chat_template_kwargs: { enable_thinking: false } });
 });
 
-test('앱 정보를 붙여 같은 질문을 바로 다시 묻는 것은 한 번만 세지 않는다 (v3.3.1)', async () => {
+test('앱 정보를 붙여 같은 질문을 바로 다시 묻는 것은 한 번만 세지 않는다 (v3.3.2)', async () => {
   const w = world();
   const me = await token();
   const q = (content) => [{ role: 'user', content }];
