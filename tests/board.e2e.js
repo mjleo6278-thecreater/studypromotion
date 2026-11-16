@@ -369,6 +369,22 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.waitForTimeout(150);
   assert((await page.evaluate(() => ({ m: Board.mode, v: App.view }))).m === 'list' && (await page.evaluate(() => App.view)) === 'board' && (await page.isVisible('.tabs')), '뒤로 가기: 보드 전체 화면에서 목록으로');
 
+  // 목록 ↔ 보드 전환 효과 (View Transitions): 자동 테스트는 평소 효과 없이 바로 바뀌므로, 효과를 켠 주소(?vt)로 따로 연다
+  const vtCtx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true });
+  const vtp = await vtCtx.newPage();
+  vtp.on('pageerror', (e) => errors.push(e.message));
+  await vtp.goto(url + '?vt#board');
+  await vtp.click('#exam-sample');
+  await vtp.click('[data-scope-mode=board]');
+  const during = await vtp.evaluate(() => document.documentElement.className);
+  await vtp.waitForFunction(() => !document.documentElement.classList.contains('vt-full'));
+  assert(/vt-full/.test(during) && /vt-in/.test(during) && (await vtp.evaluate(() => Board.full)) && !(await vtp.isVisible('.tabs')), '보드로 갈 때 전환 효과 (' + during + ') 뒤 전체 화면');
+  await vtp.evaluate(() => { Board.setMode('list'); Board.setMode('board'); Board.setMode('list'); }); // 효과 중에 여러 번 바꿔도 마지막 것으로
+  await vtp.waitForFunction(() => !document.documentElement.classList.contains('vt-full'));
+  await vtp.waitForTimeout(100);
+  assert((await vtp.evaluate(() => Board.mode)) === 'list' && !(await vtp.evaluate(() => Board.full)) && (await vtp.isVisible('.tabs')), '효과 중에 다시 바꾸면 마지막으로 고른 보기로');
+  await vtCtx.close();
+
   assert(errors.length === 0, '콘솔 오류 없음 ' + errors.join(' | '));
   await browser.close();
 })().catch(async (e) => { console.error(e.message); process.exit(1); });
