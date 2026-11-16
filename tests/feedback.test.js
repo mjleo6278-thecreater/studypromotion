@@ -120,6 +120,24 @@ test('이스터에그: 띄어쓰기·끝의 님·문장부호와 상관없이 �
   }
 });
 
+test('이스터에그: 치이카와를 넣으면 함께 공부하는 영상 (v3.4)', () => {
+  for (const w of ['치이카와', '치이 카와', '치이카와님', 'ちいかわ', 'Chiikawa', ' chiikawa! ']) {
+    const v = Egg.videoOf(w);
+    assert.ok(v && v.key === 'chiikawa', w);
+  }
+  for (const w of ['치이', '하치와레', '', '전교회장']) assert.strictEqual(Egg.videoOf(w), null, w);
+  const v = Egg.videoOf('치이카와');
+  assert.ok(/^[A-Za-z0-9_-]{11}$/.test(v.id), v.id);
+  // 쿠키를 남기지 않는 주소로 퍼오고, 영상이 막히면 유튜브에서 직접 열 수 있게
+  assert.strictEqual(Egg.embedUrl(v), 'https://www.youtube-nocookie.com/embed/' + v.id + '?rel=0&playsinline=1&autoplay=1');
+  assert.strictEqual(Egg.watchUrl(v), 'https://www.youtube.com/watch?v=' + v.id);
+  assert.strictEqual(Egg.embedUrl({ id: 'a"><b' }), 'https://www.youtube-nocookie.com/embed/ab?rel=0&playsinline=1&autoplay=1');
+  // 영상 단어는 피드백 이름이나 테마 단어와 겹치지 않는다
+  for (const k of Object.keys(Egg.VIDEO_KEYS)) { assert.ok(!Egg.KEYS[k] && !Egg.SKIN_KEYS[k], k); assert.ok(Egg.VIDEOS[Egg.VIDEO_KEYS[k]], k); }
+  assert.strictEqual(Egg.find('치이카와'), null);
+  assert.strictEqual(Egg.skinOf('치이카와'), null);
+});
+
 test('이스터에그: 해시가 바뀌지 않는다 (이미 넣어 둔 이름들이 계속 열리도록)', () => {
   assert.strictEqual(Egg.key('스터디프로모션'), 'cmbjycfyzq');
   assert.strictEqual(Egg.key('체크메이트'), 'w6myrxs27j');
