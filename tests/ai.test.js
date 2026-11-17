@@ -630,3 +630,34 @@ test('인용(>)과 취소선(~~)을 글자 그대로 두지 않는다 (v3.3.1)',
   assert.strictEqual(AI.md('~~틀림~~ 맞음, 3 > 2'), '<p><s>틀림</s> 맞음, 3 &gt; 2</p>');
   assert.strictEqual(AI.md('> <b>태그</b>'), '<blockquote>&lt;b&gt;태그&lt;/b&gt;</blockquote>');
 });
+
+/* ---------- 기능과 탭 편집에서 꺼 둔 기능 (v3.6) ---------- */
+test('꺼 둔 기능의 동작은 빼고, 왜 뺐는지와 켜는 곳을 알려 준다', () => {
+  const off = (...ids) => { const st = sample(); st.settings.layout = { off: ids }; return st; };
+  const tip = /기능과 탭 편집에서 켤 수 있어요/;
+  let { res } = check([{ type: 'add_card', front: 'hola', back: '안녕' }, { type: 'open_view', view: 'review' }], off('review'));
+  assert.strictEqual(res.ops.length, 0);
+  assert.match(res.rejected[0], /복습을 꺼 두어서 카드를 만들지 않았어요/);
+  assert.match(res.rejected[1], /복습 탭을 꺼 두어서 열지 않았어요/);
+  assert.match(res.rejected[1], tip);
+  // 타이머 탭을 끄면 집중 타이머·스톱워치 모두 (딸린 기능)
+  res = check([{ type: 'start_timer', kind: 'focus' }], off('timer')).res;
+  assert.match(res.rejected[0], /집중 타이머를 꺼 두어서 시작하지 않았어요/);
+  res = check([{ type: 'start_timer', kind: 'stopwatch' }], off('timer')).res;
+  assert.match(res.rejected[0], /스톱워치를 꺼 두어서/);
+  // 집중 타이머만 꺼 두면 스톱워치는 그대로
+  res = check([{ type: 'start_timer', kind: 'focus' }, { type: 'start_timer', kind: 'stopwatch' }], off('focus')).res;
+  assert.strictEqual(res.ops.length, 1);
+  assert.strictEqual(res.ops[0].data.kind, 'stopwatch');
+  // 홈 화면 칸이나 아무것도 꺼 두지 않았으면 그대로
+  res = check([{ type: 'add_card', front: 'hola', back: '안녕' }, { type: 'open_view', view: 'stats' }], off('home-tt')).res;
+  assert.strictEqual(res.ops.length, 2);
+});
+test('AI에게 꺼 둔 기능 이름을 알려 준다 (없으면 그 줄이 없다)', () => {
+  assert.ok(!AI.contextText(AI.buildContext(sample(), NOW)).includes('꺼 둔 기능'));
+  const st = sample();
+  st.settings.layout = { off: ['review', 'stopwatch', 'home-tt', 'ai'] };
+  const text = AI.contextText(AI.buildContext(st, NOW));
+  assert.match(text, /꺼 둔 기능: 복습, 스톱워치\. /);
+  assert.ok(!text.includes('타임테이블') && !text.includes('세컨드'), '홈 칸과 AI 자신은 말하지 않음');
+});

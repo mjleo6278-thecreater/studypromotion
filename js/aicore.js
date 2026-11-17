@@ -12,6 +12,16 @@
   const Stats = need('Stats', './stats.js');
   const SRS = need('SRS', './srs.js');
   const Schedule = need('Schedule', './schedule.js');
+  const Features = need('Features', './features.js');
+  // 기능과 탭 편집에서 꺼 둔 기능은 AI도 쓰지 않는다
+  const featOn = (state, id) => !Features || Features.isOn(Features.read(state && state.settings), id);
+  const OFF_TIP = ' (계정·설정 › 기능과 탭 편집에서 켤 수 있어요)';
+  // AI에게 알려 줄 꺼 둔 기능 이름 (탭과 탭 안 기능만. 홈 화면 칸은 AI와 상관없다)
+  const offNames = (state) => {
+    if (!Features) return [];
+    const L = Features.read(state && state.settings);
+    return Features.LIST.filter((f) => (f.kind === 'tab' || f.kind === 'sub') && f.id !== 'ai' && !Features.isOn(L, f.id)).map((f) => f.name);
+  };
 
   const DAY = 86400000;
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
@@ -186,6 +196,7 @@
       decks: state.decks.slice(0, LIMIT.decks).map((x) => str(x.name, LIMIT.name)),
       settings: { dailyGoalMin: set.dailyGoalMin, focusMin: set.focusMin, breakMin: set.breakMin },
       todayMin: Stats.minutesOn(state.sessions, now),
+      off: offNames(state),
       keys,
     };
   }
@@ -210,6 +221,7 @@
       `복습 덱: ${ctx.decks.length ? ctx.decks.join(', ') : '(없음)'}`,
       `설정: 하루 목표 ${ctx.settings.dailyGoalMin}분, 집중 ${ctx.settings.focusMin}분, 휴식 ${ctx.settings.breakMin}분. 오늘 공부한 시간 ${ctx.todayMin}분.`,
     ];
+    if (ctx.off && ctx.off.length) lines.push(`꺼 둔 기능: ${ctx.off.join(', ')}. 이 기능을 쓰는 동작은 적지 말고, 계정·설정 › 기능과 탭 편집에서 켤 수 있다고 알려 준다.`);
     return lines.join('\n');
   }
 
@@ -625,6 +637,7 @@
     add_card(a, state) {
       const front = str(a.front, LIMIT.card), back = str(a.back, LIMIT.card);
       if (!front || !back) return '카드의 앞면이나 뒷면이 비어 있어요';
+      if (!featOn(state, 'review')) return '복습을 꺼 두어서 카드를 만들지 않았어요' + OFF_TIP;
       const want = str(a.deck, LIMIT.name);
       const deck = state.decks.find((d) => norm(d.name) === norm(want || DEFAULT_DECK)) || (!want && state.decks.length === 1 ? state.decks[0] : null);
       const deckName = deck ? deck.name : want || DEFAULT_DECK;
@@ -634,6 +647,7 @@
       const kw = str(a.kind, 20).toLowerCase();
       const kind = /stop|스톱|스탑|워치/.test(kw) ? 'stopwatch' : !kw || /focus|집중|뽀모|pomo|타이머/.test(kw) ? 'focus' : null;
       if (!kind) return '어떤 타이머인지 읽지 못했어요';
+      if (!featOn(state, kind)) return `${kind === 'focus' ? '집중 타이머' : '스톱워치'}를 꺼 두어서 시작하지 않았어요` + OFF_TIP;
       const subj = findSubject(state, a.subject);
       const m = int(a.minutes), minutes = kind === 'focus' && m >= 1 && m <= 180 ? m : null;
       return {
@@ -647,6 +661,7 @@
       const ALIAS = { 시간표: 'timetable', 스케줄: 'timetable', 일정: 'timetable', 보드: 'board', 화이트보드: 'board', 할일: 'plan', 공부시간: 'stats' };
       const view = VIEWS[vw] ? vw : Object.keys(VIEWS).find((k) => VIEWS[k] === vw) || ALIAS[vw] || '';
       if (!VIEWS[view]) return '열 화면을 찾지 못했어요';
+      if (!featOn(state, view)) return `${VIEWS[view]} 탭을 꺼 두어서 열지 않았어요` + OFF_TIP;
       const date = view === 'timetable' && a.date ? goodDate(a.date, ctx.today, 400, 400) : null;
       return { kind: 'nav', line: `화면 열기: ${VIEWS[view]}`, sub: date ? dateLabel(date, ctx.today) : '', data: { view, date } };
     },

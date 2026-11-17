@@ -37,6 +37,9 @@
   if (sw.running) tab = 'sw';
   else if (App.timerBusy && App.timerBusy()) tab = 'focus';
   let busy = false; // 묻는 창이 떠 있는 동안 또 누르지 않게
+  // 기능과 탭 편집에서 집중 타이머나 스톱워치를 꺼 두었으면 남은 쪽만 보인다 (고른 탭 기억은 그대로 둔다)
+  const featOn = (id) => !window.Features || window.Features.on(id);
+  const curTab = () => (!featOn('focus') ? 'sw' : !featOn('stopwatch') ? 'focus' : tab);
 
   /* ---------- 시간 계산 ---------- */
   const pad = (n) => String(n).padStart(2, '0');
@@ -247,13 +250,13 @@
 
   function renderTabs() {
     $$('[data-ttab]').forEach((b) => {
-      const on = b.dataset.ttab === tab;
+      const on = b.dataset.ttab === curTab();
       b.classList.toggle('active', on);
       b.setAttribute('aria-selected', String(on));
       b.tabIndex = on ? 0 : -1;
     });
-    $('#timer-pane-focus').hidden = tab !== 'focus';
-    $('#timer-pane-sw').hidden = tab !== 'sw';
+    $('#timer-pane-focus').hidden = curTab() !== 'focus';
+    $('#timer-pane-sw').hidden = curTab() !== 'sw';
   }
 
   function row(id, name, color) {
@@ -269,7 +272,7 @@
     if (App.view === 'home') { renderHomeLive(); homeMin = -1; if (App.renderHomeToday) App.renderHomeToday(); }
     // 시작·멈춤이 타임테이블에도 바로 보이게 (재는 중 구간이 생기거나 기록된 칸으로 바뀐다)
     if (window.Timetable && (App.view === 'home' || App.view === 'timetable')) window.Timetable.render();
-    if (App.view !== 'timer' || tab !== 'sw') return;
+    if (App.view !== 'timer' || curTab() !== 'sw') return;
     countBase();
     const list = subjects();
     $('#sw-list').innerHTML = list.map((s) => row(s.id, s.name, s.color)).join('') + row('', '과목 없이', null);
@@ -418,10 +421,18 @@
         }
       }
       if (sw.running) return; // 고르는 동안 다른 창에서 이미 시작함
-      showTab('sw');
-      App.go('timer');
-      await start(sid, extra);
+      await launch(sid, extra);
     } finally { flowOpen = false; }
+  }
+  // 고른 공부를 시작한다. 스톱워치를 꺼 두었으면 집중 타이머로 (이미 돌고 있으면 타이머 화면만 연다)
+  async function launch(sid, extra) {
+    if (!featOn('stopwatch') && App.startFocus) {
+      if (!App.startFocus({ subjectId: sid, label: extra && extra.label, topicId: extra && extra.topicId, taskId: extra && extra.taskId })) App.go('timer');
+      return;
+    }
+    showTab('sw');
+    App.go('timer');
+    await start(sid, extra);
   }
   // 일정으로 공부 시작: 일정의 과목과 (있으면) 할 일·이름으로 스톱워치를 켠다
   async function startPlan(ev) {
@@ -429,9 +440,7 @@
     const sid = ev.subjectId && subjectOf(ev.subjectId) ? ev.subjectId : '';
     const t = ev.taskId ? store.get().tasks.find((x) => x.id === ev.taskId && !x.done) : null;
     const extra = t ? { label: t.title, taskId: t.id } : ev.title ? { label: ev.title } : undefined;
-    showTab('sw');
-    App.go('timer');
-    await start(sid, extra);
+    await launch(sid, extra);
   }
   const homeStart = $('#h-start');
   if (homeStart) homeStart.addEventListener('click', () => startFlow());
@@ -465,7 +474,7 @@
   // 지금 재고 있는 구간 (타임테이블이 실시간으로 그린다). 재는 중이 아니면 null
   const live = () => (sw.running ? { from: sw.startAt, to: now(), subjectId: sw.subjectId && subjectOf(sw.subjectId) ? sw.subjectId : null, label: sw.label } : null);
 
-  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: () => tab, showTab, render, todayMinutes, live, startFlow, startPlan };
+  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: curTab, showTab, render, todayMinutes, live, startFlow, startPlan };
   if (sw.running) begin();
   render();
 })();

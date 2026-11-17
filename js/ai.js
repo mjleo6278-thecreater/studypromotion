@@ -139,6 +139,7 @@
   fab.type = 'button';
   fab.className = 'ai-fab';
   fab.id = 'ai-fab';
+  fab.dataset.feature = 'ai'; // 기능과 탭 편집에서 끌 수 있다 (js/features.js)
   fab.setAttribute('aria-label', `AI 도우미 ${NAME} 열기`);
   fab.setAttribute('aria-haspopup', 'dialog');
   fab.title = `AI 도우미 ${NAME}`;
@@ -202,7 +203,7 @@
       (r.rows.length > 1 || (r.rows.length === 1 && !subj)
         ? '<ul class="ai-bars">' + r.rows.slice(0, 8).map((x) => `<li><span><i class="dot"${x.color ? ` style="background:${esc(x.color)}"` : ''}></i>${esc(x.name)}</span><b><i style="width:${Math.max(3, Math.round(x.minutes / max * 100))}%${x.color ? ';background:' + esc(x.color) : ''}"></i></b><em>${esc(fm(x.minutes))}</em></li>`).join('') + '</ul>'
         : '') +
-      '<div class="ai-card-act"><button type="button" class="btn link" data-ai-go="stats">통계에서 보기</button></div></div>';
+      '<div class="ai-card-act" data-feature="stats"><button type="button" class="btn link" data-ai-go="stats">통계에서 보기</button></div></div>';
   }
 
   function planHTML(m) {
@@ -238,7 +239,7 @@
   function cardsHTML(m) {
     const left = m.cards.filter((c) => !c.saved).length;
     const deck = deckLabel();
-    return '<div class="ai-card ai-cards">' +
+    return '<div class="ai-card ai-cards" data-feature="review">' +
       `<p class="ai-card-h">복습 카드로 저장<button type="button" class="btn link" data-deck-pick>${esc(deck)}</button></p>` +
       '<ul class="ai-cardlist">' + m.cards.map((c, i) =>
         `<li><span><b>${esc(c.front)}</b><small>${esc(c.back)}</small></span>` +
@@ -366,6 +367,8 @@
     fab.hidden = !on;
     if (!on && !back.hidden) close();
   }
+  // 기능과 탭 편집에서 세컨드를 끄면 (다른 기기에서 꺼도) 열려 있던 창도 닫는다. 단추는 data-feature로 숨는다
+  if (window.Features) window.Features.onChange(() => { if (!window.Features.on('ai') && !back.hidden) close(); });
   async function checkGate(force) {
     if (!gated()) return;
     const user = window.Cloud && window.Cloud.user;
