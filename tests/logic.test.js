@@ -292,3 +292,120 @@ test('기록 정리: 체크는 풀렸는데 진행률이 100%로 남은 범위 �
   assert.deepStrictEqual(out.topics.map((t) => t.pct), [0, 100, 40, undefined, undefined]);
   assert.deepStrictEqual(out.topics.map((t) => t.done), [false, true, false, true, false]);
 });
+
+/* ---------- 끝낸 할 일·범위의 소요 시간을 공부 기록으로 (v3.5.1) ---------- */
+const ScopeLib = require('../js/scope.js');
+const creditState = () => ({
+  subjects: [{ id: 'm', name: '수학', color: '#000' }],
+  tasks: [
+    { id: 't1', title: '문제집 3쪽', subjectId: 'm', estimateMin: 40, done: false },
+    { id: 't2', title: '단어', subjectId: null, estimateMin: null, done: false },
+    { id: 't3', title: '수학 · 1단원', subjectId: 'm', estimateMin: 30, done: false, topicId: 'a1' }, // 범위에서 보낸 할 일
+  ],
+  topics: [
+    { id: 'c', examId: 'e', parentId: null, kind: 'topic', title: '수학', order: 0 },
+    { id: 'a', examId: 'e', parentId: 'c', kind: 'topic', title: '1단원', order: 0 },
+    { id: 'a1', examId: 'e', parentId: 'a', kind: 'topic', title: '개념', est: 30, order: 0 },
+    { id: 'a2', examId: 'e', parentId: 'a', kind: 'topic', title: '문제', est: 50, order: 1 },
+    { id: 'b', examId: 'e', parentId: 'c', kind: 'topic', title: '2단원', order: 1 }, // 소요시간 없음
+    { id: 'n', examId: 'e', parentId: null, kind: 'note', title: '메모', done: true },
+  ],
+  sessions: [],
+});
+let cid = 0;
+const nextId = () => 'id' + ++cid;
+
+test('끝낸 할 일: 예상 시간을 시각 없는 공부 기록으로 넣고, 두 번 넣지 않는다', () => {
+  const st = creditState();
+  const t = st.tasks[0];
+  t.done = true;
+  const s = Stats.creditTask(st, t, NOW, 'x1');
+  assert.deepStrictEqual(s, { id: 'x1', kind: 'done', manual: true, doneOf: 'task:t1', subjectId: 'm', minutes: 40, endedAt: NOW, label: '문제집 3쪽', taskId: 't1' });
+  assert.strictEqual(Stats.minutesOn(st.sessions, NOW), 40);
+  assert.strictEqual(Stats.sessionSpan(s), null); // 타임테이블에는 '시각 없음'
+  assert.strictEqual(Stats.dayTimeline(st.sessions, Stats.dayKey(NOW)).untimed, 40);
+  assert.strictEqual(Stats.creditTask(st, t, NOW, 'x2'), null);
+  assert.strictEqual(st.sessions.length, 1);
+  // 예상 시간이 없거나 아직 안 끝낸 할 일은 넣지 않는다
+  st.tasks[1].done = true;
+  assert.strictEqual(Stats.creditTask(st, st.tasks[1], NOW, 'x3'), null);
+  assert.strictEqual(Stats.creditTask(st, Object.assign({}, t, { id: 'z', done: false }), NOW, 'x4'), null);
+});
+
+test('끝낸 할 일: 스톱워치로 이미 잰 할 일은 예상 시간을 또 넣지 않는다', () => {
+  const st = creditState();
+  st.sessions.push({ id: 'sw-1', subjectId: 'm', minutes: 25, endedAt: NOW - 3600000, kind: 'stopwatch', label: '문제집 3쪽', taskId: 't1' });
+  st.tasks[0].done = true;
+  assert.strictEqual(Stats.taskCreditMinutes(st, st.tasks[0]), 0);
+  assert.strictEqual(Stats.creditTask(st, st.tasks[0], NOW, 'x'), null);
+  assert.strictEqual(Stats.minutesOn(st.sessions, NOW), 25);
+});
+
+test('끝냄 취소: 오늘 넣은 기록만 빼고, 지난날 넣은 기록은 남긴다', () => {
+  const st = creditState();
+  st.tasks[0].done = true;
+  Stats.creditTask(st, st.tasks[0], NOW, 'x1');
+  assert.strictEqual(Stats.uncreditDone(st, 'task:t1', NOW + 60000), 40);
+  assert.strictEqual(st.sessions.length, 0);
+  Stats.creditTask(st, st.tasks[0], NOW - DAY, 'x2'); // 어제 끝냄
+  assert.strictEqual(Stats.uncreditDone(st, 'task:t1', NOW), 0);
+  assert.strictEqual(st.sessions.length, 1);
+  // 어제 넣은 기록이 있으니 오늘 다시 끝내도 또 넣지 않는다
+  assert.strictEqual(Stats.creditTask(st, st.tasks[0], NOW, 'x3'), null);
+});
+
+test('끝낸 할 일: 한 번에 하루(24시간)까지만 넣는다', () => {
+  const st = creditState();
+  Object.assign(st.tasks[0], { done: true, estimateMin: 5000 });
+  assert.strictEqual(Stats.creditTask(st, st.tasks[0], NOW, 'x').minutes, 24 * 60);
+});
+
+test('범위 체크: 새로 끝낸 잎 항목의 소요시간을 넣고, 체크를 풀면 오늘 넣은 것을 뺀다', () => {
+  const st = creditState();
+  let before = Stats.doneTopicIds(st);
+  ScopeLib.setDone(st.topics, 'a2', true, NOW);
+  let got = Stats.syncTopicCredits(st, before, NOW, nextId);
+  assert.strictEqual(got.added, 50);
+  assert.deepStrictEqual(st.sessions.map((s) => [s.doneOf, s.label, s.subjectId, s.topicId, s.kind, s.manual]), [['topic:a2', '수학 · 문제', 'm', 'a2', 'done', true]]);
+  // 상위 항목(과목)을 체크하면 아래 잎마다. 이미 넣은 a2, 소요시간이 없는 2단원은 빼고 a1(30분)만
+  before = Stats.doneTopicIds(st);
+  ScopeLib.setDone(st.topics, 'c', true, NOW);
+  got = Stats.syncTopicCredits(st, before, NOW, nextId);
+  assert.strictEqual(got.added, 30);
+  assert.strictEqual(got.ids.length, 1);
+  assert.strictEqual(Stats.minutesOn(st.sessions, NOW), 80);
+  // 체크를 모두 풀면 오늘 넣은 80분을 뺀다
+  before = Stats.doneTopicIds(st);
+  ScopeLib.setDone(st.topics, 'c', false, NOW);
+  got = Stats.syncTopicCredits(st, before, NOW + 1000, nextId);
+  assert.deepStrictEqual([got.added, got.removed], [0, 80]);
+  assert.strictEqual(st.sessions.length, 0);
+});
+
+test('범위 체크: 지운 항목의 기록은 남기고, 범위에서 보낸 할 일과 범위는 한 번만 넣는다', () => {
+  const st = creditState();
+  // 범위에서 보낸 할 일(t3, a1과 한 몸)을 먼저 끝내면
+  st.tasks[2].done = true;
+  assert.strictEqual(Stats.creditTask(st, st.tasks[2], NOW, 't3rec').topicId, 'a1');
+  let before = Stats.doneTopicIds(st);
+  ScopeLib.setDone(st.topics, 'a1', true, NOW);
+  assert.strictEqual(Stats.syncTopicCredits(st, before, NOW, nextId).added, 0); // 범위에서 또 체크해도 안 넣음
+  // 반대로 범위를 먼저 끝냈으면 할 일 쪽에서 안 넣음
+  const st2 = creditState();
+  before = Stats.doneTopicIds(st2);
+  ScopeLib.setDone(st2.topics, 'a1', true, NOW);
+  assert.strictEqual(Stats.syncTopicCredits(st2, before, NOW, nextId).added, 30);
+  st2.tasks[2].done = true;
+  assert.strictEqual(Stats.creditTask(st2, st2.tasks[2], NOW, 'q'), null);
+  // 끝낸 항목을 지워도 공부한 기록은 그대로
+  before = Stats.doneTopicIds(st2);
+  st2.topics = ScopeLib.removeSubtree(st2.topics, 'a1');
+  assert.strictEqual(Stats.syncTopicCredits(st2, before, NOW, nextId).removed, 0);
+  assert.strictEqual(Stats.minutesOn(st2.sessions, NOW), 30);
+  // 범위를 타이머로 잰 적이 있으면 넣지 않는다 (집중 타이머 기록은 topicId를 남긴다)
+  const st3 = creditState();
+  st3.sessions.push({ id: 'f', subjectId: 'm', minutes: 25, endedAt: NOW - 60000, label: '수학 · 문제', topicId: 'a2' });
+  before = Stats.doneTopicIds(st3);
+  ScopeLib.setDone(st3.topics, 'a2', true, NOW);
+  assert.strictEqual(Stats.syncTopicCredits(st3, before, NOW, nextId).added, 0);
+});

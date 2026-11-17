@@ -158,7 +158,7 @@
       let label = s.manual && s.label === '직접 기록' ? '' : s.label;
       if (label && sub && label.startsWith(sub.name + ' · ')) label = label.slice(sub.name.length + 3);
       const when = !sp ? '시각 없음' : `${hm(Math.max(from, d.d0))} ~ ${hmEnd(Math.min(sp[1], d.d1), key)}`;
-      return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.manual ? ' <span class="sl-tag">직접</span>' : s.kind === 'stopwatch' ? ' <span class="sl-tag">스톱워치</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>` +
+      return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.kind === 'done' ? ' <span class="sl-tag">완료</span>' : s.manual ? ' <span class="sl-tag">직접</span>' : s.kind === 'stopwatch' ? ' <span class="sl-tag">스톱워치</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>` +
         `<span class="muted sl-when">${when} · ${fm(s.minutes)}</span>` +
         `<button class="icon-btn" data-tt-del="${esc(s.id)}" aria-label="이 기록 삭제" title="기록 삭제">${ic('x')}</button></li>`;
     });
@@ -212,7 +212,7 @@
     $('#ttv-legend').innerHTML = legendHTML(d.subjects);
     $('#ttv-legend').hidden = !d.subjects.length;
     $('#ttv-grid').innerHTML = gridHTML(d, key);
-    const untimed = d.tl.untimed ? `시간만 적은 직접 기록 ${fm(d.tl.untimed)}은 공부한 시각이 없어 칸에는 안 칠해져요. ` : '';
+    const untimed = d.tl.untimed ? `시각 없는 기록 ${fm(d.tl.untimed)}(직접 기록·끝낸 할 일)은 칸에 칠하지 않아요. ` : '';
     $('#ttv-foot').innerHTML = `<span class="muted small">${untimed}${future ? '칸을 누르면 그 시각으로 일정을 넣어요.' : key === tk ? '지나간 칸을 누르면 공부 시간을, 앞으로의 칸을 누르면 일정을 넣어요.' : '칸을 누르면 그 시각부터 공부 시간을 적을 수 있어요.'}</span>` +
       (d.list.length ? `<button type="button" class="btn link tt-share" data-tt-share="${key}">인증 이미지</button>` : '');
     $('#ttv-plans-title').textContent = key === tk ? '오늘 일정' : '이날의 일정';

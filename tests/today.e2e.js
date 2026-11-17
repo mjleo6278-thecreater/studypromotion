@@ -222,12 +222,13 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   // 6) 되돌리기는 범위만: 그사이 쌓인 공부 기록은 지우지 않음
   await page.goto(base + '#home');
   await page.tap('#h-next [data-next-check]');
-  const afterCheck = (await state()).sessions.length;
+  const afterCheck = (await state()).sessions;
+  const credited = afterCheck.filter((s) => s.kind === 'done').length; // 소요시간을 적은 범위를 끝내면 그 시간이 기록으로 (v3.5.1)
   await page.evaluate(() => App.store.update((s) => s.sessions.push({ id: 'later', subjectId: null, minutes: 30, endedAt: Date.now() })));
   await page.goto(base + '#board');
   await page.tap('.sl-head [data-list-act="undo"]');
   st = await state();
-  assert(st.sessions.length === afterCheck + 1 && st.sessions.some((s) => s.id === 'later'), '되돌리기를 눌러도 공부 기록은 남음');
+  assert(credited === 1 && st.sessions.length === afterCheck.length + 1 - credited && st.sessions.some((s) => s.id === 'later') && !st.sessions.some((s) => s.kind === 'done'), '되돌리기를 눌러도 공부 기록은 남음 (그 체크로 넣은 시간만 빠짐)');
 
   // 7) 화면 켜 두기 설정
   await page.goto(base + '#account');
