@@ -9,6 +9,9 @@
   const applyDayStart = () => Stats.setDayStart(store.get().settings.dayStartHour);
   applyDayStart();
   store.subscribe(applyDayStart);
+  const Features = window.Features || null; // 기능 켜기·끄기와 탭·홈 화면 순서 (js/features.js)
+  if (Features) Features.init(store);
+  const featOn = (id) => !Features || Features.on(id);
   const uid = StoreLib.uid;
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -104,16 +107,27 @@
   }
 
   /* ---------- 라우팅 ---------- */
-  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'timetable', 'account', 'about'];
+  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'timetable', 'account', 'about', 'layout'];
   let currentView = 'home';
 
   function go(view) {
     if (!VIEWS.includes(view)) view = 'home';
+    // 꺼 둔 탭의 화면: 열지 않고 알려 준다 ('켜기'를 누르면 켜고 연다)
+    if (Features && !Features.viewOn(view)) {
+      const f = Features.item(view), want = view;
+      toast(`${f.name}${Stats.josa(f.name, '은/는')} 꺼 둔 기능이에요`, { action: '켜기', onAction: () => { Features.set(want, true); go(want); } });
+      if (document.querySelector('.view.active') && Features.viewOn(currentView)) {
+        if (location.hash !== '#' + currentView) { try { history.replaceState(history.state, '', '#' + currentView); } catch (e) { /* 무시 */ } }
+        return;
+      }
+      view = 'home';
+    }
     const prev = currentView;
     currentView = view;
+    const navView = view === 'layout' ? 'account' : view; // 기능과 탭 편집은 계정·설정 안의 화면
     $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
     $$('.tab, .top-icon[data-view]').forEach((t) => {
-      const on = t.dataset.view === view;
+      const on = t.dataset.view === navView;
       t.classList.toggle('active', on);
       if (t.classList.contains('tab')) t.setAttribute('aria-selected', String(on));
       else if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
@@ -136,7 +150,9 @@
   });
   // 링크로 카드 가져오기(#cards&…, js/cardlink.js): 링크를 맡겨 두고 주소를 #review로 바꾼다. 앱이 열려 있을 때 링크를 눌러도 같게
   const takeCardLink = () => !!(window.CardLink && window.CardLink.take(location.hash));
-  window.addEventListener('hashchange', () => go(takeCardLink() ? 'review' : location.hash.slice(1)));
+  // 복습을 꺼 두었으면 화면은 그대로 두고, 켤지는 카드 링크 창이 묻는다 (js/cardlink.js)
+  const cardView = () => (featOn('review') ? 'review' : currentView);
+  window.addEventListener('hashchange', () => go(takeCardLink() ? cardView() : location.hash.slice(1)));
 
   /* ---------- 휴대폰 '뒤로' 버튼 ----------
      열린 창이 있으면 그 창만 닫고, 없으면 홈으로 가고, 홈에서는 앱을 나간다(설치한 앱은 한 번 더 눌러야 닫힘).
@@ -164,7 +180,7 @@
   let exitTimer = null;
   function onBack() {
     if (closeTopOverlay()) return pushTop();
-    if (currentView !== 'home') { pushTop(); return go('home'); }
+    if (currentView !== 'home') { pushTop(); return go(currentView === 'layout' ? 'account' : 'home'); }
     if (!isInstalled()) {
       // 브라우저 탭: 평소처럼 이전 페이지로. 돌아갈 곳이 없어 그대로 남았으면 다시 칸을 올려 둔다
       try { history.back(); } catch (e) { /* 무시 */ }
@@ -590,7 +606,7 @@
         <button class="bchk s-${pct > 0 ? 'some' : 'none'}" data-next-check="${esc(n.id)}" role="checkbox" aria-checked="${pct > 0 ? 'mixed' : 'false'}" aria-label="${esc(n.title)} 끝냄"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.5 10.5l3.8 3.8 7.4-8.2"/><path class="dash" d="M5.5 10h9"/></svg></button>
         <div class="next-body"><div class="next-title">${esc(n.title)}</div>
           <div class="next-meta"><i class="dot" style="background:${esc(card.color || '#888')}"></i>${esc(path.join(' · ') || card.title)}${it.left ? ` · ${pct > 0 ? `${pct}% · ` : ''}남은 ${Stats.formatMinutes(it.left)}` : ''}</div></div>
-        <button class="icon-btn next-play" data-next-focus="${esc(n.id)}" aria-label="${esc(n.title)} 타이머 시작" title="이 범위로 타이머 시작">${ic('play')}</button>
+        <button class="icon-btn next-play" data-next-focus="${esc(n.id)}" data-feature="timer" aria-label="${esc(n.title)} 타이머 시작" title="이 범위로 타이머 시작">${ic('play')}</button>
       </li>`;
     }).join('');
     const unrecorded = plan && !plan.finished && plan.days > 0 ? plan.todayChecked - plan.todayDone : 0;
@@ -702,15 +718,15 @@
 
   /* ---------- 타이머 ---------- */
   const TIMER_KEY = 'studypromotion.timer';
-  const timer = { mode: 'focus', running: false, endAt: 0, remaining: 0, total: 0, startedAt: 0, tick: null, subjectId: '', label: null, topicId: null };
+  const timer = { mode: 'focus', running: false, endAt: 0, remaining: 0, total: 0, startedAt: 0, tick: null, subjectId: '', label: null, topicId: null, taskId: null };
   const CIRC = 2 * Math.PI * 88;
   $('#ring-fg').style.strokeDasharray = CIRC;
 
   // 앱을 닫았다 열어도 타이머가 이어지게 상태를 저장한다
   function saveTimer() {
     try {
-      const { mode, running, endAt, remaining, total, startedAt, subjectId, label, topicId } = timer;
-      localStorage.setItem(TIMER_KEY, JSON.stringify({ mode, running, endAt, remaining, total, startedAt, subjectId, label, topicId }));
+      const { mode, running, endAt, remaining, total, startedAt, subjectId, label, topicId, taskId } = timer;
+      localStorage.setItem(TIMER_KEY, JSON.stringify({ mode, running, endAt, remaining, total, startedAt, subjectId, label, topicId, taskId }));
     } catch (e) { /* 무시 */ }
   }
 
@@ -784,7 +800,9 @@
     if (minutes < 1) return;
     if (id && store.get().sessions.some((x) => x.id === id)) return;
     const sid = timer.subjectId && subjectById(timer.subjectId) ? timer.subjectId : null;
-    store.update((st) => st.sessions.push({ id: id || uid(), subjectId: sid, minutes, endedAt: Math.min(now(), at || now()), label: timer.label || null, topicId: timer.topicId || null }));
+    const rec = { id: id || uid(), subjectId: sid, minutes, endedAt: Math.min(now(), at || now()), label: timer.label || null, topicId: timer.topicId || null };
+    if (timer.taskId) rec.taskId = timer.taskId;
+    store.update((st) => st.sessions.push(rec));
   }
 
   // opts.at: 끝난 시각, opts.quiet: 앱이 닫혀 있는 동안 끝남(소리 없이)
@@ -821,15 +839,15 @@
     const subj = timer.subjectId ? subjectById(timer.subjectId) : null;
     nextOpen = true;
     const pick = await choose(`집중 ${Stats.formatMinutes(min)} 끝! 이어서 무엇을 할까요?`, [
-      { value: 'sw', label: '스톱워치 켜고 계속 공부하기', hint: subj ? `${subj.name} 그대로, 시간 제한 없이 이어서 재요` : '시간 제한 없이 이어서 재요' },
+      featOn('stopwatch') ? { value: 'sw', label: '스톱워치 켜고 계속 공부하기', hint: subj ? `${subj.name} 그대로, 시간 제한 없이 이어서 재요` : '시간 제한 없이 이어서 재요' } : null,
       { value: 'break', label: '휴식 타이머 시작하기', hint: `${set.breakMin}분` },
       { value: 'again', label: '같은 타이머 다시 시작', hint: `집중 ${set.focusMin}분` },
       { value: 'off', label: '그냥 끄기' },
-    ], { cls: 'next-sheet', note: `집중한 ${Stats.formatMinutes(min)}은 기록했어요.` });
+    ].filter(Boolean), { cls: 'next-sheet', note: `집중한 ${Stats.formatMinutes(min)}은 기록했어요.` });
     nextOpen = false;
     if (somethingRunning()) return; // 고르는 동안 다른 창에서 이미 무언가를 시작함
     if (pick === 'sw' && window.Stopwatch) {
-      const keep = { label: timer.label, topicId: timer.topicId };
+      const keep = { label: timer.label, topicId: timer.topicId, taskId: timer.taskId };
       setMode('focus');
       window.Stopwatch.showTab('sw');
       go('timer');
@@ -847,8 +865,9 @@
     if (timerBusy() || (window.Stopwatch && window.Stopwatch.running()) || (window.Lock && window.Lock.state)) return false;
     if (window.Stopwatch) window.Stopwatch.showTab('focus');
     timer.subjectId = opts.subjectId && subjectById(opts.subjectId) ? opts.subjectId : '';
-    timer.label = null;
-    timer.topicId = null;
+    timer.label = opts.label || null;
+    timer.topicId = opts.topicId || null;
+    timer.taskId = opts.taskId || null;
     timer.startedAt = 0;
     setMode('focus');
     if (opts.minutes) setLen(opts.minutes);
@@ -895,6 +914,7 @@
     timer.subjectId = s.subjectId || '';
     timer.label = s.label || null;
     timer.topicId = s.topicId || null;
+    timer.taskId = s.taskId || null;
     timer.mode = s.mode;
     timer.total = s.total > 0 ? s.total : modeSeconds(s.mode);
     timer.startedAt = s.startedAt || 0;
@@ -1829,7 +1849,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.5.1';
+  const APP_VERSION = '3.6';
   const APP_DATE = '2026년 11월 18일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
@@ -1958,6 +1978,8 @@
 
   /* ---------- 렌더 ---------- */
   function render() {
+    if (Features && !Features.viewOn(currentView)) return go('home'); // 지금 화면의 기능이 꺼졌으면(다른 기기에서 끈 경우 등) 홈으로
+    if (currentView === 'layout') { if (window.Layout) window.Layout.render(); return; }
     if (currentView === 'home') { renderHome(); if (window.Stopwatch) window.Stopwatch.render(); if (window.Timetable) window.Timetable.render(); }
     else if (currentView === 'timetable') { if (window.Timetable) window.Timetable.render(); }
     else if (currentView === 'plan') renderPlan();
@@ -2054,6 +2076,12 @@
   // 화이트보드 항목에서 바로 타이머 시작
   // 집중 중에 다른 범위로 바꾸면, 그때까지 한 시간은 버리지 않고 기록할지 물어본다
   async function focusOn(opts) {
+    if (!featOn('focus') && featOn('stopwatch') && window.Stopwatch) {
+      const subj = opts.subjectName ? store.get().subjects.find((s) => s.name === opts.subjectName) : null;
+      window.Stopwatch.showTab('sw');
+      go('timer');
+      return window.Stopwatch.start(subj ? subj.id : '', { label: opts.label || null, topicId: opts.topicId || null });
+    }
     if (window.Stopwatch) window.Stopwatch.showTab('focus');
     if (timer.mode === 'focus' && timer.label === (opts.label || null) && timer.topicId === (opts.topicId || null) && (timer.running || timer.remaining < timer.total)) return go('timer'); // 같은 범위면 이어서
     const left = timer.running ? Math.max(0, Math.ceil((timer.endAt - now()) / 1000)) : timer.remaining;
@@ -2067,13 +2095,14 @@
     } else if (timer.running) pauseTimer();
     timer.label = opts.label || null;
     timer.topicId = opts.topicId || null;
+    timer.taskId = null;
     const subj = opts.subjectName ? store.get().subjects.find((s) => s.name === opts.subjectName) : null;
     timer.subjectId = subj ? subj.id : '';
     timer.startedAt = 0;
     setMode('focus');
     go('timer');
   }
-  $('#timer-topic-clear').addEventListener('click', () => { timer.label = null; timer.topicId = null; saveTimer(); renderTimer(); });
+  $('#timer-topic-clear').addEventListener('click', () => { timer.label = null; timer.topicId = null; timer.taskId = null; saveTimer(); renderTimer(); });
 
   /* ---------- 화면 밝기(자동/밝게/어둡게) ---------- */
   const THEMES = ['auto', 'light', 'dark'];
@@ -2134,7 +2163,7 @@
   if (!restoreTimer()) setMode('focus');
   const fromCardLink = takeCardLink(); // 방문 기록을 깔기 전에 긴 카드 주소를 #review로 바꿔 둔다 (뒤로 가기로 다시 뜨지 않게)
   initHistory();
-  go(fromCardLink ? 'review' : (location.hash.slice(1) || 'home'));
+  go(fromCardLink ? cardView() : (location.hash.slice(1) || 'home'));
 
   // 테스트/디버그용
   window.__studypromotion = { store, timer, finishPhase, parseBulk, afterFocus };

@@ -1160,8 +1160,9 @@
       if (!hasKids) html += mItem('time', '소요시간·진행률');
       const on = Object.keys(FLAG_INFO).filter((k) => n.flags && n.flags[k]).map((k) => FLAG_INFO[k].icon).join(' ');
       html += mItem('page:flags', '표시', { sub: true, hint: on });
-      html += mItem('focus', '이 범위로 타이머 시작');
-      html += mItem('to-task', '오늘 할 일로 보내기');
+      // 기능과 탭 편집에서 타이머·계획을 꺼 두었으면 그 메뉴는 빼고
+      if (!window.Features || window.Features.on('timer')) html += mItem('focus', '이 범위로 타이머 시작');
+      if (!window.Features || window.Features.on('plan')) html += mItem('to-task', '오늘 할 일로 보내기');
       if (p.state === 'some') html += mItem('uncheck-all', '체크 모두 해제');
       if (isCard && hasKids) {
         const anyOpen = Scope.subtreeIds(st().topics, id, index).some((x) => x !== id && kidsOf(x).length && !byId(x).collapsed);

@@ -124,7 +124,7 @@
     if (cur) {
       const doing = lv && (lv.subjectId || null) === (cur.ev.subjectId || null);
       el.innerHTML = `<div class="h-plan" data-ev-id="${esc(cur.ev.id)}" data-ev-date="${esc(cur.date)}"><span class="h-plan-what"><span class="muted">${cur.from > t ? '곧 시작' : '지금 일정'}</span> ${dot(cur)}<b>${esc(evName(cur.ev))}</b> <span class="muted">${when(cur)}</span></span>` +
-        (doing ? '<span class="sl-tag on">하는 중</span>' : `<button class="btn primary sm" type="button" data-ev-start>${ic('play')}시작</button>`) + '</div>';
+        (doing ? '<span class="sl-tag on">하는 중</span>' : `<button class="btn primary sm" type="button" data-ev-start data-feature="timer">${ic('play')}시작</button>`) + '</div>';
     } else if (next) {
       el.innerHTML = `<div class="h-plan"><span class="h-plan-what"><span class="muted">다음 일정</span> ${dot(next)}<b>${esc(evName(next.ev))}</b> <span class="muted">${when(next)}</span></span><a href="#timetable" data-go="timetable" class="small">일정 보기</a></div>`;
     } else {
@@ -188,7 +188,7 @@
       else if (o.status === 'done') st = `<span class="ev-st done">✓ ${fm(o.got)}</span>`;
       else if (o.status === 'part') st = `<span class="ev-st">${fm(o.got)} / ${fm(o.minutes)}</span>`;
       else if (o.status === 'missed') st = '<button class="btn sm" type="button" data-ev-done>계획대로 했어요</button>';
-      else if (o.status === 'now' || (key === tk && o.from - t < 3 * 3600000)) st = `<button class="btn ${o.status === 'now' ? 'primary ' : ''}sm" type="button" data-ev-start>${ic('play')}시작</button>`;
+      else if (o.status === 'now' || (key === tk && o.from - t < 3 * 3600000)) st = `<button class="btn ${o.status === 'now' ? 'primary ' : ''}sm" type="button" data-ev-start data-feature="timer">${ic('play')}시작</button>`;
       else st = '<span class="ev-st muted">예정</span>';
       return `<li class="ev-row${ev.kind === 'other' ? ' other' : ''}${o.status === 'now' ? ' now' : ''}" data-ev-id="${esc(ev.id)}" data-ev-date="${esc(o.date)}">` +
         `<button type="button" class="ev-main" data-ev-edit aria-label="${esc(evName(ev))} ${hm(o.from)} 일정 고치기"><span class="ev-when">${hm(o.from)} ~ ${hm(o.to)}</span>` +

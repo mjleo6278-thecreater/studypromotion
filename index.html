@@ -15,6 +15,8 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="fonts/pretendard/pretendard.css">
   <link rel="stylesheet" href="styles.css">
+  <!-- 탭 순서·꺼 둔 탭: 첫 화면이 그려지기 전에 맞춘다 (js/features.js가 남긴 사본. 기본 배치면 없음) -->
+  <script>try{var L=JSON.parse(localStorage.getItem('studypromotion.tabbar')||'null'),k=/^[a-z0-9-]+$/,c='';if(L&&L.o&&L.o.forEach){L.o.forEach(function(v,i){if(k.test(v))c+='.tab[data-view="'+v+'"]{order:'+i+'}'});(L.x||[]).forEach(function(v){if(k.test(v))c+='.tab[data-view="'+v+'"]{display:none}'});var e=document.createElement('style');e.id='tabbar-pre';e.textContent=c;document.head.appendChild(e)}}catch(e){}</script>
   <script>try{var d=document.documentElement,t=localStorage.getItem('studypromotion.theme'),a=localStorage.getItem('studypromotion.accent');if(t==='light'||t==='dark')d.setAttribute('data-theme',t);if(a==='pink')d.setAttribute('data-accent',a);if(localStorage.getItem('studypromotion.skin')==='pink'){d.setAttribute('data-skin','pink');var m=document.querySelector('meta[name=theme-color]');if(m)m.content='#ff5c9a'}}catch(e){}</script>
 </head>
 <body>
@@ -73,6 +75,8 @@
     <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5.2" y="10.6" width="13.6" height="9.6" rx="2.4"/><path d="M8.4 10.6V8.2a3.6 3.6 0 0 1 7.2 0v2.4"/></symbol>
     <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.8h10.4M9 12h10.4M9 17.2h10.4"/><path d="M4.8 6.8h.1M4.8 12h.1M4.8 17.2h.1" stroke-width="2.4"/></symbol>
     <symbol id="i-pawn" viewBox="0 0 20 20"><g fill="currentColor" stroke="none"><circle cx="10" cy="5.2" r="3"/><path d="M7.6 8.6h4.8l-.6 1.3c1.4 1.6 2.4 3.6 2.6 6H5.6c.2-2.4 1.2-4.4 2.6-6z"/><rect x="4.2" y="15.6" width="11.6" height="2.6" rx="1"/></g></symbol>
+    <symbol id="i-grip" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></g></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h8.6M17.4 7H20M4 12h2.6M11.4 12H20M4 17h10.6M19.4 17H20"/><circle cx="15" cy="7" r="2.4"/><circle cx="9" cy="12" r="2.4"/><circle cx="17" cy="17" r="2.4"/></symbol>
     <symbol id="i-stats" viewBox="0 0 24 24"><rect x="4.4" y="12.4" width="3.8" height="7.6" rx="1.2"/><rect x="10.1" y="4.2" width="3.8" height="15.8" rx="1.2"/><rect x="15.8" y="8.6" width="3.8" height="11.4" rx="1.2"/></symbol>
   </svg>
   <header class="topbar">
@@ -121,30 +125,30 @@
         </div>
         <div class="btn-row left"><a class="btn primary" href="#board" data-go="board">시험 범위 만들기</a><a class="btn" href="#about" data-go="about">사용설명서</a><button class="btn link" type="button" id="welcome-close">닫기</button></div>
       </div>
-      <div class="cards4">
+      <div class="cards4" data-home="home-sum">
         <div class="stat"><div class="stat-label">오늘 공부</div><div class="stat-value" id="h-today">0분</div>
           <div class="bar"><div class="bar-fill" id="h-goalbar"></div></div><div class="stat-sub" id="h-goal"></div><div class="stat-sub" id="h-month-pace" hidden></div>
           <button class="stat-live" id="h-sw-live" type="button" hidden></button>
-          <button class="btn primary sm stat-start" id="h-start" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>공부 시작하기</button></div>
-        <div class="stat"><div class="stat-label">남은 할 일</div><div class="stat-value" id="h-tasks">0</div><div class="stat-sub" id="h-tasks-sub"></div></div>
-        <div class="stat"><div class="stat-label">복습 대기 카드</div><div class="stat-value" id="h-due">0</div><div class="stat-sub"><a href="#review" data-go="review">복습하러 가기</a></div></div>
+          <button class="btn primary sm stat-start" id="h-start" type="button" data-feature="timer"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>공부 시작하기</button></div>
+        <div class="stat" data-feature="plan"><div class="stat-label">남은 할 일</div><div class="stat-value" id="h-tasks">0</div><div class="stat-sub" id="h-tasks-sub"></div></div>
+        <div class="stat" data-feature="review"><div class="stat-label">복습 대기 카드</div><div class="stat-value" id="h-due">0</div><div class="stat-sub"><a href="#review" data-go="review">복습하러 가기</a></div></div>
         <div class="stat"><div class="stat-label">연속 학습일</div><div class="stat-value" id="h-streak">0일</div><div class="stat-sub">하루에 조금이라도</div></div>
       </div>
-      <div class="panel tt-home" id="h-tt-panel">
+      <div class="panel tt-home" id="h-tt-panel" data-home="home-tt" data-feature="home-tt">
         <div class="panel-head"><h2>오늘 타임테이블</h2><a href="#timetable" data-go="timetable">전체 보기</a></div>
         <div id="h-tt"></div>
         <div id="h-plan"></div>
       </div>
-      <div class="panel" id="h-exams-panel">
+      <div class="panel" id="h-exams-panel" data-home="home-exams" data-feature="home-exams">
         <div class="panel-head"><h2>시험 준비</h2><a href="#board" data-go="board">시험 범위 열기</a></div>
         <div id="h-exams"></div>
       </div>
-      <div class="panel" id="h-next-panel" hidden>
+      <div class="panel" id="h-next-panel" data-home="home-next" data-feature="home-next" hidden>
         <div class="panel-head"><h2>오늘 할 범위</h2><span class="muted small" id="h-next-sub"></span></div>
         <ul class="next-list" id="h-next"></ul>
         <p class="muted small next-foot" id="h-next-foot"></p>
       </div>
-      <div class="panel">
+      <div class="panel" id="h-tasks-panel" data-home="home-tasks" data-feature="home-tasks">
         <div class="panel-head"><h2>오늘 할 일</h2><a href="#plan" data-go="plan">전체 보기</a></div>
         <ul class="task-list" id="h-tasklist"></ul>
       </div>
@@ -261,7 +265,7 @@
     <section id="view-timer" class="view">
       <div class="timer-head">
         <h1>타이머</h1>
-        <div class="seg timer-tabs" role="tablist" aria-label="타이머 종류">
+        <div class="seg timer-tabs" role="tablist" aria-label="타이머 종류" data-feature="focus stopwatch">
           <button class="seg-btn active" type="button" role="tab" id="ttab-focus" data-ttab="focus" aria-controls="timer-pane-focus" aria-selected="true">집중 타이머</button>
           <button class="seg-btn" type="button" role="tab" id="ttab-sw" data-ttab="sw" aria-controls="timer-pane-sw" aria-selected="false" tabindex="-1">스톱워치</button>
         </div>
@@ -291,7 +295,7 @@
         <p class="muted" id="timer-today"></p>
         <p class="muted small timer-key">PC에서는 스페이스 키로 시작·일시정지할 수 있어요.</p>
         <button class="btn link log-link" type="button" data-log-open>＋ 타이머 없이 공부한 시간 기록하기</button>
-        <div class="lock-setup">
+        <div class="lock-setup" data-feature="lock">
           <h3><svg class="ic" aria-hidden="true"><use href="#i-lock"/></svg>폰 잠금 모드</h3>
           <p class="muted small">정한 시간 동안 이 화면만 보이게 잠가요. 앱을 닫았다 다시 열어도 시간이 끝날 때까지 잠금 화면이 이어지고, 다른 앱으로 나간 횟수가 기록돼요.</p>
           <div class="lock-chips" id="lock-chips" role="group" aria-label="잠글 시간 고르기">
@@ -511,6 +515,7 @@
 
       <div class="panel">
         <div class="panel-head"><h2>설정</h2></div>
+        <button class="lay-entry" type="button" data-go="layout" id="lay-entry"><span class="lay-ico" aria-hidden="true"><svg><use href="#i-sliders"/></svg></span><span class="lay-text"><b>기능과 탭 편집</b><small>기능 켜기·끄기, 탭 순서 바꾸기</small></span><span class="lay-chev" aria-hidden="true">›</span></button>
         <div class="accent-field">
           <span class="accent-label">테마 색</span>
           <div class="accent-picks" id="accent-picks" role="radiogroup" aria-label="테마 색">
@@ -566,6 +571,29 @@
       </div>
 
       <a class="panel about-link" href="#about" data-go="about"><span><b>앱 소개 · 사용설명서</b><span class="muted small">이름에 담긴 뜻, 만든 사람, 잘 쓰는 법</span></span><span aria-hidden="true">›</span></a>
+    </section>
+
+    <!-- 기능과 탭 편집 (계정·설정에서 들어옴, js/layout.js) -->
+    <section id="view-layout" class="view">
+      <a class="lay-back" href="#account" data-go="account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg>계정·설정</a>
+      <h1>기능과 탭 편집</h1>
+      <p class="tagline muted">꺼 둔 기능은 화면에서 사라져요. 기록은 지워지지 않고, 다시 켜면 그대로 돌아와요.</p>
+      <div class="panel lay-panel">
+        <div class="panel-head"><h2 id="lay-tabs-h">탭</h2><span class="lay-hint">꾹 눌러 끌면 순서가 바뀌어요</span></div>
+        <ul class="lay-list" id="lay-tabs" data-kind="tabs" aria-labelledby="lay-tabs-h"></ul>
+      </div>
+      <div class="panel lay-panel">
+        <div class="panel-head"><h2>탭 안의 기능</h2></div>
+        <div id="lay-subs"></div>
+        <p class="lay-note">집중 타이머와 스톱워치 중 하나는 켜 둬야 해요. 둘 다 안 쓰면 타이머 탭을 끄세요.</p>
+      </div>
+      <div class="panel lay-panel">
+        <div class="panel-head"><h2 id="lay-home-h">홈 화면</h2><span class="lay-hint">꾹 눌러 끌면 순서가 바뀌어요</span></div>
+        <ul class="lay-list" id="lay-home" data-kind="home" aria-labelledby="lay-home-h"></ul>
+      </div>
+      <button class="btn lay-reset" type="button" id="lay-reset">처음 배치로 되돌리기</button>
+      <p class="lay-foot muted small">탭 순서와 켜고 끈 상태는 계정에 같이 저장돼서, 로그인한 폰과 PC에서 똑같이 보여요. 백업 파일에도 들어가요.</p>
+      <p class="lay-live" id="lay-live" aria-live="polite"></p>
     </section>
 
     <!-- 앱 소개 -->
@@ -669,6 +697,16 @@
           </ul>
         </details>
         <details>
+          <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-sliders"/></svg>기능과 탭 편집</summary>
+          <p>쓰지 않는 기능은 끄고, 탭과 홈 화면을 원하는 차례로 놓을 수 있어요. <a href="#layout" data-go="layout">계정·설정 › 기능과 탭 편집</a>에서 바꿔요. 바꾸면 바로 적용돼요.</p>
+          <ul>
+            <li><b>켜고 끄기</b>: 스위치를 누르면 돼요. 탭을 끄면 탭 막대와 홈 화면에서 빠지지만 그동안의 기록은 지워지지 않아서, 다시 켜면 그대로 있어요. 홈 탭과 오늘 요약은 늘 켜져 있어요.</li>
+            <li><b>타이머 안 기능</b>: 집중 타이머, 스톱워치, 폰 잠금 모드를 따로 끌 수 있어요. 둘 중 하나는 켜 둬야 해요. 스톱워치를 끄면 홈의 ‘공부 시작하기’가 집중 타이머로 시작하고, 집중 타이머를 끄면 범위의 <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼이 스톱워치로 시작해요. 오른쪽 아래 세컨드 버튼도 끌 수 있어요.</li>
+            <li><b>순서 바꾸기</b>: 줄을 꾹 누르거나 왼쪽 손잡이를 잡고 위아래로 끌어 놓아요. 탭 목록 맨 위가 탭 막대 맨 왼쪽(PC에서는 위 탭 막대 맨 앞)이에요. 홈 화면 칸도 같은 방법으로 옮기고, 스위치로 숨겨요. 범위 탭이나 계획 탭을 끄면 그 탭에 딸린 홈 칸도 함께 안 보여요.</li>
+            <li>바꾼 배치는 계정에 같이 저장돼서 로그인한 폰과 PC에서 똑같이 보이고, 백업 파일에도 들어가요. <b>처음 배치로 되돌리기</b>를 누르면 처음 모습으로 돌아가요.</li>
+          </ul>
+        </details>
+        <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-user"/></svg>계정·동기화와 백업</summary>
           <p>오른쪽 위 사람 아이콘을 눌러 구글 계정이나 이메일로 로그인하면, 폰과 PC에서 같은 기록을 자동으로 이어서 써요. 로그인하지 않으면 기록은 이 기기에만 저장되니, 가끔 <b>백업 내보내기</b>로 파일을 받아 두세요.</p>
         </details>
@@ -706,6 +744,13 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="3.6" data-date="2026년 11월 18일">
+            <ul class="news">
+              <li><b>기능과 탭 편집</b>: 계정·설정 맨 위의 ‘기능과 탭 편집’에서 쓰지 않는 기능을 끄고 탭 순서를 바꿀 수 있어요. 줄을 꾹 누르거나 왼쪽 손잡이를 잡고 끌어 놓으면 돼요. 목록 맨 위에 둔 탭이 탭 막대 맨 왼쪽에 와요</li>
+              <li><b>홈 화면도 원하는 차례로</b>: 오늘 타임테이블, 시험 준비, 오늘 할 범위, 오늘 할 일 칸의 순서를 바꾸고, 필요 없는 칸은 숨길 수 있어요</li>
+              <li><b>꺼도 기록은 그대로</b>: 탭을 꺼도 그동안의 기록은 지워지지 않아서 다시 켜면 그대로 있어요. 타이머 안의 집중 타이머·스톱워치·폰 잠금 모드와 세컨드 버튼도 따로 끌 수 있어요. 바꾼 배치는 계정에 같이 저장돼서 폰과 PC에서 똑같이 보여요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="3.5.1" data-date="2026년 11월 18일">
             <ul class="news">
               <li><b>끝내면 공부 시간에</b>: 예상 시간을 적은 할 일이나 소요시간을 적은 범위 항목을 끝냈다고 체크하면, 그 시간이 오늘 공부 시간에 들어가요. 체크를 풀면 오늘 넣은 만큼 다시 빠지고, 알림의 ‘시간 빼기’로 시간만 뺄 수도 있어요. 타이머나 스톱워치로 이미 잰 것은 두 번 넣지 않아요</li>
@@ -1070,11 +1115,13 @@
   <script src="js/stats.js"></script>
   <script src="js/schedule.js"></script>
   <script src="js/store.js"></script>
+  <script src="js/features.js"></script>
   <script src="js/scope.js"></script>
   <script src="js/share.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/cardlink.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/layout.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/egg.js"></script>
   <script src="js/board.js"></script>

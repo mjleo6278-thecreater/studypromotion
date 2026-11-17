@@ -279,6 +279,13 @@
       try { data = await read(hash); } catch (e) { done(); root.App.toast(e.message); return; }
       if (!data.cards.length) { done(); root.App.toast('링크에서 카드를 찾지 못했어요. 링크를 다시 받아 주세요.'); return; }
       if (root.AI && root.AI.close) root.AI.close();
+      // 복습을 꺼 두었으면 켤지 먼저 묻는다 (켜지 않으면 가져오지 않는다)
+      const F = root.Features;
+      if (F && !F.on('review')) {
+        const yes = await root.App.ask(`링크에 카드 ${data.cards.length}장이 있어요.\n복습이 꺼져 있는데, 켜고 가져올까요?`, { ok: '복습 켜고 가져오기', cancel: '가져오지 않기' });
+        if (!yes) { done(); return; }
+        F.set('review', true);
+      }
       root.App.go('review');
       const choice = await confirmSheet(data);
       done();
