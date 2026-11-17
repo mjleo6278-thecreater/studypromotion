@@ -2092,3 +2092,19 @@ html.vt-full::view-transition-new(sp-bar) { animation: vt-fade-in .2s ease-out .
 .ui-cardlink .cl-foot .btn { flex: 1; min-height: 46px; }
 .ui-cardlink .cl-foot .btn:disabled { opacity: .5; }
 @media (max-height: 520px) { .ui-cardlink .cl-list { max-height: none; overflow: visible; } }
+
+/* ===== 꾹 눌러 끌어서 순서 바꾸기 (v3.5.1, js/board.js beginRowDrag) ===== */
+/* 꾹 누를 때 휴대폰이 글자를 고르거나 복사 메뉴를 띄우지 않게 (입력칸은 그대로) */
+.list-mode .brow, .list-mode .bcard-head, .board-cards .brow { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.brow input, .bcard-head input { -webkit-user-select: text; user-select: text; }
+.drag-on .bitem, .list-mode .drag-on > .bcard { transition: transform .16s ease; }
+.drag-on .drag-lift { transition: none; position: relative; z-index: 6; }
+.bitem.drag-lift { background: var(--card); border-radius: 10px; box-shadow: 0 0 0 1.5px var(--accent), 0 10px 26px rgba(0,0,0,.18); }
+.bitem.drag-lift > .brow { background: var(--card); }
+.list-mode .bcard.drag-lift { box-shadow: 0 0 0 1.5px var(--accent), 0 14px 34px rgba(0,0,0,.2); }
+html.row-dragging, html.row-dragging * { cursor: grabbing !important; }
+@keyframes drag-drop { from { background: var(--accent-soft); } to { background: transparent; } }
+.bitem.drag-drop > .brow { animation: drag-drop .7s ease-out; }
+.list-mode .bcard.drag-drop > .bcard-head { animation: drag-drop .7s ease-out; border-radius: 10px 10px 0 0; }
+.pop-menu .pm-tip { margin: 4px 10px 4px; width: 0; min-width: calc(100% - 20px); font-size: 12px; line-height: 1.45; color: var(--muted); word-break: keep-all; }
+@media (prefers-reduced-motion: reduce) { .drag-on .bitem, .list-mode .drag-on > .bcard { transition: none; } .bitem.drag-drop > .brow, .list-mode .bcard.drag-drop > .bcard-head { animation: none; } }

@@ -235,7 +235,85 @@
     return { hours, start, end, timed: Math.round(timed), untimed };
   }
 
-  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, sessionSpan, dayKey, dateKey, dayOffset, setDayStart, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes, josa };
+  /* ---------- 끝낸 할 일·범위의 소요 시간을 공부 기록으로 (v3.5.1) ----------
+   *  할 일의 예상 시간이나 범위 항목의 소요시간을 적어 두고 끝냈다고 누르면, 그 시간을 오늘 공부 기록으로 남긴다.
+   *  기록: { id, kind: 'done', manual: true, doneOf: 'task:<id>'|'topic:<id>', subjectId, minutes, endedAt, label, taskId?, topicId? }
+   *   - manual이라 시각 없는 기록이다(타임테이블 '시각 없음', 집중 횟수에 안 셈).
+   *   - 타이머·스톱워치로 이미 잰 항목(같은 할 일·범위로 남은 기록이 있음)은 두 번 넣지 않는다.
+   *     범위에서 '오늘 할 일로 보내기'로 만든 할 일은 그 범위와 한 몸으로 본다(둘 다 체크해도 한 번만).
+   *   - 끝냄을 취소하면 오늘 넣은 것만 뺀다. 지난날 넣은 기록은 그날 실제로 공부한 것이라 남긴다.
+   */
+  const DONE_MAX = 24 * 60; // 한 번에 넣는 최대(분): 직접 기록과 같게 하루치
+  const doneMinutes = (v) => Math.min(DONE_MAX, Math.max(0, Math.round(+v || 0)));
+  function doneCounted(sessions, o) {
+    return sessions.some((s) => (s.taskId && o.taskIds.includes(s.taskId)) || (s.topicId && o.topicIds.includes(s.topicId)));
+  }
+  function taskDoneInfo(state, t) {
+    return { key: 'task:' + t.id, minutes: doneMinutes(t.estimateMin), subjectId: t.subjectId || null, label: t.title || null,
+      taskId: t.id, topicId: t.topicId || null, taskIds: [t.id], topicIds: t.topicId ? [t.topicId] : [] };
+  }
+  function topicDoneInfo(state, n) {
+    const by = new Map(state.topics.map((x) => [x.id, x]));
+    let card = n;
+    while (card.parentId && by.get(card.parentId)) card = by.get(card.parentId);
+    const subj = (state.subjects || []).find((x) => x.name === card.title);
+    return { key: 'topic:' + n.id, minutes: doneMinutes(n.est), subjectId: subj ? subj.id : null, label: card.id === n.id ? n.title : `${card.title} · ${n.title}`,
+      taskId: null, topicId: n.id, taskIds: (state.tasks || []).filter((t) => t.topicId === n.id).map((t) => t.id), topicIds: [n.id] };
+  }
+  function pushDone(state, o, now, id) {
+    if (!(o.minutes >= 1) || doneCounted(state.sessions, o)) return null;
+    const s = { id, kind: 'done', manual: true, doneOf: o.key, subjectId: o.subjectId, minutes: o.minutes, endedAt: now, label: o.label };
+    if (o.taskId) s.taskId = o.taskId;
+    if (o.topicId) s.topicId = o.topicId;
+    state.sessions.push(s);
+    return s;
+  }
+  // 끝낸 할 일 하나: 넣을 시간이 있으면 기록을 더하고 그 기록을 돌려준다 (없으면 null)
+  function creditTask(state, t, now, id) {
+    return t && t.done ? pushDone(state, taskDoneInfo(state, t), now, id) : null;
+  }
+  // 끝내면 몇 분이 들어갈지 (미리 보기용, 0이면 안 들어감)
+  function taskCreditMinutes(state, t) {
+    const o = taskDoneInfo(state, t);
+    return o.minutes >= 1 && !doneCounted(state.sessions, o) ? o.minutes : 0;
+  }
+  // 범위 잎 항목 하나 (하위 항목이 있는 항목·메모는 넣지 않는다)
+  function creditTopic(state, n, now, id) {
+    if (!n || !n.done || n.kind === 'note' || state.topics.some((x) => x.parentId === n.id)) return null;
+    return pushDone(state, topicDoneInfo(state, n), now, id);
+  }
+  // 끝냄을 취소: 그 항목으로 오늘 넣은 기록을 뺀다. 뺀 분을 돌려준다
+  function uncreditDone(state, key, now) {
+    const today = dayKey(now);
+    let min = 0;
+    state.sessions = state.sessions.filter((s) => {
+      const hit = s.doneOf === key && dayKey(s.endedAt) === today;
+      if (hit) min += s.minutes;
+      return !hit;
+    });
+    return min;
+  }
+  function doneTopicIds(state) {
+    return new Set(state.topics.filter((n) => n.done && n.kind !== 'note').map((n) => n.id));
+  }
+  // 범위 체크가 바뀐 뒤(before = 바꾸기 전 doneTopicIds): 새로 끝낸 항목은 넣고, 체크를 푼 항목은 오늘 넣은 것을 뺀다.
+  // 지운 항목은 빼지 않는다(공부한 것은 그대로). 반환 { added: 분, removed: 분, ids: 새 기록 id들 }
+  function syncTopicCredits(state, before, now, uid) {
+    const after = doneTopicIds(state);
+    const out = { added: 0, removed: 0, ids: [] };
+    for (const n of state.topics.slice()) {
+      if (!after.has(n.id) || before.has(n.id)) continue;
+      const s = creditTopic(state, n, now, uid());
+      if (s) { out.added += s.minutes; out.ids.push(s.id); }
+    }
+    before.forEach((id) => {
+      if (!after.has(id) && state.topics.some((n) => n.id === id)) out.removed += uncreditDone(state, 'topic:' + id, now);
+    });
+    return out;
+  }
+
+  const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, sessionSpan, dayKey, dateKey, dayOffset, setDayStart, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes, josa,
+    creditTask, taskCreditMinutes, creditTopic, uncreditDone, doneTopicIds, syncTopicCredits };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;
 })(typeof window !== 'undefined' ? window : globalThis);

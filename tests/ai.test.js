@@ -303,6 +303,19 @@ test('적용하면 기록이 바뀌고, 되돌리면 처음과 똑같아진다',
   assert.strictEqual(AI.undoOps(st, inv) > 0, true);
   assert.strictEqual(JSON.stringify(st), before);
 });
+test('할 일을 완료로 표시하면 예상 시간이 공부 기록에 들어가고, 되돌리면 빠진다', () => {
+  const { st, res } = check([{ type: 'complete_task', task: 't2' }]);
+  st.tasks.find((t) => t.id === 'k2').estimateMin = 45;
+  const again = check([{ type: 'complete_task', task: 't2' }], st).res;
+  assert.strictEqual(again.ops[0].sub, '공부 시간 +45분'); // 확인 창에 미리 보여 준다
+  assert.strictEqual(res.ops[0].sub, ''); // 예상 시간이 없으면 안 적음
+  const before = JSON.stringify(st);
+  const inv = AI.applyOps(st, again.ops, env());
+  const rec = st.sessions.find((x) => x.doneOf === 'task:k2');
+  assert.deepStrictEqual([rec.minutes, rec.kind, rec.manual, rec.subjectId, rec.taskId], [45, 'done', true, 's-kor', 'k2']);
+  assert.ok(AI.undoOps(st, inv) > 0);
+  assert.strictEqual(JSON.stringify(st), before);
+});
 test('되돌릴 때 그사이 직접 고친 것은 건드리지 않는다', () => {
   const { st, res } = check([{ type: 'move_task', task: 't1', due: '2026-11-15' }, { type: 'set_goal', dailyMinutes: 180 }, { type: 'add_subject', name: '스페인어' }]);
   const inv = AI.applyOps(st, res.ops, env());

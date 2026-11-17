@@ -130,6 +130,13 @@
   function mutate(fn, undoable) {
     store.update(fn, { undoable: undoable !== false });
   }
+  // 체크가 바뀌는 변경: 소요시간을 적어 둔 항목을 끝내면 그 시간을 오늘 공부 기록에 넣고,
+  // 체크를 풀면 오늘 넣은 것을 뺀다 (stats.js syncTopicCredits). 반환 { added, removed, ids }
+  function mutateDone(fn, undoable) {
+    let got = null;
+    mutate((s) => { const before = Stats.doneTopicIds(s); fn(s); got = Stats.syncTopicCredits(s, before, Date.now(), uid); }, undoable);
+    return got;
+  }
 
   /* ---------- 보기(이동·확대) ---------- */
   function applyView() {
@@ -461,6 +468,7 @@
   }
 
   function render() {
+    if (rowDrag) { dragDirty = true; return; } // 줄을 들고 옮기는 중에는 다 놓은 뒤에 그린다
     if (renderingNow) return;
     renderingNow = true;
     try {
@@ -655,8 +663,8 @@
     if (chk) {
       const id = chk.dataset.check;
       let nowDone = false;
-      mutate((s) => { nowDone = Scope.toggle(s.topics, id); });
-      celebrate(id, nowDone);
+      const got = mutateDone((s) => { nowDone = Scope.toggle(s.topics, id); });
+      celebrate(id, nowDone, got);
       return;
     }
     const tm = e.target.closest('[data-time]');
@@ -816,7 +824,7 @@
     const { est, pct } = timeVals();
     closeTime();
     let nowDone = false;
-    mutate((s) => {
+    const got = mutateDone((s) => {
       const n = s.topics.find((t) => t.id === id);
       if (!n) return;
       const ex = s.exams.find((x) => x.id === n.examId);
@@ -828,20 +836,37 @@
       const was = Scope.leafPct(n);
       Scope.setLeafProgress(n, pct);
       nowDone = was < 100 && pct >= 100;
+      // 끝낸 채로 소요시간만 고치면, 오늘 넣은 기록도 새 시간으로 맞춘다
+      if (was >= 100 && n.done) {
+        const today = Stats.dayKey(Date.now());
+        const c = s.sessions.find((q) => q.doneOf === 'topic:' + id && Stats.dayKey(q.endedAt) === today);
+        if (c && est >= 1) c.minutes = Math.min(24 * 60, est);
+        else if (c) Stats.uncreditDone(s, 'topic:' + id, Date.now());
+      }
     });
-    celebrate(id, nowDone);
+    celebrate(id, nowDone, got);
   });
 
-  function celebrate(id, nowDone) {
-    if (!nowDone) return;
-    const n = byId(id);
-    if (!n) return;
-    let card = n;
-    while (card.parentId) card = byId(card.parentId);
-    const cp = Scope.progress(st().topics, card.id);
-    const ep = Scope.examProgress(st().topics, examId);
-    if (ep.total && ep.done === ep.total) toast(`체크메이트! ${exam().name} 범위를 모두 끝냈어요 ♛`);
-    else if (cp.state === 'all') toast(`'${card.title}' 승급 ♛ 남은 항목 ${ep.total - ep.done}개`);
+  // 체크한 뒤 알림: 과목·시험을 다 끝냈으면 축하, 공부 시간에 넣거나 뺐으면 그 시간 (got: mutateDone 결과)
+  function celebrate(id, nowDone, got) {
+    let cheer = '';
+    const n = nowDone ? byId(id) : null;
+    if (n) {
+      let card = n;
+      while (card.parentId) card = byId(card.parentId);
+      const cp = Scope.progress(st().topics, card.id);
+      const ep = Scope.examProgress(st().topics, examId);
+      if (ep.total && ep.done === ep.total) cheer = `체크메이트! ${exam().name} 범위를 모두 끝냈어요 ♛`;
+      else if (cp.state === 'all') cheer = `'${card.title}' 승급 ♛ 남은 항목 ${ep.total - ep.done}개`;
+    }
+    creditToast(got, cheer);
+  }
+  function creditToast(got, cheer) {
+    if (got && got.added) {
+      const ids = got.ids.slice();
+      toast(cheer ? `${cheer} · 공부 시간 +${fm(got.added)}` : `끝! 공부 시간에 ${fm(got.added)}을 넣었어요`, { action: '시간 빼기', onAction: () => A.dropCredit(ids) });
+    } else if (got && got.removed) toast(cheer || `체크를 풀어서 공부 시간에서 ${fm(got.removed)}을 뺐어요`);
+    else if (cheer) toast(cheer);
   }
 
   function openAdd(parentId) {
@@ -1121,11 +1146,13 @@
       const prev = i > 0 ? sib[i - 1] : null;
       const parent = n.parentId ? byId(n.parentId) : null;
       html = mHead('옮기기') + mItem('up', '위로', { disabled: i <= 0 }) + mItem('down', '아래로', { disabled: i < 0 || i >= sib.length - 1 });
+      const tip = isCard ? '과목 이름 줄을 꾹 눌러 끌어도 옮겨져요' : '줄을 꾹 눌러 위아래로 끌어도 옮겨져요';
       if (!isCard) {
         html += mItem('indent', '한 단계 안으로', { hint: prev ? `‘${clip(prev.title)}’ 아래로` : '', disabled: !prev });
         html += mItem('outdent', '한 단계 밖으로', { hint: parent && parent.parentId ? `‘${clip(parent.title)}’ 다음으로` : '', disabled: !(parent && parent.parentId) });
         html += mItem('move-to', '다른 곳으로…');
       }
+      if (sib.length > 1) html += `<p class="pm-tip">${tip}</p>`;
     } else {
       const p = Scope.progress(st().topics, id, index);
       html += mItem('add', isCard ? '공부할 내용 추가' : '하위 항목 추가');
@@ -1244,7 +1271,7 @@
       const el = cardsEl.querySelector(`[data-rename="${CSS.escape(id)}"]`);
       if (el) startRename(id, el);
     } else if (act === 'uncheck-all') {
-      mutate((s) => Scope.setDone(s.topics, id, false));
+      creditToast(mutateDone((s) => Scope.setDone(s.topics, id, false)));
     } else if (act === 'focus') {
       let card = n;
       while (card.parentId) card = byId(card.parentId);
@@ -1358,7 +1385,7 @@
     if (act === 'uncheck-exam') {
       if (!(await ask('이 시험의 체크를 모두 해제할까요?', { ok: '모두 해제' }))) return;
       // 체크와 함께 진행률(%)도 0으로 (진행률이 100으로 남으면 모두 99%로 보인다)
-      mutate((s) => s.topics.forEach((t) => { if (t.examId === examId) { t.done = false; t.doneAt = null; t.pct = 0; } }));
+      creditToast(mutateDone((s) => s.topics.forEach((t) => { if (t.examId === examId) { t.done = false; t.doneAt = null; t.pct = 0; } })));
     }
     if (act === 'clear-ink') {
       mutate((s) => { s.strokes = s.strokes.filter((x) => x.examId !== examId); });
@@ -1445,7 +1472,12 @@
   $('#bb-undo').addEventListener('click', undo);
 
   function undo() {
-    if (store.undo()) toast('되돌렸어요');
+    const before = Stats.doneTopicIds(st());
+    if (!store.undo()) return;
+    // 되돌리기는 범위만 되돌리고 공부 기록은 그대로 두므로, 끝냄이 되돌아간 항목의 공부 시간은 여기서 맞춘다
+    let got = null;
+    store.update((s) => { got = Stats.syncTopicCredits(s, before, Date.now(), uid); });
+    toast(got.removed ? `되돌렸어요 · 공부 시간에서 ${fm(got.removed)}을 뺐어요` : got.added ? `되돌렸어요 · 공부 시간 +${fm(got.added)}` : '되돌렸어요');
   }
 
   // 아래 도구 띠: 선택·펜·형광펜·지우개, 붙임쪽지·글 상자, 되돌리기. 펜 색은 펜·형광펜을 고르면 띠 위에 뜬다
@@ -1714,6 +1746,156 @@
     toast(`카드 ${added.length}개, 항목 ${Scope.countOutline(tree)}개를 추가했어요`);
   });
 
+  /* ---------- 꾹 눌러 끌어서 순서 바꾸기 (v3.5.1) ----------
+   *  목록: 항목 줄(제목 쪽)이나 과목 이름 줄을 꾹 누르면(0.4초) 줄이 들리고, 손가락·마우스를 따라 위아래로 움직여 놓은 자리로 순서가 바뀐다.
+   *   같은 단계(같은 과목·같은 상위 항목) 안에서만 옮긴다. 다른 곳으로는 지금처럼 ⋯ › 옮기기. 위로·아래로 버튼도 그대로.
+   *  보드: 카드 안 항목 줄을 꾹 누르면 같은 방법으로 (카드는 머리를 끌어 옮기던 그대로).
+   *  누르는 사이 손가락이 움직이면 그냥 스크롤(보드는 화면 이동)로 본다. 들고 있을 때 화면 위·아래 끝에 가까이 가면 목록이 저절로 스크롤된다.
+   */
+  const HOLD_MS = 400;
+  let hold = null;       // 목록에서 꾹 누르는 중 { el, x, y, sx, sy, pid, timer }
+  let rowDrag = null;    // 줄을 들고 옮기는 중
+  let dragDirty = false; // 옮기는 동안 미룬 다시 그리기
+  let eatClickUntil = 0; // 놓은 뒤 바로 따라오는 click은 무시 (놓은 자리의 버튼이 눌리지 않게)
+
+  // 끌 수 있는 줄: 항목 줄, 목록 보기의 과목 이름 줄 (버튼·입력칸을 누른 것은 빼고)
+  function dragTarget(t) {
+    if (!t || !t.closest || !examId || isInteractive(t) || t.closest('.brename, .note')) return null;
+    const row = t.closest('.brow');
+    if (row && cardsEl.contains(row)) return row.closest('.bitem');
+    const head = mode === 'list' && t.closest('.bcard-head');
+    return head && cardsEl.contains(head) ? head.closest('.bcard') : null;
+  }
+  function dragSiblings(el) {
+    return el.classList.contains('bitem') ? [...el.parentElement.children].filter((x) => x.classList.contains('bitem'))
+      : [...cardsEl.children].filter((x) => x.matches('.bcard:not(.note)'));
+  }
+  const dragScroller = () => (mode === 'list' ? vp : null);
+
+  function beginRowDrag(el, y) {
+    const sibs = dragSiblings(el);
+    const i0 = sibs.indexOf(el);
+    if (i0 < 0 || sibs.length < 2) return false; // 옮길 자리가 없다
+    const rects = sibs.map((x) => x.getBoundingClientRect());
+    const r = rects[i0];
+    const scale = el.offsetHeight ? r.height / el.offsetHeight : 1; // 보드는 확대 배율만큼
+    const near = rects[i0 + 1] ? rects[i0 + 1].top - r.bottom : rects[i0 - 1] ? r.top - rects[i0 - 1].bottom : 0;
+    const sc = dragScroller();
+    rowDrag = { el, id: el.dataset.id, sibs, rects, i0, idx: i0, y0: y, y, s0: sc ? sc.scrollTop : 0, scale, shift: (r.height + Math.max(0, near)) / scale, raf: 0, pid: null };
+    if (!menu.hidden) closeMenu();
+    el.classList.add('drag-lift');
+    cardsEl.classList.add('drag-on');
+    document.documentElement.classList.add('row-dragging');
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) { /* 무시 */ }
+    const step = () => {
+      if (!rowDrag) return;
+      const box = dragScroller();
+      if (box) {
+        const vr = box.getBoundingClientRect();
+        const top = Math.max(vr.top, 0), bottom = Math.min(vr.bottom, window.visualViewport ? window.visualViewport.height : innerHeight);
+        const edge = Math.min(72, (bottom - top) / 5);
+        const yy = rowDrag.y;
+        const v = yy < top + edge ? -(top + edge - yy) : yy > bottom - edge ? yy - (bottom - edge) : 0;
+        if (v) {
+          const before = box.scrollTop;
+          box.scrollTop += Math.max(-18, Math.min(18, Math.round(v / 3)));
+          if (box.scrollTop !== before) moveRowDrag(yy);
+        }
+      }
+      rowDrag.raf = requestAnimationFrame(step);
+    };
+    rowDrag.raf = requestAnimationFrame(step);
+    return true;
+  }
+
+  function moveRowDrag(y) {
+    const d = rowDrag;
+    if (!d) return;
+    d.y = y;
+    const sc = dragScroller();
+    const dy = y - d.y0 + (sc ? sc.scrollTop - d.s0 : 0); // 처음 자리에서 움직인 거리(화면 px)
+    d.el.style.transform = `translateY(${dy / d.scale}px)`;
+    // 위로 끌면 들고 있는 줄의 윗변이 위 줄의 가운데를 넘을 때, 아래로 끌면 아랫변이 아래 줄의 가운데를 넘을 때 자리를 바꾼다
+    const r = d.rects[d.i0], top = r.top + dy, bottom = r.bottom + dy;
+    let idx = d.i0;
+    for (let j = d.i0 - 1; j >= 0 && top < d.rects[j].top + d.rects[j].height / 2; j--) idx = j;
+    for (let j = d.i0 + 1; j < d.rects.length && bottom > d.rects[j].top + d.rects[j].height / 2; j++) idx = j;
+    if (idx === d.idx) return;
+    d.idx = idx;
+    d.sibs.forEach((x, j) => {
+      if (j === d.i0) return;
+      const off = j < d.i0 && j >= idx ? d.shift : j > d.i0 && j <= idx ? -d.shift : 0;
+      x.style.transform = off ? `translateY(${off}px)` : '';
+    });
+  }
+
+  function endRowDrag(commit) {
+    const d = rowDrag;
+    if (!d) return;
+    rowDrag = null;
+    cancelAnimationFrame(d.raf);
+    eatClickUntil = Date.now() + 400;
+    d.sibs.forEach((x) => { x.style.transform = ''; });
+    d.el.classList.remove('drag-lift');
+    cardsEl.classList.remove('drag-on');
+    document.documentElement.classList.remove('row-dragging');
+    const n = byId(d.id);
+    if (!commit || d.idx === d.i0 || !n) { if (dragDirty) { dragDirty = false; render(); } return; }
+    dragDirty = false;
+    // 보이는 줄 순서로 놓을 자리를 정하고, 안 보이는 줄(‘남은 것만’에서 숨긴 것)은 그 앞뒤 그대로 둔다
+    const shown = d.sibs.map((x) => x.dataset.id).filter((x) => x !== d.id);
+    mutate((s) => {
+      const me = s.topics.find((x) => x.id === d.id);
+      if (!me) return;
+      const all = Scope.childrenOf(s.topics, me.parentId, examId).filter((x) => x.kind !== 'note' && x.id !== d.id);
+      let at = d.idx < shown.length ? all.findIndex((x) => x.id === shown[d.idx]) : all.findIndex((x) => x.id === shown[shown.length - 1]) + 1;
+      if (at < 0) at = all.length;
+      all.splice(at, 0, me);
+      all.forEach((x, i) => { x.order = i; });
+    });
+    if (mode === 'board') settleAll = true;
+    const row = cardsEl.querySelector(`[data-id="${CSS.escape(d.id)}"]`);
+    if (row) { row.classList.remove('drag-drop'); void row.offsetWidth; row.classList.add('drag-drop'); }
+  }
+
+  // 목록 보기: 꾹 누르기를 알아본다 (보드는 아래 포인터 처리에서)
+  function cancelHold() { if (hold) { clearTimeout(hold.timer); hold = null; } }
+  cardsEl.addEventListener('pointerdown', (e) => {
+    if (mode !== 'list' || rowDrag || hold || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const el = dragTarget(e.target);
+    if (!el) return;
+    const h = { el, sx: e.clientX, sy: e.clientY, y: e.clientY, pid: e.pointerId };
+    h.timer = setTimeout(() => {
+      if (hold !== h) return;
+      hold = null;
+      if (!h.el.isConnected || !beginRowDrag(h.el, h.y)) return;
+      rowDrag.pid = h.pid;
+      try { cardsEl.setPointerCapture(h.pid); } catch (err) { /* 무시 */ }
+    }, HOLD_MS);
+    hold = h;
+  });
+  cardsEl.addEventListener('pointermove', (e) => {
+    if (hold && e.pointerId === hold.pid) {
+      if (Math.hypot(e.clientX - hold.sx, e.clientY - hold.sy) > (e.pointerType === 'mouse' ? 6 : 10)) cancelHold(); // 움직였으면 스크롤
+      else hold.y = e.clientY;
+    }
+    if (rowDrag && rowDrag.pid === e.pointerId) { e.preventDefault(); moveRowDrag(e.clientY); }
+  });
+  ['pointerup', 'pointercancel'].forEach((type) => cardsEl.addEventListener(type, (e) => {
+    if (hold && e.pointerId === hold.pid) cancelHold();
+    if (rowDrag && rowDrag.pid === e.pointerId) endRowDrag(type === 'pointerup');
+  }));
+  // 들고 있는 동안에는 화면이 같이 스크롤되지 않게 (손가락으로 끄는 중)
+  cardsEl.addEventListener('touchmove', (e) => { if (rowDrag && e.cancelable) e.preventDefault(); }, { passive: false });
+  // 꾹 누르면 뜨는 휴대폰 메뉴(복사 등)·글자 선택을 막는다
+  cardsEl.addEventListener('contextmenu', (e) => { if (hold || rowDrag || Date.now() < eatClickUntil) e.preventDefault(); });
+  cardsEl.addEventListener('click', (e) => {
+    if (Date.now() < eatClickUntil) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  document.addEventListener('pointerdown', () => { if (!rowDrag) eatClickUntil = 0; }, true); // 새로 누르면 그 click은 그대로
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && rowDrag) { e.preventDefault(); endRowDrag(false); } }, true);
+  window.addEventListener('blur', () => { cancelHold(); endRowDrag(false); });
+
   /* ---------- 포인터: 이동·확대·카드 끌기·펜 ---------- */
   const pointers = new Map();
   let gesture = null;
@@ -1731,6 +1913,8 @@
     if (pointers.size === 2) {
       // 두 손가락: 확대/이동 (진행 중인 펜·끌기는 취소)
       if (gesture && gesture.type === 'ink' && gesture.el) gesture.el.remove();
+      if (gesture) clearTimeout(gesture.hold);
+      if (gesture && gesture.type === 'row') endRowDrag(false);
       const [a, b] = [...pointers.values()];
       gesture = { type: 'pinch', dist: Math.hypot(a.x - b.x, a.y - b.y), z: view.z, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, vx: view.x, vy: view.y };
       return;
@@ -1779,6 +1963,20 @@
     }
     if (isInteractive(e.target) && !panKey) return;
     gesture = { type: 'maybe-pan', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, pid: e.pointerId };
+    // 카드 안 항목 줄을 꾹 누르면: 화면 이동 대신 그 줄을 들어 순서를 바꾼다
+    const holdEl = tool === 'select' && !panKey && e.button === 0 ? dragTarget(e.target) : null;
+    if (holdEl) {
+      const g = gesture;
+      g.holdable = true;
+      g.hold = setTimeout(() => {
+        if (gesture !== g || g.type !== 'maybe-pan' || pointers.size !== 1 || !holdEl.isConnected) return;
+        const pt = pointers.get(g.pid);
+        if (!beginRowDrag(holdEl, pt ? pt.y : g.sy)) return;
+        g.type = 'row';
+        rowDrag.pid = g.pid;
+        try { vp.setPointerCapture(g.pid); } catch (err) { /* 무시 */ }
+      }, HOLD_MS);
+    }
   });
 
   vp.addEventListener('pointermove', (e) => {
@@ -1809,6 +2007,7 @@
       return;
     }
     if (gesture.type === 'erase') { eraseAt(e.clientX, e.clientY); return; }
+    if (gesture.type === 'row') { moveRowDrag(e.clientY); return; }
 
     const dx = e.clientX - gesture.sx;
     const dy = e.clientY - gesture.sy;
@@ -1821,7 +2020,8 @@
       return;
     }
     if (gesture.type === 'maybe-card' || gesture.type === 'maybe-pan') {
-      if (Math.hypot(dx, dy) < (gesture.note && e.pointerType === 'touch' ? 8 : 4)) return;
+      if (Math.hypot(dx, dy) < ((gesture.note || gesture.holdable) && e.pointerType === 'touch' ? 8 : 4)) return;
+      clearTimeout(gesture.hold); // 움직였으면 꾹 누르기가 아니라 화면 이동
       gesture.type = gesture.type === 'maybe-card' ? 'card' : 'pan';
       try { vp.setPointerCapture(gesture.pid); } catch (err) { /* 무시 */ }
       vp.classList.add('dragging');
@@ -1847,6 +2047,8 @@
     }
     gesture = null;
     vp.classList.remove('dragging');
+    clearTimeout(g.hold);
+    if (g.type === 'row') { endRowDrag(e.type === 'pointerup'); return; }
     if (g.type === 'ink') {
       if (e.type === 'pointercancel') { g.el.remove(); return; }
       const id = uid();

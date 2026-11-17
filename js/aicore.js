@@ -473,7 +473,8 @@
       const t = state.tasks.find((x) => x.id === refId(ctx, 'tasks', 't', a.task));
       if (!t) return '완료할 할 일을 찾지 못했어요';
       if (t.done) return { skip: true };
-      return { kind: 'change', line: `완료 표시: ${t.title}`, data: { id: t.id } };
+      const plus = Stats.taskCreditMinutes(state, Object.assign({}, t, { done: true }));
+      return { kind: 'change', line: `완료 표시: ${t.title}`, sub: plus ? `공부 시간 +${fm(plus)}` : '', data: { id: t.id } };
     },
     add_session(a, state, ctx, now) {
       const date = goodDate(a.date || ctx.today, ctx.today, 400, 0);
@@ -698,7 +699,11 @@
         if (t) { inv.push({ t: 'set', coll: 'tasks', id: t.id, key: 'due', now: d.due, prev: t.due || null }); t.due = d.due; }
       } else if (op.type === 'complete_task') {
         const t = state.tasks.find((x) => x.id === d.id);
-        if (t && !t.done) { inv.push({ t: 'undone', id: t.id, had: 'doneAt' in t, prev: t.doneAt }); t.done = true; t.doneAt = now; }
+        if (t && !t.done) {
+          inv.push({ t: 'undone', id: t.id, had: 'doneAt' in t, prev: t.doneAt }); t.done = true; t.doneAt = now;
+          const rec = Stats.creditTask(state, t, now, uid()); // 예상 시간을 적어 둔 할 일이면 그 시간을 공부 기록에
+          if (rec) del('sessions', rec.id);
+        }
       } else if (op.type === 'add_session') {
         const label = d.memo || '직접 기록';
         if (d.from) {

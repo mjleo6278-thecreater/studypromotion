@@ -107,7 +107,9 @@
       for (const p of parts) {
         const id = 'sw-' + Math.round(p.a); // 같은 스톱워치를 두 창에서 멈춰도 한 번만
         if (st.sessions.some((x) => x.id === id)) continue;
-        st.sessions.push({ id, subjectId: sid, minutes: Math.max(1, Math.round(p.sec / 60)), sec: p.sec, endedAt: p.last ? p.b : p.b - 1, label: meta.label || null, topicId: meta.topicId || null, kind: 'stopwatch' });
+        const rec = { id, subjectId: sid, minutes: Math.max(1, Math.round(p.sec / 60)), sec: p.sec, endedAt: p.last ? p.b : p.b - 1, label: meta.label || null, topicId: meta.topicId || null, kind: 'stopwatch' };
+        if (meta.taskId) rec.taskId = meta.taskId; // 이 할 일을 잰 기록 (끝냈다고 눌러도 예상 시간을 또 넣지 않게)
+        st.sessions.push(rec);
       }
     });
     return parts.reduce((x, p) => x + p.sec, 0);
@@ -115,7 +117,7 @@
 
   // 지금까지 잰 시간을 기록. 너무 오래 켜져 있었으면 먼저 물어봄. 기록한 초(안 하기로 했으면 -1)
   async function finishRun(end) {
-    const startAt = sw.startAt, sid = sw.subjectId, meta = { label: sw.label, topicId: sw.topicId };
+    const startAt = sw.startAt, sid = sw.subjectId, meta = { label: sw.label, topicId: sw.topicId, taskId: sw.taskId };
     const sec = Math.floor((end - startAt) / 1000);
     if (sec >= LONG_SEC) {
       busy = true;

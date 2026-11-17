@@ -190,6 +190,37 @@
     } catch (e) { /* 방문 기록을 못 쓰는 환경(파일로 열기 등)에서는 예전처럼 동작 */ }
   }
 
+  // 끝낸 할 일·범위로 넣은 공부 시간을 다시 뺀다 (알림의 '시간 빼기'). 끝낸 표시는 그대로 둔다
+  function dropCredit(ids) {
+    let min = 0;
+    store.update((st) => { st.sessions = st.sessions.filter((x) => { const hit = ids.includes(x.id); if (hit) min += x.minutes; return !hit; }); });
+    if (min) toast(`공부 시간에서 ${Stats.formatMinutes(min)}을 뺐어요`);
+  }
+
+  // 할 일 완료 표시를 바꾼다 (할 일 목록의 체크, 다른 화면에서도 이것을 부른다: App.setTaskDone).
+  // 예상 시간을 적어 둔 할 일은 끝내면 그 시간을 오늘 공부 기록에 넣고, 완료를 풀면 오늘 넣은 것을 뺀다 (stats.js creditTask).
+  // opts.quiet: 알림 없이. 반환 { added: 넣은 분, removed: 뺀 분 } (할 일이 없으면 null)
+  function setTaskDone(id, done, opts) {
+    done = !!done;
+    let added = null, removed = 0, found = false;
+    store.update((st) => {
+      const t = st.tasks.find((x) => x.id === id);
+      if (!t) return;
+      found = true;
+      if (!!t.done === done) return;
+      t.done = done; t.doneAt = done ? now() : null;
+      if (done) added = Stats.creditTask(st, t, now(), uid());
+      else removed = Stats.uncreditDone(st, 'task:' + id, now());
+    });
+    if (!found) return null;
+    if (!(opts && opts.quiet)) {
+      if (added) toast(`잘했어요! 할 일 완료 · 공부 시간 +${Stats.formatMinutes(added.minutes)}`, { action: '시간 빼기', onAction: () => dropCredit([added.id]) });
+      else if (done) toast('잘했어요! 할 일 하나 완료');
+      else if (removed) toast(`완료를 풀어서 공부 시간에서 ${Stats.formatMinutes(removed)}을 뺐어요`);
+    }
+    return { added: added ? added.minutes : 0, removed };
+  }
+
   /* ---------- 할 일 ---------- */
   let taskFilter = 'open';
 
@@ -291,11 +322,7 @@
       return;
     }
     if (e.target.classList.contains('task-check')) {
-      store.update((st) => {
-        const t = st.tasks.find((x) => x.id === id);
-        if (t) { t.done = e.target.checked; t.doneAt = t.done ? now() : null; }
-      });
-      if (e.target.checked) toast('잘했어요! 할 일 하나 완료');
+      setTaskDone(id, e.target.checked);
     } else if (e.target.closest('.task-del')) {
       const list = store.get().tasks;
       const i = list.findIndex((x) => x.id === id);
@@ -319,7 +346,12 @@
     taskDraft = null;
     store.update((st) => {
       const t = st.tasks.find((x) => x.id === id);
-      if (t) { t.title = title; t.subjectId = f.subject.value || null; t.due = f.due.value || null; t.estimateMin = est > 0 ? est : null; }
+      if (!t) return;
+      t.title = title; t.subjectId = f.subject.value || null; t.due = f.due.value || null; t.estimateMin = est > 0 ? est : null;
+      // 끝낸 할 일의 예상 시간을 고치면, 오늘 넣은 공부 기록도 새 시간·과목으로 맞춘다
+      const c = t.done ? st.sessions.find((x) => x.doneOf === 'task:' + id && Stats.dayKey(x.endedAt) === todayKey()) : null;
+      if (c && est > 0) Object.assign(c, { minutes: Math.min(24 * 60, est), subjectId: t.subjectId, label: t.title });
+      else if (c) Stats.uncreditDone(st, 'task:' + id, now());
     });
     toast('할 일을 고쳤어요');
   }
@@ -575,11 +607,17 @@
       const n = store.get().topics.find((x) => x.id === id);
       if (!n) return;
       const prev = { done: n.done, pct: n.pct, doneAt: n.doneAt };
-      store.update((s) => { Scope.setDone(s.topics, id, true); }, { undoable: true });
+      let got = null; // 소요시간을 적어 둔 항목이면 그 시간을 공부 기록에 넣는다
+      store.update((s) => { const before = Stats.doneTopicIds(s); Scope.setDone(s.topics, id, true); got = Stats.syncTopicCredits(s, before, now(), uid); }, { undoable: true });
       const ep = Scope.examProgress(store.get().topics, n.examId);
       const ex = store.get().exams.find((x) => x.id === n.examId);
-      toast(ep.total && ep.done === ep.total ? `체크메이트! ${ex ? ex.name + ' ' : ''}범위를 모두 끝냈어요 ♛` : `'${n.title}' 끝! 폰이 한 칸 전진 ♟`,
-        { action: '되돌리기', onAction: () => store.update((s) => { const x = s.topics.find((t) => t.id === id); if (x) Object.assign(x, prev); }) });
+      const plus = got && got.added ? ` · 공부 시간 +${Stats.formatMinutes(got.added)}` : '';
+      toast((ep.total && ep.done === ep.total ? `체크메이트! ${ex ? ex.name + ' ' : ''}범위를 모두 끝냈어요 ♛` : `'${n.title}' 끝! 폰이 한 칸 전진 ♟`) + plus,
+        { action: '되돌리기', onAction: () => store.update((s) => {
+          const x = s.topics.find((t) => t.id === id);
+          if (x) Object.assign(x, prev);
+          if (got && got.ids.length) s.sessions = s.sessions.filter((q) => !got.ids.includes(q.id));
+        }) });
       return;
     }
     const play = e.target.closest('[data-next-focus]');
@@ -1403,7 +1441,7 @@
       let label = s.manual && s.label === '직접 기록' ? '' : s.label;
       // 범위에서 시작한 기록은 이름이 ‘과목 · 항목’이라, 앞에 적힌 과목 이름과 겹치지 않게 뒤쪽만 보여 준다
       if (label && sub && label.startsWith(sub.name + ' · ')) label = label.slice(sub.name.length + 3);
-      return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.manual ? ' <span class="sl-tag">직접</span>' : s.kind === 'stopwatch' ? ' <span class="sl-tag">스톱워치</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>
+      return `<li><span class="sl-what">${sub ? `<i class="dot" style="background:${esc(sub.color)}"></i>${esc(sub.name)}` : '과목 없음'}${s.kind === 'done' ? ' <span class="sl-tag">완료</span>' : s.manual ? ' <span class="sl-tag">직접</span>' : s.kind === 'stopwatch' ? ' <span class="sl-tag">스톱워치</span>' : ''}${label ? ` <span class="muted">· ${esc(label)}</span>` : ''}</span>
         <span class="muted sl-when">${d.getMonth() + 1}/${d.getDate()}${!Stats.sessionSpan(s) ? '' : ` ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`} · ${Stats.formatMinutes(s.minutes)}</span>
         <button class="icon-btn" data-del-session="${esc(s.id)}" aria-label="이 기록 삭제" title="기록 삭제">${ic('x')}</button></li>`;
     }).join('') + (more > 0 ? `<li class="sl-more"><button class="btn link" type="button" data-more-sessions>이전 기록 더 보기 (${more}개)</button></li>` : '')
@@ -1461,7 +1499,7 @@
     const tl = Stats.dayTimeline(sessions, key);
     const fm = Stats.formatMinutes;
     const share = `<span class="tt-links"><button type="button" class="btn link tt-share" data-tt-open="${key}">타임테이블</button><button type="button" class="btn link tt-share" data-share-day="${key}">인증 이미지</button></span>`;
-    if (!tl.hours.length) return tl.untimed ? `<div class="tt-foot"><span class="muted small">직접 기록한 ${fm(tl.untimed)}은 공부한 시각이 없어 시간표에는 안 나와요.</span>${share}</div>` : '';
+    if (!tl.hours.length) return tl.untimed ? `<div class="tt-foot"><span class="muted small">시각 없는 기록 ${fm(tl.untimed)}(직접 기록·끝낸 할 일)은 시간표에 안 나와요.</span>${share}</div>` : '';
     const color = (sid) => { const sb = sid && subjectById(sid); return sb ? sb.color : 'var(--muted)'; };
     const from = hhmm(tl.start, key), to = hhmm(tl.end, key);
     const rows = tl.hours.map((h) => `<div class="tt-row"><span class="tt-h">${h.hour}</span><div class="tt-bar">${h.segs.map((g) =>
@@ -1791,8 +1829,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.5';
-  const APP_DATE = '2026년 11월 17일';
+  const APP_VERSION = '3.5.1';
+  const APP_DATE = '2026년 11월 18일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
@@ -2091,7 +2129,7 @@
   window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone, openDeck,
     // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
     timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null } : null),
-    openLog, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
+    openLog, dropCredit, setTaskDone, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   const fromCardLink = takeCardLink(); // 방문 기록을 깔기 전에 긴 카드 주소를 #review로 바꿔 둔다 (뒤로 가기로 다시 뜨지 않게)
