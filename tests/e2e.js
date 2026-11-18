@@ -36,7 +36,7 @@ const shotDir = process.argv[2];
   await page.click('[data-view=home]');
   assert((await page.textContent('#h-tasks')) === '1', '홈에 오늘 남은 할 일 1');
   assert((await page.locator('#h-tasklist .pl-item').count()) === 1, '홈 오늘 할 일 1개');
-  await page.click('#h-tasklist .pl-check');
+  await page.click('#h-tasklist .pl-mark');
   assert((await page.textContent('#h-tasks')) === '0' && /오늘 할 일 끝/.test(await page.textContent('#h-tasks-sub')), '완료 체크 후 0');
 
   // 타이머: 1분 집중 설정 후 시간 경과 시뮬레이션

@@ -242,3 +242,192 @@ test('플래너: 그날 공부 시간과 할 일 한 줄의 시간', () => {
   assert.strictEqual(P.taskMinutes(sessions, { id: 'k1' }), 30);
   assert.strictEqual(P.taskMinutes(sessions, { id: 'k2', topicId: 'a1' }), 15, '이은 범위로 잰 기록');
 });
+
+/* ---------- v3.10: 세모(△), 장소·시간, 옮기기, 복습 줄 ---------- */
+test('플래너 3.10: 진행 칸 빈칸 → ○ → △ → 빈칸, ○만 공부 시간에', () => {
+  const st = scopeState();
+  const t = task({ estimateMin: 30, subjectId: 'math' });
+  st.tasks.push(t);
+  assert.strictEqual(P.markOf(t), '');
+  assert.strictEqual(P.nextMark(''), 'o');
+  assert.strictEqual(P.nextMark('o'), 't');
+  assert.strictEqual(P.nextMark('t'), '');
+  let r = P.setMark(st, t.id, 'o', NOW, uid);
+  assert.strictEqual(P.markOf(t), 'o');
+  assert.strictEqual(r.added, 30);
+  assert.strictEqual(credits(st), 30);
+  r = P.setMark(st, t.id, 't', NOW, uid);
+  assert.strictEqual(P.markOf(t), 't');
+  assert.strictEqual(t.done, false);
+  assert.strictEqual(r.removed, 30, '○를 풀면 넣은 시간을 뺀다');
+  assert.strictEqual(credits(st), 0, '△는 공부 시간에 안 넣는다');
+  assert.strictEqual(r.prev, 'o');
+  r = P.setMark(st, t.id, '', NOW, uid);
+  assert.strictEqual(P.markOf(t), '');
+  assert.ok(!('part' in t));
+  assert.strictEqual(r.changed, true);
+  r = P.setMark(st, t.id, '', NOW, uid);
+  assert.strictEqual(r.changed, false);
+  // △에서 바로 끝내면 세모는 지운다
+  P.setMark(st, t.id, 't', NOW, uid);
+  P.setDone(st, t.id, true, NOW, uid);
+  assert.ok(!('part' in t));
+  assert.strictEqual(P.markOf(t), 'o');
+  assert.strictEqual(P.setMark(st, 'nope', 'o', NOW, uid), null);
+  // 요약에 세모 수
+  st.tasks.push(task({ part: true }), task({ done: true }));
+  const sum = P.daySummary(st.tasks, TODAY);
+  assert.strictEqual(sum.part, 1);
+  assert.strictEqual(sum.done, 2);
+});
+
+test('플래너 3.10: 범위와 이은 할 일을 △로 바꾸면 범위 체크도 풀린다', () => {
+  const st = scopeState();
+  const t = task({ topicId: 'a1' });
+  st.tasks.push(t);
+  P.setMark(st, t.id, 'o', NOW, uid);
+  assert.ok(st.topics.find((x) => x.id === 'a1').done);
+  P.setMark(st, t.id, 't', NOW, uid);
+  assert.ok(!st.topics.find((x) => x.id === 'a1').done);
+  assert.strictEqual(P.markOf(t), 't');
+});
+
+test('플래너 3.10: 장소·시간 목록과 고르기', () => {
+  const st = scopeState();
+  const t = task();
+  st.tasks.push(t);
+  assert.deepStrictEqual(P.slotList(st).map((x) => x.name), P.DEFAULT_SLOTS, '처음엔 기본 목록');
+  assert.ok(!('slots' in st), '보기만 해서는 적지 않는다');
+  assert.strictEqual(P.setSlot(st, t.id, 'slot3'), true);
+  assert.strictEqual(t.slotId, 'slot3');
+  assert.ok(Array.isArray(st.slots), '고르면 목록을 적어 둔다');
+  assert.strictEqual(P.slotOf(st, t).name, '독서실');
+  assert.strictEqual(P.setSlot(st, t.id, 'slot3'), false);
+  assert.strictEqual(P.setSlot(st, t.id, 'nope'), true, '없는 장소면 비운다');
+  assert.ok(!('slotId' in t));
+  const a = P.addSlot(st, '  학원   끝나고 ', uid);
+  assert.strictEqual(a.name, '학원 끝나고');
+  assert.strictEqual(P.addSlot(st, '집', uid).id, 'slot4', '같은 이름이면 있던 것');
+  assert.strictEqual(P.addSlot(st, '   ', uid), null);
+  P.setSlot(st, t.id, a.id);
+  assert.ok(P.moveSlot(st, a.id, 0));
+  assert.strictEqual(P.slotList(st)[0].id, a.id);
+  assert.ok(P.renameSlot(st, a.id, '학원 뒤'));
+  assert.strictEqual(P.slotOf(st, t).name, '학원 뒤');
+  assert.strictEqual(P.removeSlot(st, a.id), 1, '지우면 고른 할 일도 비운다');
+  assert.ok(!('slotId' in t));
+});
+
+test('플래너 3.10: 정렬 — 기본은 과목 순, 장소를 하나라도 정하면 장소 순(안 정한 일은 맨 아래)', () => {
+  const st = scopeState();
+  st.subjects = [{ id: 'math', name: '수학' }, { id: 'eng', name: '영어' }, { id: 'econ', name: '경제' }];
+  const a = task({ title: 'a', subjectId: 'econ', createdAt: 1 });
+  const b = task({ title: 'b', subjectId: 'math', createdAt: 2 });
+  const c = task({ title: 'c', subjectId: null, createdAt: 3 });
+  const d = task({ title: 'd', subjectId: 'eng', createdAt: 4 });
+  const e = task({ title: 'e', subjectId: 'math', createdAt: 5 });
+  st.tasks.push(a, b, c, d, e);
+  let r = P.dayList(st, TODAY);
+  assert.strictEqual(r.by, 'subject');
+  assert.deepStrictEqual(r.list.map((t) => t.title), ['b', 'e', 'd', 'a', 'c']);
+  P.setSlot(st, a.id, 'slot1'); // 야자1
+  P.setSlot(st, e.id, 'slot4'); // 집
+  P.setSlot(st, d.id, 'slot1');
+  r = P.dayList(st, TODAY);
+  assert.strictEqual(r.by, 'slot');
+  assert.deepStrictEqual(r.list.map((t) => t.title), ['d', 'a', 'e', 'b', 'c'], '장소 순서 → 과목 순서, 안 정한 일은 맨 아래');
+  P.moveSlot(st, 'slot4', 0);
+  assert.deepStrictEqual(P.dayList(st, TODAY).list.map((t) => t.title), ['e', 'd', 'a', 'b', 'c'], '목록 순서를 바꾸면 정렬도');
+});
+
+test('플래너 3.10: 어제 못 끝낸 일 고르기 — 고른 것만, 세모·장소·잰 시간 같이, 처음 날짜 남김', () => {
+  const st = scopeState();
+  const Y = '2026-11-16', Y2 = '2026-11-15';
+  const a = task({ title: '세모', due: Y, part: true, slotId: 'slot3' });
+  const b = task({ title: '빈칸', due: Y });
+  const c = task({ title: '끝냄', due: Y, done: true });
+  const d = task({ title: '영단어', due: Y, rep: { id: 'R', days: [0, 1, 2, 3, 4, 5, 6] } });
+  const d2 = task({ title: '영단어', due: TODAY, rep: { id: 'R', days: [0, 1, 2, 3, 4, 5, 6] } });
+  const f = task({ title: '빈칸', due: Y2 });
+  st.tasks.push(a, b, c, d, d2, f);
+  st.sessions.push({ id: 'x', minutes: 25, endedAt: NOW - 86400000, taskId: a.id });
+  const ch = P.carryChoices(st, TODAY);
+  assert.deepStrictEqual(ch.map((o) => [o.t.title, o.t.due, o.on]), [['세모', Y, true], ['빈칸', Y, true], ['영단어', Y, false], ['빈칸', Y2, false]],
+    '최근 날부터, 오늘에 같은 반복이 있거나 더 최근 날에 같은 일이 있으면 꺼 둔다');
+  const prev = P.carryOver(st, TODAY, NOW, [a.id, b.id]);
+  assert.strictEqual(prev.length, 2);
+  assert.strictEqual(a.due, TODAY);
+  assert.strictEqual(a.part, true);
+  assert.strictEqual(a.slotId, 'slot3');
+  assert.strictEqual(a.from, Y);
+  assert.strictEqual(P.taskMinutes(st.sessions, a), 25, '잰 시간도 그대로 할 일에');
+  assert.strictEqual(d.due, Y, '고르지 않은 일은 그대로');
+  assert.strictEqual(P.fromText(a, TODAY), '어제부터');
+  P.carryOver(st, TODAY, NOW, [f.id]);
+  assert.strictEqual(P.fromText(f, TODAY), '11/15부터');
+  assert.ok(P.dayTasks(st.tasks, TODAY).slice(0, 3).some((t) => t.id === f.id));
+  P.restoreMoves(st, prev);
+  assert.strictEqual(a.due, Y);
+  assert.ok(!('from' in a), '되돌리면 처음 날짜도 지운다');
+  assert.strictEqual(P.fromText(a, TODAY), '');
+});
+
+test('플래너 3.10: 미루기 — 오늘·지난 일을 뒤로 옮기면 처음 날짜, 앞날끼리 옮기거나 되돌리면 없음', () => {
+  const st = scopeState();
+  const t = task({ due: TODAY });
+  st.tasks.push(t);
+  P.moveTask(st, t.id, '2026-11-18', NOW);
+  assert.strictEqual(t.from, TODAY);
+  assert.strictEqual(P.fromText(t, TODAY), '11/17부터', '앞날 칸에서는 날짜로');
+  assert.strictEqual(P.fromText(t, '2026-11-18'), '어제부터', '그날이 오늘이 되면 어제부터');
+  P.moveTask(st, t.id, '2026-11-20', NOW);
+  assert.strictEqual(t.from, TODAY, '처음 날짜는 그대로');
+  P.moveTask(st, t.id, TODAY, NOW);
+  assert.ok(!('from' in t), '처음 날로 되돌리면 지움');
+  const u = task({ due: '2026-11-25' });
+  st.tasks.push(u);
+  P.moveTask(st, u.id, '2026-11-26', NOW);
+  assert.ok(!('from' in u), '앞날끼리 옮긴 건 미룬 일이 아님');
+  const v = task({ due: '2026-11-16' });
+  st.tasks.push(v);
+  P.moveTask(st, v.id, null, NOW);
+  assert.ok(!('from' in v), '날짜 안 정함으로 보내면 없음');
+});
+
+test('플래너 3.10: 복습 줄 — 수업 요일에만, 이름 누르면 체크, 날짜별로 남음', () => {
+  const st = scopeState();
+  const a = P.addTeacher(st, { name: ' 수탁 ', subjectId: 'math', days: [1, 2, 4, 5] }, uid);
+  const b = P.addTeacher(st, { name: '서김' }, uid);
+  const c = P.addTeacher(st, { name: '역김', subjectId: 'nope', days: [2, 4] }, uid);
+  assert.strictEqual(P.addTeacher(st, { name: '  ' }, uid), null);
+  assert.strictEqual(a.name, '수탁');
+  assert.deepStrictEqual(b.days, [1, 2, 3, 4, 5], '요일을 안 고르면 평일');
+  assert.strictEqual(c.subjectId, null, '없는 과목은 비움');
+  const WED = '2026-11-18', THU = '2026-11-19', SUN = '2026-11-22';
+  assert.deepStrictEqual(P.teachersOn(st, WED).map((t) => t.name), ['서김']);
+  assert.deepStrictEqual(P.teachersOn(st, THU).map((t) => t.name), ['수탁', '서김', '역김']);
+  assert.deepStrictEqual(P.teachersOn(st, SUN), []);
+  assert.strictEqual(P.toggleReview(st, THU, a.id), true);
+  assert.strictEqual(P.toggleReview(st, THU, c.id), true);
+  assert.deepStrictEqual(P.reviewedOn(st, THU), [a.id, c.id]);
+  assert.strictEqual(P.toggleReview(st, THU, c.id), false);
+  assert.deepStrictEqual(P.reviewedOn(st, THU), [a.id]);
+  assert.strictEqual(P.toggleReview(st, THU, 'nope'), false);
+  // 목표·메모를 지워도 복습 체크는 남는다
+  P.setNote(st, THU, { goal: '목표' });
+  P.setNote(st, THU, { goal: '' });
+  assert.deepStrictEqual(st.planner[THU], { rv: [a.id] });
+  P.toggleReview(st, THU, a.id, false);
+  assert.ok(!(THU in st.planner), '다 비면 그날 칸을 지움');
+  // 요일을 바꿔도 그날 체크한 선생님은 그날 줄에 남는다
+  P.toggleReview(st, THU, c.id, true);
+  P.editTeacher(st, c.id, { days: [1] });
+  assert.ok(P.teachersOn(st, THU).some((t) => t.id === c.id));
+  assert.ok(P.editTeacher(st, a.id, { name: '수학탁', subjectId: '' }));
+  assert.strictEqual(P.teacherList(st)[0].name, '수학탁');
+  assert.strictEqual(P.teacherList(st)[0].subjectId, null);
+  assert.ok(P.moveTeacher(st, c.id, 0));
+  assert.strictEqual(P.teacherList(st)[0].id, c.id);
+  assert.ok(P.removeTeacher(st, c.id));
+  assert.ok(!P.teachersOn(st, THU).some((t) => t.id === c.id), '지우면 안 나옴');
+});

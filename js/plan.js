@@ -4,8 +4,13 @@
  *   { id, title, subjectId, due: 'YYYY-MM-DD'|null(날짜 안 정함), estimateMin, done, doneAt, createdAt,
  *     topicId?  범위에서 넣은 할 일이면 그 범위 항목. 끝내면 범위에도 체크되고, 범위에서 체크해도 이 할 일이 끝난다
  *     rep?      { id, days: [0~6] } 반복으로 만든 할 일 묶음 (0=일, 매일이면 7개 모두). 날마다 한 줄씩 따로 저장한다
- *     pos?      그날 목록에서의 차례 (없으면 createdAt) }
- * 날짜별 목표·메모: state.planner = { 'YYYY-MM-DD': { goal, memo } }
+ *     pos?      그날 목록에서의 차례 (없으면 createdAt)
+ *     part?     true = 세모(△, 덜 끝냄). 끝내면(done) 지운다. 진행 칸은 빈칸 → ○(done) → △(part) → 빈칸 (v3.10)
+ *     slotId?   어디서·언제 할지 (state.slots의 id: 집·독서실·야자1 같은 사용자 목록). 정하지 않아도 된다 (v3.10)
+ *     from?     지난 날에서 옮겨 온 일이면 처음 날짜 ('어제부터' 꼬리표) (v3.10) }
+ * 날짜별 목표·메모·복습 체크: state.planner = { 'YYYY-MM-DD': { goal, memo, rv: [선생님 id] } }
+ * 장소·시간 목록: state.slots = [{ id, name }] (위에 있을수록 먼저. 한 번도 고치지 않았으면 기본 목록)
+ * 복습 선생님: state.teachers = [{ id, name, subjectId, days: [0~6] }] (수업 있는 요일에 복습 줄에 나온다)
  * 하루 시작 시각을 새벽으로 옮겼으면 그 전의 새벽은 전날이다 (Stats.dayKey와 같은 규칙).
  */
 (function (root) {
@@ -52,12 +57,96 @@
     .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : byOrder(a, b)));
   const estOf = (t) => (+t.estimateMin > 0 ? Math.round(+t.estimateMin) : 0);
 
-  // 그날 요약: 할 일 수, 끝낸 수, 계획(예상 시간 합)
+  // 그날 요약: 할 일 수, 끝낸 수, 세모 수, 계획(예상 시간 합)
   function daySummary(tasks, key) {
     const list = dayTasks(tasks, key);
     const done = list.filter((t) => t.done).length;
-    return { list, total: list.length, done, left: list.length - done, planMin: list.reduce((a, t) => a + estOf(t), 0) };
+    const part = list.filter((t) => !t.done && t.part).length;
+    return { list, total: list.length, done, part, left: list.length - done, planMin: list.reduce((a, t) => a + estOf(t), 0) };
   }
+
+  /* ---------- 장소·시간 (할 일 왼쪽 칸) ---------- */
+  const DEFAULT_SLOTS = ['야자1', '야자2', '독서실', '집'];
+  const SLOT_MAX = 20;
+  const cleanSlot = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 10);
+  // 장소·시간 목록 (위에 있을수록 먼저). 한 번도 고치지 않았으면 기본 목록 (id가 정해져 있어서 고를 때 그대로 적어 둔다)
+  function slotList(state) {
+    if (Array.isArray(state.slots)) return state.slots.filter((x) => x && x.id && cleanSlot(x.name));
+    return DEFAULT_SLOTS.map((name, i) => ({ id: 'slot' + (i + 1), name }));
+  }
+  function ensureSlots(state) { if (!Array.isArray(state.slots)) state.slots = slotList(state); return state.slots; }
+  const slotOf = (state, t) => (t && t.slotId ? slotList(state).find((x) => x.id === t.slotId) || null : null);
+  // 할 일의 장소를 정하거나(slotId) 비운다(''/null). 반환 바꿨나
+  function setSlot(state, id, slotId) {
+    const t = (state.tasks || []).find((x) => x && x.id === id);
+    if (!t) return false;
+    const ok = slotId && slotList(state).some((x) => x.id === slotId);
+    if (ok) { ensureSlots(state); if (t.slotId === slotId) return false; t.slotId = slotId; return true; }
+    if (!t.slotId) return false;
+    delete t.slotId;
+    return true;
+  }
+  // 새 장소·시간. 같은 이름이 있으면 그것을 돌려준다. 반환 { id, name } 또는 null
+  function addSlot(state, name, uid) {
+    const v = cleanSlot(name);
+    if (!v) return null;
+    const list = ensureSlots(state);
+    const same = list.find((x) => x.name === v);
+    if (same) return same;
+    if (list.length >= SLOT_MAX) return null;
+    const x = { id: uid(), name: v };
+    list.push(x);
+    return x;
+  }
+  function renameSlot(state, id, name) {
+    const v = cleanSlot(name);
+    const x = ensureSlots(state).find((y) => y.id === id);
+    if (!x || !v) return false;
+    x.name = v;
+    return true;
+  }
+  // 지우면 그 장소를 고른 할 일도 '정하지 않음'으로. 반환 비운 할 일 수
+  function removeSlot(state, id) {
+    const list = ensureSlots(state);
+    const i = list.findIndex((y) => y.id === id);
+    if (i < 0) return 0;
+    list.splice(i, 1);
+    let n = 0;
+    (state.tasks || []).forEach((t) => { if (t && t.slotId === id) { delete t.slotId; n++; } });
+    return n;
+  }
+  // 목록에서 자리 바꾸기 (to = 새 자리 번호)
+  function moveSlot(state, id, to) {
+    const list = ensureSlots(state);
+    const i = list.findIndex((y) => y.id === id);
+    if (i < 0) return false;
+    const j = Math.max(0, Math.min(list.length - 1, Math.round(+to || 0)));
+    if (i === j) return false;
+    list.splice(j, 0, list.splice(i, 1)[0]);
+    return true;
+  }
+
+  /* ---------- 정렬 ---------- */
+  // 그날 목록의 차례: 하나라도 장소·시간을 정했으면 장소 목록 순서(안 정한 일은 맨 아래), 아니면 과목 순서
+  // (과목 관리 순서, 과목 없는 일은 맨 아래). 같은 칸 안에서는 과목 → 적은 차례. opts.noSlot: 장소 칸을 꺼 두었으면 과목 순만.
+  // 반환 { list, by: 'slot'|'subject' }
+  function sortDay(state, list, opts) {
+    const subs = new Map((state.subjects || []).map((x, i) => [x.id, i]));
+    const slots = new Map(slotList(state).map((x, i) => [x.id, i]));
+    const BIG = 1e6;
+    const si = (t) => (t.subjectId && subs.has(t.subjectId) ? subs.get(t.subjectId) : BIG);
+    const pi = (t) => (t.slotId && slots.has(t.slotId) ? slots.get(t.slotId) : BIG);
+    const by = !(opts && opts.noSlot) && (list || []).some((t) => pi(t) < BIG) ? 'slot' : 'subject';
+    const out = (list || []).slice().sort((a, b) => (by === 'slot' ? pi(a) - pi(b) : 0) || si(a) - si(b) || byOrder(a, b));
+    return { list: out, by };
+  }
+  const dayList = (state, key, opts) => sortDay(state, dayTasks(state.tasks, key), opts);
+
+  /* ---------- 진행 표시 (오른쪽 칸) ---------- */
+  // 'o' 끝냄 / 't' 세모(덜 끝냄) / '' 아직
+  const markOf = (t) => (t && t.done ? 'o' : t && t.part ? 't' : '');
+  // 진행 칸을 누를 때마다: 빈칸 → ○ → △ → 빈칸
+  const nextMark = (m) => (m === 'o' ? 't' : m === 't' ? '' : 'o');
   // 그날 공부한 시간(기록된 것만. 지금 재는 시간은 화면에서 더한다)
   function studyMinutes(sessions, key) {
     return (sessions || []).reduce((a, s) => a + (s && s.minutes > 0 && Stats.dayKey(s.endedAt) === key ? s.minutes : 0), 0);
@@ -111,12 +200,13 @@
   /* ---------- 만들기·고치기 ---------- */
   const cleanTitle = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 120);
   const cleanEst = (v) => { const n = Math.round(+v || 0); return n > 0 ? Math.min(EST_MAX, n) : null; };
-  // 새 할 일 (반복이면 여러 개). input: { title, subjectId, due, estimateMin, topicId, rep: { days, until } }
+  // 새 할 일 (반복이면 여러 개). input: { title, subjectId, due, estimateMin, slotId, topicId, rep: { days, until } }
   // env: { uid, now }. 반환 할 일 목록 (이름이 없으면 빈 목록)
   function makeTasks(input, env) {
     const title = cleanTitle(input.title);
     if (!title) return [];
     const base = { title, subjectId: input.subjectId || null, estimateMin: cleanEst(input.estimateMin), done: false };
+    if (input.slotId) base.slotId = input.slotId;
     const due = S.isKey(input.due) ? input.due : null;
     const days = input.rep && Array.isArray(input.rep.days) ? [...new Set(input.rep.days.map(Number))].filter((d) => d >= 0 && d <= 6).sort() : [];
     if (due && days.length) {
@@ -132,7 +222,7 @@
     if (!t || !t.rep || !t.rep.id) return t ? [t] : [];
     return (tasks || []).filter((x) => x && x.rep && x.rep.id === t.rep.id && (x.id === t.id || (x.due && t.due && x.due >= t.due)));
   }
-  // 할 일 고치기. patch: { title, subjectId, due, estimateMin } (없는 칸은 그대로). all: 반복 묶음의 그날부터 앞으로 모두 (날짜는 이 할 일만)
+  // 할 일 고치기. patch: { title, subjectId, due, estimateMin, slotId } (없는 칸은 그대로). all: 반복 묶음의 그날부터 앞으로 모두 (날짜는 이 할 일만)
   // 끝낸 할 일의 예상 시간을 고치면 오늘 넣은 공부 기록도 새 시간·과목으로 맞춘다. 반환 고친 개수
   function editTask(state, id, patch, now, all) {
     const t = (state.tasks || []).find((x) => x && x.id === id);
@@ -143,6 +233,7 @@
       if ('title' in patch) { const v = cleanTitle(patch.title); if (v) x.title = v; }
       if ('subjectId' in patch) x.subjectId = patch.subjectId || null;
       if ('estimateMin' in patch) x.estimateMin = cleanEst(patch.estimateMin);
+      if ('slotId' in patch) { if (patch.slotId) x.slotId = patch.slotId; else delete x.slotId; }
       if (x.done) {
         const c = (state.sessions || []).find((s) => s.doneOf === 'task:' + x.id && Stats.dayKey(s.endedAt) === today);
         if (c && x.estimateMin) Object.assign(c, { minutes: x.estimateMin, subjectId: x.subjectId, label: x.title });
@@ -152,26 +243,71 @@
     if ('due' in patch && patch.due !== t.due) moveTask(state, id, patch.due, now);
     return list.length;
   }
+  // 옮기기 전 날짜를 남긴다: 오늘이나 지난 날의 안 끝낸 일을 뒤로 미루면 처음 날짜(from)를 적고, 그날이나 그 앞으로 되돌리면 지운다
+  function markFrom(t, key, today) {
+    if (t.done || !S.isKey(key)) { delete t.from; return; }
+    const first = t.from || t.due;
+    if (S.isKey(first) && first <= today && key > first) t.from = first;
+    else delete t.from;
+  }
   // 할 일을 다른 날로 (key 'YYYY-MM-DD', 없으면 날짜 안 정함). 옮긴 날의 맨 아래에 놓는다
   function moveTask(state, id, key, now) {
     const t = (state.tasks || []).find((x) => x && x.id === id);
     if (!t) return false;
+    markFrom(t, key, Stats.dayKey(now));
     t.due = S.isKey(key) ? key : null;
     t.pos = now;
     return true;
   }
-  // 지난 날 못 한 할 일을 모두 오늘로 (오늘 목록 맨 위에, 원래 차례대로). 반환 [{ id, due, pos }] (되돌리기용 옛 값)
-  function carryOver(state, today, now) {
-    const list = overdue(state.tasks, today);
+  // 지난 날 못 한 할 일을 오늘로 (오늘 목록 맨 위에, 원래 차례대로). ids를 주면 그 할 일만.
+  // 세모·장소·잰 시간은 할 일에 붙어 있어서 그대로 같이 가고, 처음 날짜(from)를 남긴다.
+  // 반환 [{ id, due, pos, from }] (되돌리기용 옛 값)
+  function carryOver(state, today, now, ids) {
+    const want = Array.isArray(ids) ? new Set(ids) : null;
+    const list = overdue(state.tasks, today).filter((t) => !want || want.has(t.id));
     if (!list.length) return [];
     const first = dayTasks(state.tasks, today)[0];
     const base = first ? order(first) : now;
     return list.map((t, i) => {
-      const prev = { id: t.id, due: t.due, pos: t.pos };
+      const prev = { id: t.id, due: t.due, pos: t.pos, from: t.from };
+      t.from = t.from || t.due;
       t.due = today;
       t.pos = base - (list.length - i);
       return prev;
     });
+  }
+  // 되돌리기: carryOver·moveTask 전에 찍어 둔 { id, due, pos, from }로 돌린다
+  function restoreMoves(state, prev) {
+    (prev || []).forEach((p) => {
+      const x = (state.tasks || []).find((y) => y && y.id === p.id);
+      if (!x) return;
+      x.due = p.due;
+      if (p.pos === undefined) delete x.pos; else x.pos = p.pos;
+      if (p.from === undefined) delete x.from; else x.from = p.from;
+    });
+  }
+  // 오늘로 옮길지 물어볼 지난 날 못 끝낸 일 (최근 날부터, 그날 안에서는 목록 차례).
+  // 오늘에 같은 반복 묶음이나 같은 이름·과목 할 일이 이미 있거나, 더 최근 날에 같은 일이 있으면 처음에 체크를 꺼 둔다.
+  // 반환 [{ t, on }]
+  function carryChoices(state, today) {
+    const list = overdue(state.tasks, today);
+    if (!list.length) return [];
+    const same = (t) => (t.rep && t.rep.id ? 'r:' + t.rep.id : 't:' + t.title + '|' + (t.subjectId || ''));
+    const seen = new Set(dayTasks(state.tasks, today).map(same));
+    const days = [...new Set(list.map((t) => t.due))].sort().reverse();
+    const out = [];
+    days.forEach((k) => sortDay(state, list.filter((t) => t.due === k)).list.forEach((t) => {
+      const key = same(t);
+      out.push({ t, on: !seen.has(key) });
+      seen.add(key);
+    }));
+    return out;
+  }
+  // 줄에 붙는 꼬리표: 오늘 칸의 어제 일이면 '어제부터', 아니면 '11/18부터'. 옮겨 온 일이 아니면 ''
+  function fromText(t, today) {
+    if (!t || !S.isKey(t.from) || !S.isKey(t.due) || t.from >= t.due) return '';
+    if (t.due === today && t.from === S.shiftKey(today, -1)) return '어제부터';
+    return shortDay(t.from).split(' ')[0] + '부터';
   }
 
   /* ---------- 범위와 잇기 ---------- */
@@ -198,7 +334,7 @@
       if (!t || !t.topicId || t.id === skip || !before.has(t.topicId)) return;
       const a = after.get(t.topicId), b = before.get(t.topicId);
       if (a === null || b === null || a === b) return; // 지운 범위는 건드리지 않는다
-      if (a && !t.done) { t.done = true; t.doneAt = now; out.done.push(t.id); }
+      if (a && !t.done) { t.done = true; t.doneAt = now; delete t.part; out.done.push(t.id); }
       else if (!a && t.done) { t.done = false; t.doneAt = null; out.removed += Stats.uncreditDone(state, 'task:' + t.id, now); out.undone.push(t.id); }
     });
     return out;
@@ -223,6 +359,7 @@
     const beforeDone = link ? Stats.doneTopicIds(state) : null;
     t.done = done;
     t.doneAt = done ? now : null;
+    if (done) delete t.part;
     if (done && !t.due) t.due = Stats.dayKey(now);
     if (done) {
       const timed = (state.sessions || []).some((s) => s.taskId === t.id);
@@ -242,6 +379,22 @@
       }
     }
     if (link) out.removed += syncLinked(state, before, now, t.id).removed;
+    return out;
+  }
+
+  // 진행 표시를 바꾼다. ○는 setDone(공부 시간·범위 체크)과 같고, △와 빈칸은 끝냄을 풀고(오늘 넣은 시간은 뺀다) 세모만 다르다.
+  // △는 아직 안 끝난 일로 쳐서 공부 시간을 넣지 않는다(타이머로 잰 기록은 그대로).
+  // 반환 null(그런 할 일 없음) 또는 setDone 결과 + { mark, prev }
+  function setMark(state, id, mark, now, uid) {
+    const t = (state.tasks || []).find((x) => x && x.id === id);
+    if (!t) return null;
+    mark = mark === 'o' || mark === 't' ? mark : '';
+    const prev = markOf(t);
+    const out = setDone(state, id, mark === 'o', now, uid);
+    if (mark === 't') t.part = true; else delete t.part;
+    out.mark = mark;
+    out.prev = prev;
+    out.changed = prev !== mark;
     return out;
   }
 
@@ -299,24 +452,97 @@
 
   /* ---------- 날짜별 목표·메모 ---------- */
   const noteOf = (state, key) => { const p = state.planner && state.planner[key]; return { goal: (p && p.goal) || '', memo: (p && p.memo) || '' }; };
-  // 목표·메모를 적는다. 둘 다 비면 그날 칸을 지운다
+  // 그날 칸 (없으면 만든다). 다 비면 tidyDay가 지운다
+  function dayEntry(state, key) {
+    if (!state.planner || typeof state.planner !== 'object' || Array.isArray(state.planner)) state.planner = {};
+    const cur = state.planner[key];
+    if (!cur || typeof cur !== 'object' || Array.isArray(cur)) state.planner[key] = {};
+    return state.planner[key];
+  }
+  function tidyDay(state, key) {
+    const p = state.planner && state.planner[key];
+    if (!p) return;
+    if (!p.goal) delete p.goal;
+    if (!p.memo) delete p.memo;
+    if (Array.isArray(p.rv) && !p.rv.length) delete p.rv;
+    if (!Object.keys(p).some((k) => (k === 'memo' ? String(p.memo).trim() : true))) delete state.planner[key];
+  }
+  // 목표·메모를 적는다. 그날 칸이 다 비면 지운다 (복습 체크는 그대로 둔다)
   function setNote(state, key, patch) {
     if (!S.isKey(key)) return;
-    if (!state.planner || typeof state.planner !== 'object' || Array.isArray(state.planner)) state.planner = {};
     const cur = noteOf(state, key);
-    const next = {
-      goal: 'goal' in patch ? String(patch.goal || '').replace(/\s+/g, ' ').trim().slice(0, 80) : cur.goal,
-      memo: 'memo' in patch ? String(patch.memo || '').slice(0, 2000) : cur.memo,
-    };
-    if (!next.goal && !next.memo.trim()) delete state.planner[key];
-    else state.planner[key] = next;
+    const p = dayEntry(state, key);
+    p.goal = 'goal' in patch ? String(patch.goal || '').replace(/\s+/g, ' ').trim().slice(0, 80) : cur.goal;
+    p.memo = 'memo' in patch ? String(patch.memo || '').slice(0, 2000) : cur.memo;
+    tidyDay(state, key);
+  }
+
+  /* ---------- 복습 줄 (선생님 이름, 누르면 체크) ---------- */
+  const WEEKDAYS = [1, 2, 3, 4, 5];
+  const cleanName = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 8);
+  const cleanDays = (d) => { const a = Array.isArray(d) ? [...new Set(d.map(Number))].filter((x) => x >= 0 && x <= 6).sort() : []; return a.length ? a : WEEKDAYS.slice(); };
+  const teacherList = (state) => (Array.isArray(state.teachers) ? state.teachers.filter((x) => x && x.id && cleanName(x.name)) : []);
+  const reviewedOn = (state, key) => { const p = state.planner && state.planner[key]; return Array.isArray(p && p.rv) ? p.rv : []; };
+  // 그날 복습 줄에 나올 선생님: 수업 요일이 그날인 사람 + 그날 이미 체크한 사람 (등록한 차례대로)
+  function teachersOn(state, key) {
+    if (!S.isKey(key)) return [];
+    const wd = S.weekday(key);
+    const done = new Set(reviewedOn(state, key));
+    return teacherList(state).filter((t) => done.has(t.id) || cleanDays(t.days).includes(wd));
+  }
+  // 그날 복습 체크를 바꾼다 (on을 안 주면 뒤집기). 반환 바뀐 뒤 체크했나
+  function toggleReview(state, key, id, on) {
+    if (!S.isKey(key) || !teacherList(state).some((t) => t.id === id)) return false;
+    const p = dayEntry(state, key);
+    const set = new Set(Array.isArray(p.rv) ? p.rv : []);
+    const want = on === undefined ? !set.has(id) : !!on;
+    if (want) set.add(id); else set.delete(id);
+    p.rv = [...set];
+    tidyDay(state, key);
+    return want;
+  }
+  // 선생님 등록. input: { name, subjectId, days }. 반환 새 선생님 또는 null(이름 없음)
+  function addTeacher(state, input, uid) {
+    const name = cleanName(input && input.name);
+    if (!name) return null;
+    if (!Array.isArray(state.teachers)) state.teachers = [];
+    const sid = input.subjectId && (state.subjects || []).some((x) => x.id === input.subjectId) ? input.subjectId : null;
+    const t = { id: uid(), name, subjectId: sid, days: cleanDays(input.days) };
+    state.teachers.push(t);
+    return t;
+  }
+  function editTeacher(state, id, patch) {
+    const t = teacherList(state).find((x) => x.id === id);
+    if (!t) return false;
+    if ('name' in patch) { const v = cleanName(patch.name); if (v) t.name = v; }
+    if ('subjectId' in patch) t.subjectId = patch.subjectId && (state.subjects || []).some((x) => x.id === patch.subjectId) ? patch.subjectId : null;
+    if ('days' in patch) t.days = cleanDays(patch.days);
+    return true;
+  }
+  // 지워도 지난 날 체크 기록(rv)의 id는 남는다 (화면에는 안 나온다)
+  function removeTeacher(state, id) {
+    if (!Array.isArray(state.teachers)) return false;
+    const n = state.teachers.length;
+    state.teachers = state.teachers.filter((x) => !x || x.id !== id);
+    return state.teachers.length !== n;
+  }
+  function moveTeacher(state, id, to) {
+    if (!Array.isArray(state.teachers)) return false;
+    const i = state.teachers.findIndex((x) => x && x.id === id);
+    if (i < 0) return false;
+    const j = Math.max(0, Math.min(state.teachers.length - 1, Math.round(+to || 0)));
+    if (i === j) return false;
+    state.teachers.splice(j, 0, state.teachers.splice(i, 1)[0]);
+    return true;
   }
 
   const api = {
     WD, REP_MAX, dayTitle, shortDay, relDay, nextExam, ddayText, weekKeys,
     dayTasks, undated, overdue, daySummary, studyMinutes, taskMinutes, taskColor,
-    repeatDates, repText, defaultUntil, makeTasks, seriesFrom, editTask, moveTask, carryOver,
+    repeatDates, repText, defaultUntil, makeTasks, seriesFrom, editTask, moveTask, carryOver, restoreMoves, carryChoices, fromText,
     topicComplete, linkState, syncLinked, setDone, topicTask, scopeChoices, noteOf, setNote,
+    DEFAULT_SLOTS, slotList, ensureSlots, slotOf, setSlot, addSlot, renameSlot, removeSlot, moveSlot, sortDay, dayList,
+    markOf, nextMark, setMark, teacherList, teachersOn, reviewedOn, toggleReview, addTeacher, editTeacher, removeTeacher, moveTeacher,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Plan = api;

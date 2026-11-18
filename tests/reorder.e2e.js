@@ -90,7 +90,17 @@ function seed() {
     const { ctx, page } = await open();
     await page.goto(base + '#plan');
     await page.waitForSelector('#pl-list .pl-item');
-    const chk = (id) => page.tap(`#pl-list [data-pl-id="${id}"] .pl-check`);
+    // 진행 칸: 누를 때마다 빈칸 → ○ → △ → 빈칸. want가 될 때까지 누른다
+    const chk = async (id, want) => {
+      for (let i = 0; i < 3; i++) {
+        await page.tap(`#pl-list [data-pl-id="${id}"] .pl-mark`);
+        await page.waitForTimeout(60);
+        const t = (await state(page)).tasks.find((x) => x.id === id);
+        const m = t.done ? 'o' : t.part ? 't' : '';
+        if (m === (want === undefined ? 'o' : want)) return;
+      }
+      throw new Error('진행 칸이 ' + want + '이 안 됨');
+    };
     assert(await todayMin(page) === 0, '처음엔 오늘 공부 0분');
     // 예상 시간 45분인 할 일을 끝내면 45분이 들어간다
     await chk('t1');
@@ -106,9 +116,9 @@ function seed() {
     assert((await state(page)).sessions.length === 1, '예상 시간이 없는 할 일은 기록 안 함');
     // 끝낸 할 일도 그 자리에 남아 있어서 체크를 바로 풀 수 있다. 풀면 뺀다
     assert(await page.isVisible('#pl-list [data-pl-id="t1"].done'), '끝낸 할 일은 줄을 그은 채 그 자리에');
-    await chk('t1');
+    await chk('t1', 't');
     await page.waitForTimeout(100);
-    assert(!(await state(page)).sessions.some((x) => x.doneOf === 'task:t1'), '완료를 풀면 기록에서 뺌');
+    assert(!(await state(page)).sessions.some((x) => x.doneOf === 'task:t1'), '△(덜 끝냄)로 바꾸면 기록에서 뺌');
     assert(/45분을 뺐어요/.test(await toastOf(page)), '뺀 알림: ' + (await toastOf(page)));
     // 다시 끝내고 알림의 ‘시간 빼기’ → 완료는 그대로, 시간만 뺌
     await chk('t1');
@@ -121,7 +131,7 @@ function seed() {
     // 끝낸 할 일의 예상 시간을 고치면 오늘 넣은 기록도 맞춘다
     await chk('t3');
     await page.waitForTimeout(100);
-    await page.tap('#pl-list [data-pl-id="t3"] .pl-more');
+    await page.tap('#pl-list [data-pl-id="t3"] .pl-title');
     await page.tap('.ui-back.in [data-pl-mi="edit"]');
     await page.selectOption('#pl-est', 'custom');
     await page.fill('#pl-est-custom', '50');

@@ -71,7 +71,7 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   // 할 일 삭제도 되돌리기 (플래너 ⋯ › 지우기)
   await page.evaluate(() => App.store.update((s) => s.tasks.push({ id: 'tk', title: '수학 익힘책', due: Stats.dayKey(Date.now()), done: false, createdAt: Date.now() })));
   await page.goto(base + '#plan');
-  await page.tap('#pl-list [data-pl-id="tk"] .pl-more');
+  await page.tap('#pl-list [data-pl-id="tk"] .pl-title');
   await page.tap('.ui-back.in [data-pl-mi="del"]');
   assert(!(await state()).tasks.some((x) => x.id === 'tk'), '할 일 삭제');
   await page.tap('#toast .toast-act');

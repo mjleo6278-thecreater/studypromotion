@@ -82,6 +82,7 @@
     <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.6V12l3 2"/></symbol>
     <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M5 12a7 7 0 0 1 12-4.9L19 9"/><path d="M19 4.6V9h-4.4"/><path d="M19 12a7 7 0 0 1-12 4.9L5 15"/><path d="M5 19.4V15h4.4"/></symbol>
     <symbol id="i-more" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></g></symbol>
+    <symbol id="i-carry" viewBox="0 0 24 24"><path d="M15.6 5.2l4 4-4 4"/><path d="M19.2 9.2H9.6a5 5 0 0 0 0 10h4.6"/></symbol>
     <symbol id="i-next" viewBox="0 0 24 24"><path d="M4.6 12h12.6"/><path d="m12.6 6.8 5.2 5.2-5.2 5.2"/></symbol>
     <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
   </svg>
@@ -270,6 +271,26 @@
             <input id="s-name" placeholder="새 과목 이름" required maxlength="20">
             <input id="s-color" type="color" value="#9468d9" aria-label="과목 색">
             <button class="btn" type="submit">과목 추가</button>
+          </form>
+        </details>
+        <details class="pl-fold" id="pl-teachers-fold" data-feature="plreview">
+          <summary class="pl-row"><span>복습 선생님</span><b id="pl-tch-n"></b><svg class="ic pl-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+          <p class="pl-help">수업 있는 요일에 할 일 맨 위 ‘복습’ 줄에 이름이 나와요. 복습하고 이름을 누르면 체크돼요.</p>
+          <ul class="pl-tch" id="pl-tch"></ul>
+          <form class="pl-addrow" id="pl-tch-form" novalidate>
+            <input id="pl-tch-name" maxlength="8" placeholder="선생님 이름 (예: 수탁)" autocomplete="off" enterkeyhint="done" aria-label="선생님 이름">
+            <select id="pl-tch-subj" aria-label="과목"></select>
+            <button class="btn" type="submit">추가</button>
+            <div class="pl-wdays" id="pl-tch-days" role="group" aria-label="수업 있는 요일"></div>
+          </form>
+        </details>
+        <details class="pl-fold" id="pl-slots-fold" data-feature="plslot">
+          <summary class="pl-row"><span>장소·시간 목록</span><b id="pl-slot-n"></b><svg class="ic pl-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+          <p class="pl-help">할 일 왼쪽 칸에서 골라요. 위에 있을수록 목록에서 먼저 나와요(손잡이를 끌면 순서가 바뀌어요).</p>
+          <ul class="pl-slots" id="pl-slot-list"></ul>
+          <form class="pl-addrow" id="pl-slot-form" novalidate>
+            <input id="pl-slot-name" maxlength="10" placeholder="새 장소·시간 (예: 학원 끝나고)" autocomplete="off" enterkeyhint="done" aria-label="새 장소·시간">
+            <button class="btn" type="submit">추가</button>
           </form>
         </details>
       </div>
@@ -652,7 +673,7 @@
           <p>오늘 공부한 시간과 하루 목표, 오늘 남은 할 일, 오늘 복습할 카드, 연속 학습일을 한눈에 보여 줘요. <b>시험 준비</b>에는 시험마다 D-day, 진행률(폰이 걷는 체스 칸), 남은 시간과 오늘 더 해야 할 양이 나와요.</p>
           <p>‘오늘 공부’의 <b>공부 시작하기</b>를 누르면 과목을 고르고, 그 과목의 할 일이나 시험 범위 항목을 고르면 바로 스톱워치가 켜져요. 범위를 골랐다면 멈출 때 그 범위를 끝냈는지 물어봐요. 할 일이나 범위에 없는 공부라면 맨 아래에서 과목만 골라요. <b>오늘 타임테이블</b>은 오늘 하루 중 언제 공부했는지를 한 줄로 보여 주고, 누르면 타임테이블이 열려요.</p>
           <p><b>오늘 할 범위</b>는 가장 가까운 시험에서 아직 안 끝낸 내용을 과목을 번갈아 가며 오늘 할 양만큼 골라 줘요. 바로 체크할 수 있고, <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼을 누르면 그 범위로 타이머가 준비돼요.</p>
-          <p><b>오늘 할 일</b>은 스터디 플래너의 오늘 칸이에요. 여기서 바로 체크하고 새 할 일을 적을 수 있어요.</p>
+          <p><b>오늘 할 일</b>은 스터디 플래너의 오늘 칸이에요. 여기서 바로 ○·△를 표시하고 새 할 일을 적을 수 있어요.</p>
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-board"/></svg>범위 — 목록과 보드</summary>
@@ -674,9 +695,12 @@
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-planner"/></svg>스터디 플래너</summary>
           <ul>
             <li><b>하루 보기</b>: 위쪽 주간 띠에서 날짜를 누르면 그날 계획이 나와요. 날짜 아래 점은 그날 할 일이에요(칠한 점은 끝낸 일). ‹ ›로 지난주·다음 주로 가고, <svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg> 달력으로 아무 날이나 열어요.</li>
-            <li><b>할 일</b>: <b>＋ 할 일 추가</b>에서 과목, 날짜, 예상 시간을 정해요. 날짜는 그 일을 하기로 한 날이에요. 매일이나 요일마다 반복할 수도 있어요. 끝내면 체크하고(예상 시간을 적어 두면 그 시간이 오늘 공부 시간에 들어가요), <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼을 누르면 그 할 일로 스톱워치가 켜져서 잰 시간이 그 줄에 쌓여요.</li>
-            <li><b>⋯ 메뉴</b>: 내일로 미루기, 다른 날로 옮기기, 공부할 시각 정하기(타임테이블 일정), 고치기, 지우기. 실수로 지웠다면 아래 알림의 <b>되돌리기</b>를 눌러요.</li>
-            <li><b>지난 날 못 한 할 일</b>: 어제까지 끝내지 못한 일은 오늘 칸 위에 모여요. <b>오늘로 가져오기</b>를 누르면 한 번에 오늘 할 일로 옮겨요.</li>
+            <li><b>할 일</b>: <b>＋ 할 일 추가</b>에서 과목, 날짜, 예상 시간을 정해요. 날짜는 그 일을 하기로 한 날이에요. 매일이나 요일마다 반복할 수도 있어요. <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼을 누르면 그 할 일로 스톱워치가 켜져서 잰 시간이 그 줄에 쌓여요.</li>
+            <li><b>○·△ 진행 칸</b>: 할 일 오른쪽 칸을 누를 때마다 빈칸 → ○(끝냄) → △(덜 끝냄) → 빈칸으로 바뀌어요. ○을 하면 예상 시간이 오늘 공부 시간에 들어가요. △는 아직 안 끝난 일이라 공부 시간은 넣지 않아요(타이머로 잰 시간은 그대로 남아요).</li>
+            <li><b>할 일 메뉴</b>: 할 일 이름을 누르면 내일로 미루기, 다른 날로 옮기기, 공부할 시각 정하기(타임테이블 일정), 고치기, 지우기가 나와요. 실수로 지웠다면 아래 알림의 <b>되돌리기</b>를 눌러요.</li>
+            <li><b>장소·시간</b>: 할 일 왼쪽 칸을 누르면 집·독서실·야자1처럼 어디서(언제) 할지 골라요. 꼭 고르지 않아도 되고, ‘정하지 않음’으로 다시 비워요. 그날 하나라도 정하면 목록 순서대로 모이고(안 정한 일은 맨 아래), 아니면 과목 순이에요. 목록은 맨 아래 <b>장소·시간 목록</b>에서 넣고, 이름을 바꾸고, 손잡이를 끌어 순서를 바꿔요.</li>
+            <li><b>어제 못 끝낸 일</b>: 그날 처음 앱을 열면 어제 못 끝낸 일을 오늘로 옮길지 물어봐요. 체크한 것만 옮겨지고 △ 표시·잰 시간·장소도 같이 가요. 오늘도 같은 일이 있으면 처음부터 체크를 꺼 둬요. ‘그대로 두기’를 고른 일은 오늘 칸 위 <b>지난 날 못 한 할 일</b> 띠에 남아서 나중에 옮길 수 있어요.</li>
+            <li><b>복습 줄</b>: 맨 아래 <b>복습 선생님</b>에 선생님 이름(과목은 골라도 되고 안 골라도 돼요)과 수업 있는 요일을 넣어요. 그날 수업 있는 선생님 이름이 할 일 맨 위에 나오고, 복습하고 누르면 체크돼요. 체크는 날짜마다 따로 남아요.</li>
             <li><b>범위에서 고르기</b>: 시험 범위에서 남은 항목을 골라 그날 할 일로 넣어요. 범위 탭의 ⋯ › <b>플래너에 넣기</b>로 오늘·내일·아무 날에나 넣을 수도 있어요. 이렇게 넣은 할 일을 끝내면 범위에도 체크되고, 범위에서 체크해도 할 일이 끝나요(공부 시간은 한 번만 들어가요).</li>
             <li><b>목표와 돌아보기</b>: 그날의 목표를 한 줄 적어 두면 플래너와 홈에 늘 보여요. 하루가 끝나면 <b>하루 돌아보기</b>에 잘한 점과 고칠 점을 적고, 앞날에는 준비물 같은 메모를 남겨요.</li>
             <li><b>주간 보기</b>: ‘주간’을 누르면 월~일 할 일과 일정이 한 번에 나와요. 날짜를 누르면 그날 하루 보기로 가요.</li>
@@ -768,6 +792,15 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="3.10" data-date="2026년 11월 19일">
+            <ul class="news">
+              <li><b>○·△ 진행 칸</b>: 할 일 오른쪽 칸을 누를 때마다 빈칸 → ○(끝냄) → △(덜 끝냄)으로 바뀌어요. ○은 지금까지의 체크와 같아서 예상 시간이 공부 시간에 들어가고, △는 아직 안 끝난 일로 쳐서 공부 시간은 넣지 않아요. 홈과 주간 보기도 같은 칸이에요</li>
+              <li><b>어제 못 끝낸 일 옮기기</b>: 그날 처음 앱을 열면 어제 못 끝낸 일을 오늘로 옮길지 물어봐요. 체크한 것만 옮겨지고, △ 표시·잰 시간·장소도 같이 가요. 옮겨 온 일에는 ‘어제부터’가 붙어요</li>
+              <li><b>장소·시간 칸</b>: 할 일 왼쪽 칸을 눌러 야자1·야자2·독서실·집처럼 어디서 할지 골라요. 고르지 않아도 돼요. 하나라도 정하면 그 목록 순서로, 아니면 과목 순으로 정렬돼요. 목록은 플래너 맨 아래에서 넣고 순서를 바꿔요</li>
+              <li><b>복습 줄</b>: 플래너 맨 아래 ‘복습 선생님’에 선생님 이름과 수업 요일을 넣으면, 할 일 맨 위에 그날 수업 있는 선생님 이름이 나와요. 복습하고 이름을 누르면 체크돼요</li>
+              <li>세 기능 모두 ‘기능과 탭 편집’에서 끌 수 있어요. 할 일 오른쪽 ⋯ 단추는 없어지고, 할 일 이름을 누르면 같은 메뉴가 열려요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="3.9.1" data-date="2026년 11월 18일">
             <ul class="news">
               <li><b>범위 목록의 큰 글씨</b>: 범위에서 보드를 멀리 보다가 ‘목록’으로 돌아오면 과목 이름과 ‘남은 시간’ 글씨가 크게 나오던 문제를 고쳤어요</li>
@@ -1088,6 +1121,9 @@
       <div class="pl-f"><span class="pl-lab" id="pl-subj-lab">과목</span>
         <div class="pl-chips" id="pl-subj" role="radiogroup" aria-labelledby="pl-subj-lab"></div>
         <div class="pl-newsub" id="pl-newsub" hidden><input id="pl-newsub-name" maxlength="20" placeholder="새 과목 이름" autocomplete="off" aria-label="새 과목 이름"><button class="btn sm" type="button" id="pl-newsub-ok">만들기</button></div>
+      </div>
+      <div class="pl-f" id="pl-slot-f" data-feature="plslot"><span class="pl-lab" id="pl-slot-lab">장소·시간 <small>골라도 되고 안 골라도 돼요</small></span>
+        <div class="pl-chips" id="pl-slot-chips" role="radiogroup" aria-labelledby="pl-slot-lab"></div>
       </div>
       <div class="pl-f2">
         <label class="pl-f"><span class="pl-lab">날짜</span><input type="date" id="pl-date" placeholder="날짜 안 정함" aria-label="날짜"></label>

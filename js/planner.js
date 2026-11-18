@@ -2,8 +2,10 @@
    계산은 js/plan.js(window.Plan), 끝냄은 App.setTaskDone, 일정은 js/events.js, 시간 띠는 js/timetable.js가 맡는다.
    - 하루: 주간 띠(날짜·과목 색 점) → 그날 요약(D-day·목표·진행률) → 할 일 → 시간 계획(띠·일정) → 돌아보기·메모
    - 주간: 월~일 날짜별 할 일. 달력 창(📅)에서 아무 날이나 고른다
-   - 맨 아래: 날짜 안 정한 할 일, 과목 관리 (과목 목록은 app.js가 그린다)
-   홈의 '오늘 할 일' 칸과 요약 카드도 여기서 그린다 (플래너의 오늘 칸). */
+   - 맨 아래: 날짜 안 정한 할 일, 과목 관리 (과목 목록은 app.js가 그린다), 복습 선생님, 장소·시간 목록
+   홈의 '오늘 할 일' 칸과 요약 카드도 여기서 그린다 (플래너의 오늘 칸).
+   v3.10 (종이 플래너처럼): 할 일 한 줄 = [왼쪽 장소·시간 칸][과목 색 줄][이름·메타][▶][오른쪽 진행 칸 빈칸→○→△].
+   목록은 과목 순, 장소를 정한 날은 장소 순. 할 일 맨 위 복습 줄. 그날 처음 열면 지난 날 못 끝낸 일을 옮길지 묻는다. */
 (function () {
   'use strict';
   const App = window.App, P = window.Plan, S = window.Schedule;
@@ -13,9 +15,21 @@
   const fm = Stats.formatMinutes;
   const today = () => App.todayKey();
   const featOn = (id) => !window.Features || window.Features.on(id);
+  const slotOn = () => featOn('plslot');
+  const sortOf = (list) => P.sortDay(store.get(), list, { noSlot: !slotOn() });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const MODE_KEY = 'studypromotion.plMode';
   const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
   const EST_OPTS = [10, 15, 20, 30, 40, 45, 60, 90, 120, 180];
+  const ASK_KEY = 'studypromotion.plCarryAsk'; // 어제 못 끝낸 일을 물어본 날 (이 기기)
+  // 동글동글한 ○·△ (굵고 둥근 선)
+  const MARK_SVG = {
+    o: '<svg class="pl-mk" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.9"/></svg>',
+    t: '<svg class="pl-mk" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.2 18.9 17.4H5.1z"/></svg>',
+    '': '',
+  };
+  const MARK_NAME = { '': '아직 안 함', o: '끝냄(○)', t: '덜 끝냄(△)' };
+  const WD_ORDER = [1, 2, 3, 4, 5, 6, 0];
 
   let sel = null; // 보고 있는 날 'YYYY-MM-DD' (null = 오늘을 따라감)
   let mode = 'day';
@@ -44,6 +58,19 @@
     const o = S.next(evs, now(), 60);
     return o ? { text: `${P.shortDay(o.date).split(' ')[0]} ${hm(o)}`, key: o.date } : null;
   }
+  // 오른쪽 진행 칸: 누를 때마다 빈칸 → ○ → △ → 빈칸
+  let drawn = null; // 방금 누른 진행 칸 { id, at }: 그 칸만 톡 튀어나오는 움직임
+  function markHTML(t, sm) {
+    const m = P.markOf(t);
+    const draw = m && drawn && drawn.id === t.id && Date.now() - drawn.at < 900;
+    return `<button type="button" class="pl-mark${sm ? ' sm' : ''}${m ? ' ' + m : ''}${draw ? ' pop' : ''}" data-pl-mark aria-label="${esc(t.title)} ${MARK_NAME[m]}. 누르면 ${MARK_NAME[P.nextMark(m)]}">${MARK_SVG[m]}</button>`;
+  }
+  // 왼쪽 장소·시간 칸 (정하지 않아도 된다)
+  function slotHTML(t) {
+    if (!slotOn()) return '';
+    const x = P.slotOf(store.get(), t);
+    return `<button type="button" class="pl-slot${x ? '' : ' empty'}" data-pl-slot data-feature="plslot" aria-label="${x ? `장소·시간 ${esc(x.name)}, 바꾸기` : '장소·시간 정하기'}">${x ? esc(x.name) : '장소'}</button>`;
+  }
   // opts.dated: 날짜도 적는다(지난 날 못 한 일), opts.place: '이날로' 단추(날짜 안 정한 일)
   function rowHTML(t, opts) {
     opts = opts || {};
@@ -53,10 +80,13 @@
     const lv = liveOf();
     const liveMin = lv && lv.taskId === t.id && !t.done ? Math.max(0, Math.floor((now() - lv.from) / 60000)) : null;
     const got = P.taskMinutes(st.sessions, t);
+    const mark = P.markOf(t);
     const meta = [];
     if (s) meta.push(`<span class="pl-sub">${esc(s.name)}</span>`);
     if (opts.dated && t.due) meta.push(`<span class="overdue">${esc(P.shortDay(t.due))}</span>`);
     if (+t.estimateMin > 0) meta.push(`<span>${fm(+t.estimateMin)}</span>`);
+    const ft = opts.dated ? '' : P.fromText(t, tk);
+    if (ft && !t.done) meta.push(`<span class="pl-tag from" title="${esc(P.dayTitle(t.from))}에서 옮겨 온 할 일">${ic('carry')}${esc(ft)}</span>`);
     const rt = P.repText(t.rep);
     if (rt) meta.push(`<span class="pl-tag">${ic('repeat')}${esc(rt)}</span>`);
     const at = t.done ? null : planAt(t);
@@ -67,10 +97,28 @@
     if (liveMin !== null) right = `<span class="pl-live" data-pl-live="${esc(t.id)}"><i></i>${liveText(liveMin)}</span>`;
     else if (opts.place) right = `<button type="button" class="btn sm pl-place" data-pl-place>${viewKey() === tk ? '오늘로' : esc(P.shortDay(viewKey()).split(' ')[0]) + '로'}</button>`;
     else if (!t.done && t.due && t.due <= tk && featOn('timer')) right = `<button type="button" class="pl-play" data-pl-play data-feature="timer" aria-label="${esc(t.title)} 공부 시작" title="이 할 일로 공부 시작">${ic('play')}</button>`;
-    return `<li class="pl-item${t.done ? ' done' : ''}${liveMin !== null ? ' live' : ''}" data-pl-id="${esc(t.id)}" style="--c:${esc(colorOf(t))}">` +
-      `<input type="checkbox" class="pl-check"${t.done ? ' checked' : ''} aria-label="${esc(t.title)} 끝냄">` +
-      `<div class="pl-body" data-pl-more><div class="pl-title">${esc(t.title)}</div>${meta.length ? `<div class="pl-meta">${meta.join('')}</div>` : ''}</div>` +
-      right + `<button type="button" class="icon-btn pl-more" data-pl-more aria-label="${esc(t.title)} 메뉴" title="더 보기">${ic('more')}</button></li>`;
+    return `<li class="pl-item${mark === 'o' ? ' done' : ''}${mark === 't' ? ' part' : ''}${liveMin !== null ? ' live' : ''}" data-pl-id="${esc(t.id)}" style="--c:${esc(colorOf(t))}">` +
+      slotHTML(t) +
+      `<div class="pl-body" data-pl-more><button type="button" class="pl-title" data-pl-more aria-label="${esc(t.title)}${mark === 't' ? ' (덜 끝냄)' : ''}, 메뉴 열기">${esc(t.title)}</button>${meta.length ? `<div class="pl-meta">${meta.join('')}</div>` : ''}</div>` +
+      right + markHTML(t) + '</li>';
+  }
+  // 복습 줄: 그날 수업 있는 선생님 이름, 누르면 체크. where 'plan'이면 아직 아무도 없을 때 적어 두라고 알려 준다
+  function reviewHTML(key, where) {
+    if (!featOn('plreview')) return '';
+    const st = store.get();
+    const list = P.teachersOn(st, key);
+    if (!list.length) {
+      if (where !== 'plan' || P.teacherList(st).length) return '';
+      return `<div class="pl-rv empty" data-feature="plreview"><span class="pl-rv-h">복습</span><button type="button" class="btn link pl-rv-add" data-pl-rv-setup>＋ 수업 복습을 체크할 선생님 이름 적기</button></div>`;
+    }
+    const done = new Set(P.reviewedOn(st, key));
+    const n = list.filter((t) => done.has(t.id)).length;
+    return `<div class="pl-rv" data-feature="plreview" role="group" aria-label="복습 ${list.length}명 중 ${n}명 체크"><span class="pl-rv-h" aria-hidden="true">복습<small>${n}/${list.length}</small></span><div class="pl-rv-names">` +
+      list.map((t) => {
+        const on = done.has(t.id);
+        const sb = subjOf(t.subjectId);
+        return `<button type="button" class="pl-rv-name${on ? ' on' : ''}" data-pl-rv="${esc(t.id)}" data-pl-rv-day="${key}" aria-pressed="${on}" aria-label="${esc(sb ? sb.name + ' ' : '')}${esc(t.name)} 복습" style="--c:${esc(sb ? sb.color : 'var(--muted)')}">${on ? ic('check') : '<i></i>'}${esc(t.name)}</button>`;
+      }).join('') + '</div></div>';
   }
 
   /* ---------- 하루 ---------- */
@@ -121,7 +169,7 @@
     if (key <= tk) {
       const studied = P.studyMinutes(st.sessions, key) + (key === tk ? liveTodayMin() : 0);
       const pct = sum.total ? Math.round((sum.done / sum.total) * 100) : 0;
-      prog = `<div class="pl-prog"><div class="pl-prog-top"><b>할 일 ${sum.done} / ${sum.total}</b><span>${sum.planMin ? `계획 ${fm(sum.planMin)} · ` : ''}공부 <b class="pl-studied">${fm(studied)}</b></span></div>` +
+      prog = `<div class="pl-prog"><div class="pl-prog-top"><b>할 일 ${sum.done} / ${sum.total}${sum.part ? `<em class="pl-part-n" title="덜 끝낸 일">△ ${sum.part}</em>` : ''}</b><span>${sum.planMin ? `계획 ${fm(sum.planMin)} · ` : ''}공부 <b class="pl-studied">${fm(studied)}</b></span></div>` +
         `<div class="bar" role="progressbar" aria-label="할 일 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="bar-fill" style="width:${pct}%"></div></div></div>`;
     } else {
       prog = `<div class="pl-prog"><div class="pl-prog-top"><b>할 일 ${sum.total}개</b><span>${sum.planMin ? `계획 ${fm(sum.planMin)}` : ''}</span></div></div>`;
@@ -142,10 +190,13 @@
     const st = store.get();
     const tk = today();
     const sum = P.daySummary(st.tasks, key);
-    const empty = key < tk ? '이날 적어 둔 할 일이 없어요.' : key === tk ? '오늘 할 일을 적어 보세요. 끝내면 체크해요.' : '이날 할 일을 미리 적어 두세요.';
-    return `<div class="panel-head"><h2>할 일</h2>${featOn('board') ? `<button type="button" class="btn link pl-scope" data-pl-scope data-feature="board">${ic('board')}범위에서 고르기</button>` : ''}</div>` +
+    const empty = key < tk ? '이날 적어 둔 할 일이 없어요.' : key === tk ? '오늘 할 일을 적어 보세요. 끝내면 오른쪽 칸을 눌러 ○, 덜 끝냈으면 한 번 더 눌러 △.' : '이날 할 일을 미리 적어 두세요.';
+    const sorted = sortOf(sum.list);
+    const by = sum.list.length > 1 ? `<small class="pl-sort">${sorted.by === 'slot' ? '장소·시간 순' : '과목 순'}</small>` : '';
+    return `<div class="panel-head"><h2>할 일${by}</h2>${featOn('board') ? `<button type="button" class="btn link pl-scope" data-pl-scope data-feature="board">${ic('board')}범위에서 고르기</button>` : ''}</div>` +
+      reviewHTML(key, 'plan') +
       (key === tk ? carryHTML() : '') +
-      `<ul class="pl-list" id="pl-list">${sum.list.length ? sum.list.map((t) => rowHTML(t)).join('') : `<li class="empty">${empty}</li>`}</ul>` +
+      `<ul class="pl-list" id="pl-list">${sorted.list.length ? sorted.list.map((t) => rowHTML(t)).join('') : `<li class="empty">${empty}</li>`}</ul>` +
       `<button type="button" class="pl-add" data-pl-add="${key}"><span aria-hidden="true">＋</span>할 일 추가</button>`;
   }
   function timeHTML(key) {
@@ -197,8 +248,12 @@
       const d = S.keyDate(k), sum = P.daySummary(st.tasks, k);
       const exams = st.exams.filter((e) => e.date === k);
       const evs = S.forDay(st.events || [], k).map((o) => `<span>${ic('clock')}${S.fmtHM(S.parseHM(o.ev.start))} ${esc(window.Events ? window.Events.nameOf(o.ev) : o.ev.title || '공부')}</span>`).join('');
-      const lis = sum.list.map((t) => `<li class="pl-wi${t.done ? ' done' : ''}" data-pl-id="${esc(t.id)}"><input type="checkbox" class="pl-check"${t.done ? ' checked' : ''} aria-label="${esc(t.title)} 끝냄">` +
-        `<i class="dot" style="background:${esc(colorOf(t))}"></i><button type="button" class="t" data-pl-more>${esc(t.title)}</button>${+t.estimateMin > 0 ? `<small>${fm(+t.estimateMin)}</small>` : ''}</li>`).join('');
+      const lis = sortOf(sum.list).list.map((t) => {
+        const m = P.markOf(t);
+        const x = slotOn() ? P.slotOf(st, t) : null;
+        return `<li class="pl-wi${m === 'o' ? ' done' : ''}${m === 't' ? ' part' : ''}" data-pl-id="${esc(t.id)}"><i class="dot" style="background:${esc(colorOf(t))}"></i>` +
+          `<button type="button" class="t" data-pl-more>${esc(t.title)}</button>${x ? `<small class="pl-wslot">${esc(x.name)}</small>` : ''}${+t.estimateMin > 0 ? `<small>${fm(+t.estimateMin)}</small>` : ''}${markHTML(t, true)}</li>`;
+      }).join('');
       const badge = k === tk ? '<em>오늘</em>' : sum.total ? `<small>${k < tk ? `${sum.done}/${sum.total}` : `${sum.total}개`}</small>` : '';
       return `<div class="pl-wd${k === tk ? ' today' : ''}${k < tk ? ' past' : ''}${d.getDay() === 0 ? ' sun' : ''}" data-pl-wd="${k}">` +
         `<button type="button" class="pl-wd-date" data-pl-open="${k}" aria-label="${P.dayTitle(k)} 하루 보기"><span>${P.WD[d.getDay()]}</span><b>${d.getDate()}</b>${badge}</button>` +
@@ -226,12 +281,15 @@
   }
 
   function render() {
-    if (App.view === 'home') return renderHome();
+    if (App.view === 'home') { renderHome(); maybeAsk(); return; }
     if (App.view !== 'plan') return;
     paintMode();
     if (mode === 'week') renderWeek(); else renderDay();
     renderUndated();
     $('#pl-subj-n').textContent = store.get().subjects.length + '과목';
+    renderTeachers();
+    renderSlots();
+    maybeAsk();
   }
 
   /* ---------- 홈: 플래너의 오늘 칸 ---------- */
@@ -246,8 +304,8 @@
     $('#h-tasks-sub').innerHTML = late.length ? `<span class="overdue">지난 날 못 한 일 ${late.length}개</span>`
       : sum.total ? (sum.left ? `${sum.total}개 중 ${sum.done}개 끝냄` : '오늘 할 일 끝 ✓') : '플래너에 적어 보세요';
     const note = P.noteOf(st, tk);
-    setHTML($('#h-pl-top'), (note.goal ? `<p class="pl-home-goal"><span>오늘의 목표</span><b>${esc(note.goal)}</b></p>` : '') + carryHTML());
-    setHTML(list, sum.list.length ? sum.list.map((t) => rowHTML(t)).join('')
+    setHTML($('#h-pl-top'), (note.goal ? `<p class="pl-home-goal"><span>오늘의 목표</span><b>${esc(note.goal)}</b></p>` : '') + reviewHTML(tk, 'home') + carryHTML());
+    setHTML(list, sum.list.length ? sortOf(sum.list).list.map((t) => rowHTML(t)).join('')
       : '<li class="empty">오늘 할 일이 없어요. 아래에서 바로 적거나, 플래너에서 앞날까지 계획해 보세요.</li>');
   }
 
@@ -350,14 +408,9 @@
   }
   function moveTo(t, key) {
     if (t.due === key) return;
-    const prev = { due: t.due, pos: t.pos };
+    const prev = [{ id: t.id, due: t.due, pos: t.pos, from: t.from }];
     store.update((st) => { P.moveTask(st, t.id, key, now()); });
-    toast(key ? `${withJosa(key, '으로/로')} 옮겼어요` : '날짜 안 정한 할 일로 옮겼어요', { action: '되돌리기', onAction: () => store.update((st) => {
-      const x = st.tasks.find((y) => y.id === t.id);
-      if (!x) return;
-      x.due = prev.due;
-      if (prev.pos === undefined) delete x.pos; else x.pos = prev.pos;
-    }) });
+    toast(key ? `${withJosa(key, '으로/로')} 옮겼어요` : '날짜 안 정한 할 일로 옮겼어요', { action: '되돌리기', onAction: () => store.update((st) => P.restoreMoves(st, prev)) });
   }
   async function removeTask(t) {
     const series = P.seriesFrom(store.get().tasks, t);
@@ -387,18 +440,83 @@
     App.go('timer');
   }
 
-  /* ---------- 지난 일 가져오기 ---------- */
-  function carry() {
+  /* ---------- 지난 날 못 끝낸 일 옮기기 ---------- */
+  // 고르는 창: 체크한 것만 오늘로. 세모·장소·잰 시간은 할 일에 붙어 있어서 같이 간다. 반환 옮긴 개수
+  async function openCarry() {
+    const tk = today(), y = S.shiftKey(tk, -1);
+    const st = store.get();
+    const ch = P.carryChoices(st, tk);
+    if (!ch.length) { toast('옮길 할 일이 없어요'); return 0; }
+    const chosen = new Set(ch.filter((o) => o.on).map((o) => o.t.id));
+    const onlyY = ch.every((o) => o.t.due === y);
+    const many = new Set(ch.map((o) => o.t.due)).size > 1;
+    let last = null;
+    const items = ch.map(({ t }) => {
+      let h = '';
+      if (many && t.due !== last) { last = t.due; h = `<p class="ui-group pl-cy-day">${esc(P.dayTitle(t.due))} · ${esc(P.relDay(t.due, tk))}</p>`; }
+      const on = chosen.has(t.id);
+      const sb = subjOf(t.subjectId);
+      const m = P.markOf(t);
+      const x = slotOn() ? P.slotOf(st, t) : null;
+      const got = P.taskMinutes(st.sessions, t);
+      const sub = [sb ? sb.name : '', +t.estimateMin > 0 ? fm(+t.estimateMin) : '', x ? x.name : '', got ? '공부 ' + fm(got) : '', P.repText(t.rep)].filter(Boolean).join(' · ');
+      return h + `<button type="button" class="pl-sc-item pl-cy-item${on ? ' on' : ''}" data-pl-cy="${esc(t.id)}" role="checkbox" aria-checked="${on}"><span class="pl-sc-box">${ic('check')}</span>` +
+        `<span class="pl-sc-text"><b>${esc(t.title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="pl-cy-mark${m ? ' ' + m : ''}" title="${MARK_NAME[m]}">${MARK_SVG[m]}</span></button>`;
+    }).join('');
+    const okText = () => (chosen.size ? `${chosen.size}개 오늘로 옮기기` : '옮길 일을 골라 주세요');
+    const lead = onlyY ? `어제 ${P.dayTitle(y)}에 덜 끝낸 할 일이에요.` : '지난 날 덜 끝낸 할 일이에요.';
+    const body = `<div class="pl-cy"><p class="pl-cy-sub">${esc(lead)}<br>오늘 할 것만 체크해 두고 옮겨요.</p>${items}` +
+      `<p class="pl-cy-note">세모(△) 표시와 그동안 잰 공부 시간${slotOn() ? ', 정해 둔 장소' : ''}도 같이 옮겨져요. 옮기지 않은 일은 그날 칸에 남고, 오늘 칸 위 띠에서 나중에 옮길 수 있어요.</p>` +
+      `<div class="pl-cy-foot"><button type="button" class="btn" data-pl-cy-no>그대로 두기</button><button type="button" class="btn primary" data-pl-cy-ok${chosen.size ? '' : ' disabled'}>${okText()}</button></div></div>`;
+    const ids = await window.UI.openSheet({
+      title: `${onlyY ? '어제' : '지난 날'} 못 끝낸 할 일 ${ch.length}개`, body, cls: 'pl-scope-sheet pl-cy-sheet', focusSel: '[data-pl-cy-ok]',
+      onClick: (e, close) => {
+        const b = e.target.closest('[data-pl-cy]');
+        if (b) {
+          const id = b.dataset.plCy;
+          if (chosen.has(id)) chosen.delete(id); else chosen.add(id);
+          b.classList.toggle('on', chosen.has(id));
+          b.setAttribute('aria-checked', String(chosen.has(id)));
+          const ok = e.currentTarget.querySelector('[data-pl-cy-ok]');
+          ok.disabled = !chosen.size;
+          ok.textContent = okText();
+          return;
+        }
+        if (e.target.closest('[data-pl-cy-no]')) { close(null); return; }
+        if (e.target.closest('[data-pl-cy-ok]') && chosen.size) close([...chosen]);
+      },
+    });
+    if (!ids || !ids.length) return 0;
     let prev = [];
-    store.update((st) => { prev = P.carryOver(st, today(), now()); });
-    if (!prev.length) return;
+    store.update((s) => { prev = P.carryOver(s, today(), now(), ids); });
+    if (!prev.length) return 0;
     carryOpen = false;
-    toast(`할 일 ${prev.length}개를 오늘로 가져왔어요`, { action: '되돌리기', onAction: () => store.update((st) => prev.forEach((p) => {
-      const x = st.tasks.find((y) => y.id === p.id);
-      if (!x) return;
-      x.due = p.due;
-      if (p.pos === undefined) delete x.pos; else x.pos = p.pos;
-    })) });
+    toast(`할 일 ${prev.length}개를 오늘로 옮겼어요`, { action: '되돌리기', onAction: () => store.update((s) => P.restoreMoves(s, prev)) });
+    return prev.length;
+  }
+  // 그날 처음 홈이나 플래너를 열면 한 번 묻는다 (시작 화면·잠금·다른 창이 없어지고, 계정 기록과 맞춘 뒤)
+  const askedToday = () => { try { return localStorage.getItem(ASK_KEY) === today(); } catch (e) { return true; } };
+  const markAsked = () => { try { localStorage.setItem(ASK_KEY, today()); } catch (e) { /* 무시 */ } };
+  let asking = false;
+  async function maybeAsk() {
+    if (asking || askedToday() || !featOn('plan') || !featOn('plcarry')) return;
+    if (navigator.webdriver && !window.__plCarryTest) return; // 화면 시험에서는 시험이 직접 켤 때만 (시작 화면과 같게)
+    if (!P.carryChoices(store.get(), today()).length) return;
+    asking = true;
+    const t0 = Date.now();
+    const typing = () => { const a = document.activeElement; return !!a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.isContentEditable); };
+    const free = () => !document.hidden && !document.getElementById('splash') && !(window.Lock && window.Lock.state) && $('#ask').hidden && $('#pl-dlg').hidden &&
+      !document.querySelector('.ui-back:not(.out)') && !document.querySelector('.ask-backdrop:not([hidden])') && !typing() && (App.view === 'home' || App.view === 'plan');
+    const cloudBusy = () => window.Cloud && window.Cloud.syncing && Date.now() - t0 < 8000;
+    try {
+      while (!free() || cloudBusy()) {
+        if (Date.now() - t0 > 60000) return; // 1분 넘게 바쁘면 다음에 화면을 그릴 때 다시
+        await sleep(400);
+      }
+    } finally { asking = false; }
+    if (askedToday() || !P.carryChoices(store.get(), today()).length) return;
+    markAsked();
+    openCarry();
   }
 
   /* ---------- 목표·메모 ---------- */
@@ -444,7 +562,7 @@
   });
 
   /* ---------- 할 일 추가·고치기 창 ---------- */
-  let dlg = null; // { id(고치는 할 일), subjectId, rep: ''|'daily'|'weekly', days: Set, back }
+  let dlg = null; // { id(고치는 할 일), subjectId, slotId, rep: ''|'daily'|'weekly', days: Set, back }
   let lastSubject = '';
   const SUBJ_COLORS = ['#e05a4f', '#3d96e0', '#45a865', '#9468d9', '#ef7d3c', '#2aa893', '#e36299', '#5e6cd6', '#e3ae24', '#8f7056'];
 
@@ -454,6 +572,12 @@
     $('#pl-subj').innerHTML = subs.map((s) => `<button type="button" class="chip${on(s.id) ? ' active' : ''}" data-pl-subj="${esc(s.id)}" role="radio" aria-checked="${on(s.id)}"><i class="dot" style="background:${esc(s.color)}"></i>${esc(s.name)}</button>`).join('') +
       `<button type="button" class="chip${on('') ? ' active' : ''}" data-pl-subj="" role="radio" aria-checked="${on('')}">과목 없음</button>` +
       '<button type="button" class="chip pl-chip-new" data-pl-newsub>＋ 새 과목</button>';
+  }
+  function paintSlotChips() {
+    const list = P.slotList(store.get());
+    const on = (id) => (dlg.slotId || '') === id;
+    $('#pl-slot-chips').innerHTML = list.map((x) => `<button type="button" class="chip${on(x.id) ? ' active' : ''}" data-pl-slotc="${esc(x.id)}" role="radio" aria-checked="${on(x.id)}">${esc(x.name)}</button>`).join('') +
+      `<button type="button" class="chip${on('') ? ' active' : ''}" data-pl-slotc="" role="radio" aria-checked="${on('')}">정하지 않음</button>`;
   }
   function setEst(v) {
     const sel = $('#pl-est');
@@ -511,14 +635,16 @@
     opts = opts || {};
     const st = store.get();
     const t = opts.id ? st.tasks.find((x) => x.id === opts.id) : null;
-    dlg = { id: t ? t.id : null, subjectId: t ? t.subjectId || '' : opts.subjectId != null ? opts.subjectId : lastSubject, rep: '', days: new Set(), back: document.activeElement };
+    dlg = { id: t ? t.id : null, subjectId: t ? t.subjectId || '' : opts.subjectId != null ? opts.subjectId : lastSubject, slotId: t ? t.slotId || '' : opts.slotId || '', rep: '', days: new Set(), back: document.activeElement };
     if (dlg.subjectId && !subjOf(dlg.subjectId)) dlg.subjectId = '';
+    if (dlg.slotId && !P.slotList(st).some((x) => x.id === dlg.slotId)) dlg.slotId = '';
     $('#pl-dlg-h').textContent = t ? '할 일 고치기' : '할 일 추가';
     $('#pl-save').textContent = t ? '저장' : '추가';
     $('#pl-title').value = t ? t.title : '';
     $('#pl-date').value = t ? t.due || '' : opts.date != null ? opts.date : viewKey();
     setEst(t ? t.estimateMin : null);
     paintSubj();
+    paintSlotChips();
     $('#pl-newsub').hidden = true;
     $('#pl-newsub-name').value = '';
     // 반복: 새 할 일이나 반복이 아닌 할 일만 고를 수 있다. 반복 할 일·범위와 이은 할 일은 알려 주기만
@@ -551,6 +677,7 @@
     const est = readEst();
     if (est === false) { toast('예상 시간을 1~1440분으로 적어 주세요'); $('#pl-est-custom').focus(); return; }
     const subjectId = dlg.subjectId || null;
+    const slotId = slotOn() && dlg.slotId && P.slotList(store.get()).some((x) => x.id === dlg.slotId) ? dlg.slotId : null;
     let rep = null;
     if (dlg.rep) {
       if (!due) { toast('반복하려면 날짜를 정해 주세요'); return; }
@@ -567,7 +694,8 @@
       if (!t) { closeDlg(); return; }
       let all = false;
       const series = P.seriesFrom(st.tasks, t);
-      const changed = title !== t.title || subjectId !== (t.subjectId || null) || (est || null) !== (t.estimateMin || null);
+      const keepSlot = slotOn() ? slotId : t.slotId || null; // 장소 칸을 꺼 두었으면 고르던 장소는 그대로
+      const changed = title !== t.title || subjectId !== (t.subjectId || null) || (est || null) !== (t.estimateMin || null) || keepSlot !== (t.slotId || null);
       if (t.rep && series.length > 1 && changed) {
         const pick = await App.choose('반복 할 일을 어떻게 바꿀까요?', [
           { value: 'one', label: '이 날만', hint: t.due ? P.dayTitle(t.due) : '' },
@@ -577,9 +705,10 @@
         all = pick === 'all';
       }
       // 반복이 아니던 할 일을 반복으로 바꾸면, 이 날 다음부터 같은 할 일을 넣는다
-      const more = rep && !t.rep ? P.makeTasks({ title, subjectId, due, estimateMin: est, rep }, { uid, now: now() }).filter((x) => x.due !== due) : [];
+      const more = rep && !t.rep ? P.makeTasks({ title, subjectId, due, estimateMin: est, slotId: keepSlot, rep }, { uid, now: now() }).filter((x) => x.due !== due) : [];
       store.update((s) => {
-        P.editTask(s, t.id, { title, subjectId, due, estimateMin: est }, now(), all);
+        if (keepSlot) P.ensureSlots(s);
+        P.editTask(s, t.id, { title, subjectId, due, estimateMin: est, slotId: keepSlot }, now(), all);
         if (rep && !t.rep) {
           const x = s.tasks.find((y) => y.id === t.id);
           if (x) x.rep = { id: more.length ? more[0].rep.id : uid(), days: rep.days.slice().sort() };
@@ -590,9 +719,9 @@
       toast(more.length ? `할 일을 고치고 ${more.length}개를 더 넣었어요` : '할 일을 고쳤어요');
       return;
     }
-    const list = P.makeTasks({ title, subjectId, due, estimateMin: est, rep }, { uid, now: now() });
+    const list = P.makeTasks({ title, subjectId, due, estimateMin: est, slotId, rep }, { uid, now: now() });
     if (!list.length) { toast(rep ? '이 기간에는 고른 요일이 없어요' : '할 일을 적어 주세요'); return; }
-    store.update((s) => { s.tasks.push(...list); });
+    store.update((s) => { if (slotId) P.ensureSlots(s); s.tasks.push(...list); });
     closeDlg();
     if (rep) toast(`${P.repText({ days: rep.days })} 할 일 ${list.length}개를 넣었어요 (${P.shortDay(list[list.length - 1].due)}까지)`);
     else if (!due) toast('날짜 안 정한 할 일에 넣었어요');
@@ -640,6 +769,8 @@
     if (!dlg) return;
     const sb = e.target.closest('[data-pl-subj]');
     if (sb) { dlg.subjectId = sb.dataset.plSubj; paintSubj(); return; }
+    const sl = e.target.closest('[data-pl-slotc]');
+    if (sl) { dlg.slotId = sl.dataset.plSlotc; paintSlotChips(); return; }
     if (e.target.closest('[data-pl-newsub]')) { $('#pl-newsub').hidden = false; $('#pl-newsub-name').focus(); return; }
     if (e.target.closest('#pl-newsub-ok')) { addSubject(); return; }
     const r = e.target.closest('[data-pl-rep]');
@@ -727,6 +858,246 @@
     if (t) toast(`${withJosa(key, '에/에')} 넣었어요`, featOn('plan') ? { action: '보기', onAction: () => open(key) } : undefined);
   }
 
+  /* ---------- 장소·시간 고르기 (할 일 왼쪽 칸) ---------- */
+  async function openSlotPick(id) {
+    const t = taskOf(id);
+    if (!t) return;
+    const list = P.slotList(store.get());
+    const sb = subjOf(t.subjectId);
+    const cur = t.slotId && list.some((x) => x.id === t.slotId) ? t.slotId : '';
+    const opt = (x) => `<button type="button" class="pl-sp-item${x.id === cur ? ' on' : ''}" data-pl-sp="${esc(x.id)}" role="radio" aria-checked="${x.id === cur}">${x.id === cur ? ic('check') : ''}${esc(x.name)}</button>`;
+    const body = `<p class="pl-sp-sub">${esc([t.title, sb ? sb.name : '', +t.estimateMin > 0 ? fm(+t.estimateMin) : ''].filter(Boolean).join(' · '))}</p>` +
+      `<div class="pl-sp-grid" role="radiogroup" aria-label="장소·시간">${list.map(opt).join('')}` +
+      `<button type="button" class="pl-sp-item none${cur ? '' : ' on'}" data-pl-sp="" role="radio" aria-checked="${!cur}">정하지 않음</button></div>` +
+      `<div class="pl-sp-foot"><span>${list.length ? '같은 장소·시간끼리 모여서 정렬돼요' : '목록이 비어 있어요'}</span><button type="button" class="btn link" data-pl-sp-edit>${list.length ? '목록 고치기' : '장소 넣기'}</button></div>`;
+    const pick = await window.UI.openSheet({
+      title: '언제·어디서 할까요?', body, cls: 'pl-menu-sheet pl-sp-sheet', focusSel: '.pl-sp-item.on, .pl-sp-item',
+      onClick: (e, close) => {
+        const b = e.target.closest('[data-pl-sp]');
+        if (b) { close({ slot: b.dataset.plSp }); return; }
+        if (e.target.closest('[data-pl-sp-edit]')) close({ edit: true });
+      },
+    });
+    if (!pick) return;
+    if (pick.edit) { showFold('pl-slots-fold', '#pl-slot-name'); return; }
+    if (pick.slot === cur) return;
+    store.update((st) => { P.setSlot(st, id, pick.slot); });
+  }
+
+  // 플래너 맨 아래 접이를 펼쳐 보여 준다 (focus: 그 안에서 초점을 줄 칸)
+  function showFold(id, focus) {
+    if (App.view !== 'plan') App.go('plan');
+    const f = $('#' + id);
+    if (!f) return;
+    f.open = true;
+    requestAnimationFrame(() => {
+      try { f.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) { f.scrollIntoView(); }
+      const i = focus && f.querySelector(focus);
+      if (i) i.focus({ preventScroll: true });
+    });
+  }
+
+  /* ---------- 맨 아래: 복습 선생님 ---------- */
+  const tchDays = new Set([1, 2, 3, 4, 5]); // 새 선생님의 수업 요일 (처음엔 평일)
+  const dayText = (days) => {
+    const ds = WD_ORDER.filter((d) => days.includes(d));
+    if (ds.length === 7) return '매일';
+    if (ds.length === 5 && !days.includes(0) && !days.includes(6)) return '평일 매일';
+    return ds.map((d) => P.WD[d]).join(' ');
+  };
+  const wdButtons = (set, attr) => WD_ORDER.map((d) => `<button type="button" class="${set.has(d) ? 'on' : ''}" ${attr}="${d}" aria-pressed="${set.has(d)}">${P.WD[d]}</button>`).join('');
+  function subjOptions(cur) {
+    return '<option value="">과목 없음</option>' + store.get().subjects.map((x) => `<option value="${esc(x.id)}"${x.id === cur ? ' selected' : ''}>${esc(x.name)}</option>`).join('');
+  }
+  function renderTeachers() {
+    const list = P.teacherList(store.get());
+    $('#pl-tch-n').textContent = list.length ? list.length + '명' : '';
+    setHTML($('#pl-tch'), list.length ? list.map((t) => {
+      const sb = subjOf(t.subjectId);
+      const days = Array.isArray(t.days) && t.days.length ? t.days.map(Number) : [1, 2, 3, 4, 5];
+      return `<li data-id="${esc(t.id)}" style="--c:${esc(sb ? sb.color : 'var(--muted)')}">` +
+        (list.length > 1 ? `<span class="pl-grip" data-pl-grip role="button" tabindex="0" aria-label="${esc(t.name)} 순서 바꾸기 (위·아래 화살표)">${ic('grip')}</span>` : '') +
+        `<i class="dot"></i><button type="button" class="pl-tch-name" data-pl-tch="${esc(t.id)}"><b>${esc(t.name)}</b><span class="sub">${esc(sb ? sb.name : '과목 없음')}</span><span class="days">${esc(dayText(days))}</span></button>` +
+        `<button type="button" class="icon-btn" data-pl-tch="${esc(t.id)}" aria-label="${esc(t.name)} 고치기">${ic('more')}</button></li>`;
+    }).join('') : '<li class="empty">아직 없어요. 아래에 이름을 적고 수업 있는 요일을 골라 넣어요.</li>');
+    const sel = $('#pl-tch-subj');
+    const want = subjOptions(sel.value);
+    if (sel._plHTML !== want) { const v = sel.value; sel.innerHTML = want; sel._plHTML = want; sel.value = store.get().subjects.some((x) => x.id === v) ? v : ''; }
+    setHTML($('#pl-tch-days'), wdButtons(tchDays, 'data-pl-twd'));
+  }
+  $('#pl-tch-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const inp = $('#pl-tch-name');
+    const name = inp.value.trim();
+    if (!name) { toast('선생님 이름을 적어 주세요'); inp.focus(); return; }
+    if (!tchDays.size) { toast('수업 있는 요일을 골라 주세요'); return; }
+    let t = null;
+    store.update((st) => { t = P.addTeacher(st, { name, subjectId: $('#pl-tch-subj').value, days: [...tchDays] }, uid); });
+    if (!t) return;
+    inp.value = '';
+    toast(`'${t.name}' 선생님을 넣었어요 · ${dayText(t.days)} 복습 줄에 나와요`);
+  });
+  $('#pl-tch-days').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pl-twd]');
+    if (!b) return;
+    const d = +b.dataset.plTwd;
+    if (tchDays.has(d)) tchDays.delete(d); else tchDays.add(d);
+    setHTML($('#pl-tch-days'), wdButtons(tchDays, 'data-pl-twd'));
+  });
+  $('#pl-tch').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pl-tch]');
+    if (b) editTeacher(b.dataset.plTch);
+  });
+  // 선생님 고치기 창: 이름 · 과목 · 수업 요일 · 지우기
+  async function editTeacher(id) {
+    const st = store.get();
+    const t = P.teacherList(st).find((x) => x.id === id);
+    if (!t) return;
+    const days = new Set(Array.isArray(t.days) && t.days.length ? t.days.map(Number) : [1, 2, 3, 4, 5]);
+    let subj = t.subjectId || '';
+    const chips = () => st.subjects.map((x) => `<button type="button" class="chip${subj === x.id ? ' active' : ''}" data-pl-ts="${esc(x.id)}" role="radio" aria-checked="${subj === x.id}"><i class="dot" style="background:${esc(x.color)}"></i>${esc(x.name)}</button>`).join('') +
+      `<button type="button" class="chip${subj ? '' : ' active'}" data-pl-ts="" role="radio" aria-checked="${!subj}">과목 없음</button>`;
+    const body = `<div class="pl-te"><label class="pl-lab" for="pl-te-name">이름</label><input id="pl-te-name" maxlength="8" value="${esc(t.name)}" autocomplete="off">` +
+      `<span class="pl-lab">과목</span><div class="pl-chips" data-pl-te-subj role="radiogroup" aria-label="과목">${chips()}</div>` +
+      `<span class="pl-lab">수업 있는 요일</span><div class="pl-wdays" data-pl-te-days role="group" aria-label="수업 있는 요일">${wdButtons(days, 'data-pl-tewd')}</div>` +
+      `<div class="pl-te-foot"><button type="button" class="btn danger" data-pl-te-del>지우기</button><span class="sp"></span><button type="button" class="btn primary" data-pl-te-ok>저장</button></div></div>`;
+    const res = await window.UI.openSheet({
+      title: '복습 선생님 고치기', body, cls: 'pl-menu-sheet pl-te-sheet', focusSel: '#pl-te-name',
+      onKey: (e, box, close) => { if (e.key === 'Enter' && e.target.id === 'pl-te-name') { e.preventDefault(); close({ ok: true, name: e.target.value }); } },
+      onClick: (e, close) => {
+        const box = e.currentTarget;
+        const sb = e.target.closest('[data-pl-ts]');
+        if (sb) { subj = sb.dataset.plTs; box.querySelector('[data-pl-te-subj]').innerHTML = chips(); return; }
+        const wd = e.target.closest('[data-pl-tewd]');
+        if (wd) { const d = +wd.dataset.plTewd; if (days.has(d)) days.delete(d); else days.add(d); box.querySelector('[data-pl-te-days]').innerHTML = wdButtons(days, 'data-pl-tewd'); return; }
+        if (e.target.closest('[data-pl-te-del]')) { close({ del: true }); return; }
+        if (e.target.closest('[data-pl-te-ok]')) close({ ok: true, name: box.querySelector('#pl-te-name').value });
+      },
+    });
+    if (!res) return;
+    if (res.del) {
+      const ok = await App.ask(`'${t.name}' 선생님을 지울까요?\n지난 날 체크한 기록은 남지만 복습 줄에는 더 안 나와요.`, { ok: '지우기', cancel: '두기', danger: true });
+      if (ok) { store.update((s) => { P.removeTeacher(s, id); }); toast(`'${t.name}' 선생님을 지웠어요`); }
+      return;
+    }
+    if (!days.size) { toast('수업 있는 요일을 하나 이상 골라 주세요'); return; }
+    store.update((s) => { P.editTeacher(s, id, { name: res.name, subjectId: subj, days: [...days] }); });
+  }
+
+  /* ---------- 맨 아래: 장소·시간 목록 ---------- */
+  function renderSlots() {
+    const st = store.get();
+    const list = P.slotList(st);
+    $('#pl-slot-n').textContent = list.length + '개';
+    const used = new Map();
+    const tk = today();
+    st.tasks.forEach((t) => { if (t && t.slotId && !t.done && (!t.due || t.due >= tk)) used.set(t.slotId, (used.get(t.slotId) || 0) + 1); });
+    setHTML($('#pl-slot-list'), list.length ? list.map((x) => `<li data-id="${esc(x.id)}">` +
+      (list.length > 1 ? `<span class="pl-grip" data-pl-grip role="button" tabindex="0" aria-label="${esc(x.name)} 순서 바꾸기 (위·아래 화살표)">${ic('grip')}</span>` : '') +
+      `<button type="button" class="pl-slot-name" data-pl-slot-ren="${esc(x.id)}" aria-label="${esc(x.name)} 이름 바꾸기"><b>${esc(x.name)}</b>${used.get(x.id) ? `<span class="n">할 일 ${used.get(x.id)}개</span>` : ''}</button>` +
+      `<button type="button" class="icon-btn" data-pl-slot-del="${esc(x.id)}" aria-label="${esc(x.name)} 지우기">${ic('x')}</button></li>`).join('')
+      : '<li class="empty">비어 있어요. 아래에 적어 넣어요.</li>');
+  }
+  $('#pl-slot-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const inp = $('#pl-slot-name');
+    const v = inp.value.trim();
+    if (!v) { inp.focus(); return; }
+    const before = P.slotList(store.get()).length;
+    let x = null;
+    store.update((st) => { x = P.addSlot(st, v, uid); });
+    if (!x) { toast('장소·시간은 20개까지 넣을 수 있어요'); return; }
+    inp.value = '';
+    toast(P.slotList(store.get()).length > before ? `'${x.name}'을 넣었어요` : `'${x.name}'은 이미 있어요`);
+  });
+  $('#pl-slot-list').addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-pl-slot-del]');
+    if (del) {
+      const id = del.dataset.plSlotDel;
+      const x = P.slotList(store.get()).find((y) => y.id === id);
+      if (!x) return;
+      const n = store.get().tasks.filter((t) => t && t.slotId === id).length;
+      if (n && !(await App.ask(`'${x.name}'을 지울까요?\n이 장소를 고른 할 일 ${n}개는 '정하지 않음'이 돼요.`, { ok: '지우기', cancel: '두기', danger: true }))) return;
+      store.update((st) => { P.removeSlot(st, id); });
+      toast(`'${x.name}'을 지웠어요`);
+      return;
+    }
+    const ren = e.target.closest('[data-pl-slot-ren]');
+    if (ren) {
+      const id = ren.dataset.plSlotRen;
+      const x = P.slotList(store.get()).find((y) => y.id === id);
+      if (!x) return;
+      const res = await window.UI.openSheet({
+        title: '이름 바꾸기', cls: 'pl-menu-sheet pl-te-sheet', focusSel: '#pl-sr-name',
+        body: `<div class="pl-te"><input id="pl-sr-name" maxlength="10" value="${esc(x.name)}" autocomplete="off" enterkeyhint="done" aria-label="장소·시간 이름"><div class="pl-te-foot"><span class="sp"></span><button type="button" class="btn primary" data-pl-sr-ok>저장</button></div></div>`,
+        onKey: (ev, box, close) => { if (ev.key === 'Enter' && ev.target.id === 'pl-sr-name') { ev.preventDefault(); close(ev.target.value); } },
+        onClick: (ev, close) => { if (ev.target.closest('[data-pl-sr-ok]')) close(ev.currentTarget.querySelector('#pl-sr-name').value); },
+      });
+      if (typeof res === 'string' && res.trim() && res.trim() !== x.name) store.update((st) => { P.renameSlot(st, id, res); });
+    }
+  });
+
+  // 손잡이로 끌거나 위·아래 화살표로 순서 바꾸기 (onMove(id, 새 자리))
+  function sortable(list, onMove) {
+    let d = null;
+    list.addEventListener('pointerdown', (e) => {
+      const g = e.target.closest('[data-pl-grip]');
+      if (!g || d || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      const el = g.closest('li');
+      const sibs = [...list.children];
+      const i0 = sibs.indexOf(el);
+      if (i0 < 0 || sibs.length < 2) return;
+      e.preventDefault();
+      const rects = sibs.map((x) => x.getBoundingClientRect());
+      d = { el, sibs, rects, i0, idx: i0, y0: e.clientY, pid: e.pointerId, h: rects[i0].height };
+      el.classList.add('pl-lift');
+      list.classList.add('pl-sorting');
+      try { list.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+    });
+    list.addEventListener('pointermove', (e) => {
+      if (!d || e.pointerId !== d.pid) return;
+      e.preventDefault();
+      const dy = e.clientY - d.y0;
+      d.el.style.transform = `translateY(${dy}px)`;
+      const r = d.rects[d.i0], top = r.top + dy, bottom = r.bottom + dy;
+      let idx = d.i0;
+      for (let j = d.i0 - 1; j >= 0 && top < d.rects[j].top + d.rects[j].height / 2; j--) idx = j;
+      for (let j = d.i0 + 1; j < d.rects.length && bottom > d.rects[j].top + d.rects[j].height / 2; j++) idx = j;
+      d.idx = idx;
+      d.sibs.forEach((x, j) => {
+        if (j === d.i0) return;
+        const off = j < d.i0 && j >= idx ? d.h : j > d.i0 && j <= idx ? -d.h : 0;
+        x.style.transform = off ? `translateY(${off}px)` : '';
+      });
+    });
+    const end = (e) => {
+      if (!d || e.pointerId !== d.pid) return;
+      const x = d;
+      d = null;
+      x.sibs.forEach((y) => { y.style.transform = ''; });
+      x.el.classList.remove('pl-lift');
+      list.classList.remove('pl-sorting');
+      if (e.type === 'pointerup' && x.idx !== x.i0) onMove(x.el.dataset.id, x.idx);
+    };
+    list.addEventListener('pointerup', end);
+    list.addEventListener('pointercancel', end);
+    list.addEventListener('touchmove', (e) => { if (d && e.cancelable) e.preventDefault(); }, { passive: false });
+    list.addEventListener('keydown', (e) => {
+      const g = e.target.closest('[data-pl-grip]');
+      if (!g || d || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+      e.preventDefault();
+      const el = g.closest('li');
+      const i = [...list.children].indexOf(el);
+      const to = i + (e.key === 'ArrowUp' ? -1 : 1);
+      if (to < 0 || to >= list.children.length) return;
+      onMove(el.dataset.id, to);
+      const ng = list.querySelector(`[data-id="${el.dataset.id}"] [data-pl-grip]`);
+      if (ng) ng.focus();
+    });
+  }
+  sortable($('#pl-slot-list'), (id, to) => store.update((st) => { P.moveSlot(st, id, to); }));
+  sortable($('#pl-tch'), (id, to) => store.update((st) => { P.moveTeacher(st, id, to); }));
+
   /* ---------- 누르기 ---------- */
   function open(key) {
     sel = key && S.isKey(key) && key !== today() ? key : null;
@@ -753,18 +1124,12 @@
     });
   }
 
-  document.addEventListener('change', (e) => {
-    const c = e.target.closest && e.target.closest('.pl-check');
-    if (!c) return;
-    const li = c.closest('[data-pl-id]');
-    if (li && !App.setTaskDone(li.dataset.plId, c.checked)) c.checked = !c.checked; // 그사이 지워진 할 일
-  });
   document.addEventListener('click', async (e) => {
     if (e.target.closest('[data-pl-subjects]')) { e.preventDefault(); showSubjects(); return; }
     const zone = e.target.closest('#view-plan, #h-tasks-panel');
     if (!zone || e.target.closest('[data-tt-open]')) return; // 일정 시각·타임테이블 단추는 timetable.js가 연다
-    const b = e.target.closest('[data-pl-mode], [data-pl-nav], [data-pl-today], [data-pl-cal], [data-pl-day], [data-pl-open], [data-pl-goal], [data-pl-add], [data-pl-scope], [data-pl-carry], [data-pl-carry-open], [data-pl-evadd], [data-pl-play], [data-pl-more], [data-pl-place]');
-    if (!b || e.target.closest('.pl-check')) return;
+    const b = e.target.closest('[data-pl-mode], [data-pl-nav], [data-pl-today], [data-pl-cal], [data-pl-day], [data-pl-open], [data-pl-goal], [data-pl-add], [data-pl-scope], [data-pl-carry], [data-pl-carry-open], [data-pl-evadd], [data-pl-play], [data-pl-mark], [data-pl-slot], [data-pl-rv], [data-pl-rv-setup], [data-pl-more], [data-pl-place]');
+    if (!b) return;
     const d = b.dataset;
     const id = b.closest('[data-pl-id]') ? b.closest('[data-pl-id]').dataset.plId : null;
     if ('plMode' in d) setMode(d.plMode);
@@ -776,14 +1141,18 @@
     else if ('plGoal' in d) startGoal();
     else if ('plAdd' in d) openDlg({ date: d.plAdd === 'today' ? today() : d.plAdd });
     else if ('plScope' in d) openScope(viewKey());
-    else if ('plCarry' in d) carry();
+    else if ('plCarry' in d) openCarry();
     else if ('plCarryOpen' in d) { carryOpen = !carryOpen; render(); }
     else if ('plEvadd' in d) { if (window.Events) window.Events.open({ date: d.plEvadd }); }
     else if (id && 'plPlay' in d) { const t = taskOf(id); if (t) startTask(t); }
+    else if (id && 'plMark' in d) { const t = taskOf(id); if (t) { drawn = { id, at: Date.now() }; App.setTaskMark(id, P.nextMark(P.markOf(t))); } }
+    else if (id && 'plSlot' in d) openSlotPick(id);
+    else if ('plRv' in d) store.update((st) => { P.toggleReview(st, d.plRvDay, d.plRv); });
+    else if ('plRvSetup' in d) showFold('pl-teachers-fold', '#pl-tch-name');
     else if (id && 'plPlace' in d) { const t = taskOf(id); if (t) moveTo(t, viewKey()); }
     else if (id && 'plMore' in d) openMenu(id);
   });
 
-  window.Planner = { render, renderHome, open, setMode, openAdd: openDlg, pickDay: openMonth, placeTopic, addFromScope: openScope, showSubjects, get day() { return viewKey(); }, get mode() { return mode; } };
+  window.Planner = { render, renderHome, open, setMode, openAdd: openDlg, pickDay: openMonth, placeTopic, addFromScope: openScope, showSubjects, openCarry, maybeAsk, openSlotPick, get day() { return viewKey(); }, get mode() { return mode; } };
   render();
 })();

@@ -74,7 +74,7 @@ function seed() {
   const sheetIn = (page) => page.waitForSelector('.ui-back.in .ui-sheet');
   const tapIn = async (page, sel) => { await page.waitForSelector('.ui-back.in ' + sel); await page.tap('.ui-back.in ' + sel); await page.waitForTimeout(250); };
   const choose = (page, label) => tapIn(page, `.ch-opt:has(b:text-is("${label}"))`);
-  const menu = async (page, rowSel, item) => { await page.tap(rowSel + ' .pl-more'); await tapIn(page, `[data-pl-mi="${item}"]`); };
+  const menu = async (page, rowSel, item) => { await page.tap(rowSel + ' .pl-title'); await tapIn(page, `[data-pl-mi="${item}"]`); };
   const sumTitle = (page) => page.textContent('#pl-sum h2');
   const listIds = (page, sel) => page.$$eval((sel || '#pl-list') + ' > .pl-item', (els) => els.map((e) => e.dataset.plId));
 
@@ -168,12 +168,18 @@ function seed() {
   await page.tap('#pl-todo [data-pl-carry-open]');
   assert(/11\/16 \(월\)/.test(await page.textContent('#pl-todo .pl-carry-list [data-pl-id="o1"]')), '펼치면 못 한 일과 그 날짜');
   await page.tap('#pl-todo [data-pl-carry]');
-  await page.waitForTimeout(100);
-  assert((await task(page, 'o1')).due === '2026-11-17' && !(await page.$('#pl-todo .pl-carry')) && (await listIds(page))[0] === 'o1', '오늘로 가져오기: 오늘 목록 맨 위로, 띠는 사라짐');
-  assert(/할 일 1개를 오늘로 가져왔어요/.test(await toastOf(page)), '가져온 알림');
+  await sheetIn(page);
+  assert(/어제 못 끝낸 할 일 1개/.test(await page.textContent('.ui-back.in .ui-sheet-head')) && await page.isVisible('.ui-back.in [data-pl-cy="o1"].on'), "'오늘로' → 고르는 창 (처음부터 체크)");
+  await page.tap('.ui-back.in [data-pl-cy-ok]');
+  await page.waitForTimeout(250);
+  let o1 = await task(page, 'o1');
+  assert(o1.due === '2026-11-17' && o1.from === '2026-11-16' && !(await page.$('#pl-todo .pl-carry')) && (await listIds(page)).includes('o1'), '옮기기: 오늘 목록으로, 처음 날짜를 기억, 띠는 사라짐');
+  assert(/어제부터/.test(await page.textContent('#pl-list [data-pl-id="o1"] .pl-tag.from')), "옮겨 온 일에 '어제부터'");
+  assert(/할 일 1개를 오늘로 옮겼어요/.test(await toastOf(page)), '옮긴 알림');
   await page.tap('#toast .toast-act');
   await page.waitForTimeout(100);
-  assert((await task(page, 'o1')).due === '2026-11-16' && await page.isVisible('#pl-todo .pl-carry'), '되돌리기로 원래 날짜');
+  o1 = await task(page, 'o1');
+  assert(o1.due === '2026-11-16' && !('from' in o1) && await page.isVisible('#pl-todo .pl-carry'), '되돌리기로 원래 날짜');
 
   /* ===== ⑤ 목표·돌아보기·홈 ===== */
   await page.tap('#pl-sum [data-pl-goal]');
@@ -195,12 +201,15 @@ function seed() {
   await page.tap('#pl-save');
   await page.waitForTimeout(150);
   assert((await state(page)).tasks.find((t) => t.title === '홈에서 넣은 할 일').due === '2026-11-17' && (await listIds(page, '#h-tasklist')).length === 3, '홈에서 추가하면 오늘 할 일로');
-  await page.tap('#h-tasklist [data-pl-id="t1"] .pl-check');
+  await page.tap('#h-tasklist [data-pl-id="t1"] .pl-mark');
   await page.waitForTimeout(150);
-  assert((await task(page, 't1')).done && (await state(page)).sessions.some((s) => s.doneOf === 'task:t1' && s.minutes === 45), '홈에서 체크해도 끝남 (예상 45분 기록)');
-  await page.tap('#h-tasklist [data-pl-id="t1"] .pl-check');
+  assert((await task(page, 't1')).done && (await state(page)).sessions.some((s) => s.doneOf === 'task:t1' && s.minutes === 45), '홈에서 ○ 눌러도 끝남 (예상 45분 기록)');
+  await page.tap('#h-tasklist [data-pl-id="t1"] .pl-mark');
   await page.waitForTimeout(150);
-  assert(!(await task(page, 't1')).done && !(await state(page)).sessions.length, '체크를 풀면 기록도 뺌');
+  assert(!(await task(page, 't1')).done && (await task(page, 't1')).part && !(await state(page)).sessions.length && await page.isVisible('#h-tasklist [data-pl-id="t1"] .pl-mark.t'), '한 번 더 누르면 △: 기록도 뺌');
+  await page.tap('#h-tasklist [data-pl-id="t1"] .pl-mark');
+  await page.waitForTimeout(150);
+  assert(!(await task(page, 't1')).part && !(await page.$('#h-tasklist [data-pl-id="t1"] .pl-mark.t')), '또 누르면 빈칸');
   await page.evaluate(() => App.go('plan'));
 
   /* ===== ⑥ 주간 보기 ===== */
@@ -233,15 +242,15 @@ function seed() {
   assert(tm1 && tm1.title === '2단원 · 복소수' && tm1.subjectId === 's2' && tm1.estimateMin === 50, '단원 이름도 앞에: ' + tm1.title);
   assert(/범위 2개를 11월 17일 \(화\)에 넣었어요/.test(await toastOf(page)) && /범위/.test(await page.textContent(`#pl-list [data-pl-id="${tk1.id}"] .pl-meta`)), '알림과 줄의 범위 표시');
   // 플래너에서 체크 → 범위도 체크, 공부 시간은 한 번만
-  await page.tap(`#pl-list [data-pl-id="${tk1.id}"] .pl-check`);
+  await page.tap(`#pl-list [data-pl-id="${tk1.id}"] .pl-mark`);
   await page.waitForTimeout(150);
   st = await state(page);
   assert(st.topics.find((n) => n.id === 'k1').done && st.sessions.filter((s) => s.kind === 'done').length === 1 && st.sessions[0].minutes === 30, '플래너에서 끝내면 범위도 체크, 공부 시간 30분은 한 번만');
   assert(/범위도 체크 ♟/.test(await toastOf(page)) && /\+30분/.test(await toastOf(page)), '알림: ' + await toastOf(page));
-  await page.tap(`#pl-list [data-pl-id="${tk1.id}"] .pl-check`);
+  await page.tap(`#pl-list [data-pl-id="${tk1.id}"] .pl-mark`);
   await page.waitForTimeout(150);
   st = await state(page);
-  assert(!st.topics.find((n) => n.id === 'k1').done && !st.sessions.length, '체크를 풀면 범위 체크와 시간도 풀림');
+  assert(!st.topics.find((n) => n.id === 'k1').done && !st.sessions.length && st.tasks.find((t) => t.id === tk1.id).part, '△로 바꾸면 범위 체크와 시간도 풀림');
   // 범위에서 체크 → 할 일도 끝남
   await page.evaluate(() => App.go('board'));
   await page.waitForSelector('.list-mode .bitem[data-id="m1"]');
@@ -282,7 +291,7 @@ function seed() {
   await page.evaluate(() => Stopwatch.stop());
   await page.waitForTimeout(200);
   assert(/공부 25분/.test(await page.textContent('#pl-list [data-pl-id="t1"] .pl-got')) && (await state(page)).sessions.some((s) => s.taskId === 't1' && s.minutes === 25), '멈추면 잰 시간이 그 줄에');
-  await page.tap(`#pl-list [data-pl-id="t1"] .pl-check`);
+  await page.tap(`#pl-list [data-pl-id="t1"] .pl-mark`);
   await page.waitForTimeout(150);
   assert(!(await state(page)).sessions.some((s) => s.doneOf === 'task:t1'), '잰 할 일을 끝내도 예상 시간을 또 넣지 않음');
 
