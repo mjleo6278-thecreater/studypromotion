@@ -306,13 +306,13 @@ const SW = 'studypromotion.stopwatch';
   await page.waitForFunction(() => window.App);
   const tabs = await page.$$eval('#ver-tabs [data-ver-tab]', (els) => els.map((e) => ({ v: e.dataset.verTab, on: e.classList.contains('active'), sel: e.getAttribute('aria-selected') })));
   assert(tabs.length >= 9 && tabs[0].v === await page.evaluate(() => App.version) && tabs[0].on && tabs[0].sel === 'true' && tabs.filter((t) => t.on).length === 1, '버전마다 탭 하나, 맨 앞이 지금 버전(' + tabs[0].v + ')이고 처음에 골라져 있음: ' + tabs.map((t) => t.v).join(' '));
-  assert(/버전 3\.8/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
+  assert(/버전 3\.9/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
   const shown = () => page.$$eval('#about-news .ver', (els) => els.filter((e) => !e.hidden && e.offsetParent !== null).map((e) => ({ v: e.dataset.ver, when: e.querySelector('.ver-when').textContent, n: e.querySelectorAll('.news li').length })));
   let sh = await shown();
-  assert(sh.length === 1 && sh[0].v === '3.8' && /버전 3\.8 · 2026년 11월 18일 업데이트/.test(sh[0].when) && /벽 튕기기/.test(await page.textContent('#about-news .ver:not([hidden])')) && /얼굴 공/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.8 소식: 벽 튕기기, 얼굴 공 ' + sh[0].when);
-  await page.tap('#ver-tabs [data-ver-tab="3.7"]');
+  assert(sh.length === 1 && sh[0].v === '3.9' && /버전 3\.9 · 2026년 11월 18일 업데이트/.test(sh[0].when) && /전체 순위/.test(await page.textContent('#about-news .ver:not([hidden])')) && /별명/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.9 소식: 벽 튕기기 전체 순위, 별명 ' + sh[0].when);
+  await page.tap('#ver-tabs [data-ver-tab="3.8"]');
   sh = await shown();
-  assert(sh.length === 1 && sh[0].v === '3.7' && /버전 3\.7 · 2026년 11월 18일 업데이트/.test(sh[0].when) && /스터디 플래너/.test(await page.textContent('#about-news .ver:not([hidden])')) && /범위와 한 몸/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.7 소식: 스터디 플래너, 범위와 한 몸 ' + sh[0].when);
+  assert(sh.length === 1 && sh[0].v === '3.8' && /버전 3\.8 · 2026년 11월 18일 업데이트/.test(sh[0].when) && /벽 튕기기/.test(await page.textContent('#about-news .ver:not([hidden])')) && /얼굴 공/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.8 소식: 벽 튕기기, 얼굴 공 ' + sh[0].when);
   await page.tap('#ver-tabs [data-ver-tab="3.6"]');
   sh = await shown();
   assert(sh.length === 1 && sh[0].v === '3.6' && /버전 3\.6 · 2026년 11월 18일 업데이트/.test(sh[0].when) && /기능과 탭 편집/.test(await page.textContent('#about-news .ver:not([hidden])')) && /홈 화면도 원하는 차례로/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.6 소식: 기능과 탭 편집, 홈 화면 순서 ' + sh[0].when);
@@ -371,7 +371,7 @@ const SW = 'studypromotion.stopwatch';
   await page.tap('#toast .toast-act');
   await page.waitForTimeout(300);
   sh = await shown();
-  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '3.8' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
+  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '3.9' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
   await page.context().close();
 
   /* ===== 8) PC 화면, 어두운 화면 ===== */

@@ -2492,3 +2492,28 @@ body.bounce-open { overflow: hidden; }
   .crop-canvas { --cs: min(70vh, 300px); grid-column: 1; grid-row: 1 / 6; }
   .crop-box > :not(.crop-canvas) { grid-column: 2; }
 }
+/* ===== 벽 튕기기 전체 순위 (v3.9, js/bounce.js) ===== */
+.bounce-board .seg { display: flex; margin-bottom: 8px; }
+.bounce-board .seg-btn { flex: 1; justify-content: center; }
+.bounce-board.busy ol { opacity: .55; transition: opacity .2s; }
+.bounce-board ol.bb-all li { grid-template-columns: 22px minmax(0, 1fr) auto auto; }
+.bounce-board ol.bb-all.owner li { grid-template-columns: 22px minmax(0, 1fr) auto auto 22px; }
+.bb-name { min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bb-you { margin-left: 5px; padding: 0 5px; border-radius: 6px; background: var(--ink); color: var(--ink-text); font-size: 10.5px; font-style: normal; font-weight: 700; vertical-align: 1px; }
+.bb-rm { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; align-self: center; border: 0; border-radius: 50%; background: none; color: var(--muted); cursor: pointer; }
+.bb-rm .ic { width: 14px; height: 14px; }
+.bounce-board .bb-msg { margin-top: 8px; }
+.bounce-board .bb-btn { margin-top: 6px; }
+.bounce-board .bb-mine { margin-top: 8px; font-size: 13px; }
+.bounce-board .bb-nick { margin-top: 6px; display: flex; align-items: baseline; gap: 8px; }
+.bb-nick b { color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (hover: hover) { :where(:root:not(.touch)) .bb-rm:hover { color: var(--danger); background: var(--bg); } }
+/* 별명 창 (사진 자르기 창과 같은 덮개) */
+.bounce-name { align-items: flex-start; }
+.name-box { width: min(100%, 340px); margin: 10vh auto auto; display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.name-box h3 { margin: 0; font-size: 19px; font-weight: 800; }
+.name-box p { margin: 0; word-break: keep-all; line-height: 1.55; }
+.name-box input { text-align: center; font-size: 17px; }
+.bn-hint { color: var(--muted); }
+.bn-hint.bad { color: var(--danger); font-weight: 600; }
+@media (max-height: 520px) { .name-box { margin-top: 2vh; } }

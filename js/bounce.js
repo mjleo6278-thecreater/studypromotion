@@ -1,6 +1,8 @@
 /* 이스터에그 '벽 튕기기' (v3.8): 앱 소개의 비밀 입력칸에 비밀 단어를 넣으면 열리는 작은 공 게임 (js/egg.js가 연다).
  * - 화면을 좌우로 끌어 아래 막대를 움직이고, 공을 받아 넘긴다(1점). 공은 양옆 벽과 천장에 튕기고, 천장의 골대에 들어가면 1점 더.
- *   공은 시간이 갈수록 끝없이 빨라진다 (사용자 규칙, 2026-11-18). 끝나면 이 기기의 기록 순위(상위 10개)를 보여 준다.
+ *   공은 시간이 갈수록 끝없이 빨라진다 (사용자 규칙, 2026-11-18). 끝나면 기록 순위를 보여 준다.
+ * - 기록 순위(v3.9): '전체'는 모든 사용자의 순위(서버 worker/src/index.js의 /bounce, 한 사람에 최고 기록 한 줄, 별명으로 표시),
+ *   '이 기기'는 이 기기의 상위 10개. 전체 순위에 올리려면 로그인하고 별명을 정한다. 못 올린 기록은 기기에 두었다가 다음에 올린다.
  * - 공 얼굴: '얼굴 사진'으로 기기 안의 사진을 고르면 얼굴 부분을 동그랗게 잘라 공으로 쓴다.
  *   잘린 사진은 이 기기의 localStorage(studypromotion.eggBall)에만 둔다. 공부 기록(studypromotion.v1)과 따로라
  *   계정 동기화·자동 백업·내보내기에 들어가지 않고, 앱 파일과 저장소에도 사진을 담지 않는다.
@@ -11,6 +13,8 @@
   const BEST_KEY = 'studypromotion.eggBest';
   const BOARD_KEY = 'studypromotion.eggBoard'; // 기록 순위 [{ s 점수, g 골, sec 버틴 초, t 끝난 때 }]
   const BOARD_MAX = 10;
+  const NAME_KEY = 'studypromotion.eggName'; // 전체 순위에 보일 별명 { n 별명, u 정한 계정 }
+  const SEND_KEY = 'studypromotion.eggSend'; // 아직 전체 순위에 못 올린 가장 좋은 기록 { s, g, sec, t, u 그때 로그인한 계정 }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
   /* ---------- 사진 자르기 계산 (사진 픽셀 기준: 동그라미 가운데 cx·cy, 지름 d) ---------- */
@@ -131,6 +135,21 @@
     arr.splice(i, 0, rec);
     return { list: arr.slice(0, n), rank: i < n ? i : -1 };
   }
+  // 별명: 빈칸은 하나로, 한글·영어·숫자·빈칸·_·-만, 1~12글자. 아니면 null (서버 worker/src/index.js cleanName과 같은 규칙)
+  function cleanName(v) {
+    if (typeof v !== 'string') return null;
+    const s = v.normalize('NFC').replace(/\s+/g, ' ').trim();
+    const n = [...s].length;
+    if (!n || n > 12 || !/^[0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ _-]+$/.test(s)) return null;
+    return s;
+  }
+  // 전체 순위에 올릴 기록: 아직 못 올린 기록(old)과 이번 기록(rec) 중 점수가 높은 것.
+  // 다른 계정으로 만든 기록이 남아 있으면 이번 기록으로 바꾼다 (그 계정의 기록을 이 계정 이름으로 올리지 않는다)
+  function pickSend(old, rec) {
+    if (!old || !(old.s > 0)) return rec;
+    if (old.u && old.u !== rec.u) return rec;
+    return rec.s > old.s ? rec : old;
+  }
   // 버틴 시간 글자: 45초, 1분 12초, 2분
   function fmtSec(sec) {
     const s = Math.max(0, Math.round(sec || 0));
@@ -138,13 +157,13 @@
     return Math.floor(s / 60) + '분' + (s % 60 ? ' ' + (s % 60) + '초' : '');
   }
 
-  const lib = { BALL_KEY, BEST_KEY, BOARD_KEY, BOARD_MAX, SPEED_PER_SEC, FAST_CUE, speedOf, addRecord, fmtSec, cropLimits, clampCrop, initialCrop, cropFromFace, zoomToD, dToZoom, createGame, layoutGame, serve, launch, movePaddle, step };
+  const lib = { BALL_KEY, BEST_KEY, BOARD_KEY, BOARD_MAX, NAME_KEY, SEND_KEY, cleanName, pickSend, SPEED_PER_SEC, FAST_CUE, speedOf, addRecord, fmtSec, cropLimits, clampCrop, initialCrop, cropFromFace, zoomToD, dToZoom, createGame, layoutGame, serve, launch, movePaddle, step };
   if (typeof module !== 'undefined' && module.exports) { module.exports = lib; return; }
 
   /* ================= 화면 ================= */
   const App = root.App;
   if (!App) return;
-  const { ic, toast } = App;
+  const { ic, toast, esc } = App;
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } };
   const lsDel = (k) => { try { localStorage.removeItem(k); } catch (e) { /* 무시 */ } };
@@ -203,6 +222,15 @@
           <div class="crop-actions"><button class="btn" type="button" id="crop-cancel">취소</button><button class="btn primary" type="button" id="crop-ok">이 얼굴로 하기</button></div>
           <p class="muted small crop-note">고른 사진은 이 기기에만 저장돼요. 계정 동기화나 백업에는 들어가지 않아요.</p>
         </div>
+      </div>
+      <div class="bounce-crop bounce-name" id="bounce-name" hidden>
+        <form class="name-box" id="bn-form" autocomplete="off" novalidate>
+          <h3>전체 순위에 보일 별명</h3>
+          <p class="muted small">다른 사람에게는 계정 이름 대신 이 별명만 보여요.</p>
+          <input type="text" id="bn-input" maxlength="12" placeholder="예: 공부왕" aria-label="별명" enterkeyhint="done" spellcheck="false">
+          <p class="small bn-hint" id="bn-hint">한글·영어·숫자로 12자까지 쓸 수 있어요.</p>
+          <div class="crop-actions"><button class="btn" type="button" id="bn-cancel">취소</button><button class="btn primary" type="submit" id="bn-ok">정하기</button></div>
+        </form>
       </div>`;
     document.body.appendChild(el);
 
@@ -216,7 +244,16 @@
       else if (act === 'resume') { card(null); g.state = 'play'; last = 0; }
       else if (act === 'photo') pickPhoto();
       else if (act === 'plain') { lsDel(BALL_KEY); face = null; sprite = null; card(g.state === 'over' ? 'over' : 'ready'); toast('기본 공으로 바꿨어요'); }
+      else if (act === 'rank') { card('rank'); if (!net.view && !net.busy) sync(); }
+      else if (act === 'tab-all' || act === 'tab-me') { tab = act === 'tab-all' ? 'all' : 'me'; paintBoard(); if (tab === 'all' && !net.view && !net.busy) sync(); }
+      else if (act === 'retry') sync();
+      else if (act === 'login') { close(); App.go('account'); }
+      else if (act === 'name') openName();
+      else if (act === 'rm') removeRow(b.dataset.id, b.dataset.n);
     });
+    q('#bn-form').addEventListener('submit', (e) => { e.preventDefault(); saveName(); });
+    q('#bn-cancel').addEventListener('click', hideName);
+    q('#bn-input').addEventListener('input', () => q('#bn-hint').classList.remove('bad'));
     q('#bounce-file').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; if (f) openPhoto(f); });
 
     // 막대: 화면 아무 데나 대고 좌우로 끌기
@@ -290,7 +327,7 @@
   function onKey(e) {
     if (!isOpen()) return;
     if (e.key === 'Escape') { e.preventDefault(); back(); return; }
-    if (crop) return;
+    if (crop || nameOpen()) return;
     if (e.key === 'ArrowLeft') { keys.l = 1; e.preventDefault(); }
     else if (e.key === 'ArrowRight') { keys.r = 1; e.preventDefault(); }
     else if ((e.key === ' ' || e.key === 'Enter') && g.state === 'ready' && q('#bounce-card').hidden) { e.preventDefault(); launch(g); }
@@ -366,18 +403,21 @@
     const prev = '<canvas class="bounce-prev" aria-hidden="true"></canvas>';
     if (cardKind === 'ready') {
       c.innerHTML = `${prev}<h3>벽 튕기기</h3><p class="muted small">화면을 좌우로 끌어 막대를 움직여요. 공을 치면 1점, 위쪽 골대에 넣으면 1점 더! 시간이 갈수록 공이 점점 빨라지고, 놓치면 끝나요.</p>` +
-        `<div class="bounce-acts"><button class="btn primary" type="button" data-b="start">시작하기</button>${photo}</div>` +
+        `<div class="bounce-acts"><button class="btn primary" type="button" data-b="start">시작하기</button>${photo}` +
+        (remote() || board.length ? '<button class="btn link" type="button" data-b="rank">기록 순위 보기</button>' : '') + '</div>' +
         (face ? '' : '<p class="muted small bounce-note">사진을 고르면 얼굴만 동그랗게 잘라 공으로 써요. 사진은 이 기기에만 저장돼요.</p>');
     } else if (cardKind === 'over') {
       c.innerHTML = `${prev}<h3>${lastScore}점</h3><p class="muted small">${newBest && lastScore > 0 ? '새 최고 기록이에요!' : '최고 기록 ' + best + '점'} · 골 ${g.goals}번 · ${fmtSec(g.t)}</p>` +
         boardHTML() +
         `<div class="bounce-acts"><button class="btn primary" type="button" data-b="again">다시 하기</button>${photo}</div>`;
+    } else if (cardKind === 'rank') {
+      c.innerHTML = '<h3>기록 순위</h3>' + (boardHTML() || '<p class="muted small">아직 기록이 없어요.</p>') +
+        '<div class="bounce-acts"><button class="btn primary" type="button" data-b="start">시작하기</button></div>';
     } else if (cardKind === 'pause') {
       c.innerHTML = `${prev}<h3>잠깐 멈췄어요</h3><p class="muted small">지금 ${g.score}점이에요.</p>` +
         '<div class="bounce-acts"><button class="btn primary" type="button" data-b="resume">이어 하기</button><button class="btn" type="button" data-b="again">처음부터</button></div>';
     }
-    const me = c.querySelector('.bounce-board li.me');
-    if (me) { const ol = me.parentNode; ol.scrollTop = Math.max(0, me.offsetTop - ol.clientHeight / 2); }
+    scrollMe(c);
     const pc = c.querySelector('.bounce-prev');
     if (pc && g) {
       const S = 64;
@@ -388,16 +428,191 @@
     }
   }
 
-  // 기록 순위 (이 기기에만 저장)
+  // 기록 순위: 원격(실제 앱 주소)이면 '전체 | 이 기기' 두 칸, 아니면 이 기기 것만
   const two = (n) => String(n).padStart(2, '0');
   const when = (t) => { const d = new Date(t); return `${d.getMonth() + 1}월 ${d.getDate()}일 ${two(d.getHours())}:${two(d.getMinutes())}`; };
-  function boardHTML() {
-    if (!board.length) return '';
+  function localList() {
     const rows = board.map((r, i) => `<li${i === lastRank ? ' class="me"' : ''}><span class="bb-rk">${i + 1}</span><b>${r.s}점</b>` +
       `<span class="bb-sub">골 ${r.g || 0} · ${fmtSec(r.sec)}</span><span class="bb-when">${i === lastRank ? '방금' : when(r.t)}</span></li>`).join('');
-    const outside = lastRank < 0 && lastScore > 0 ? `<p class="muted small bb-out">이번 ${lastScore}점은 10위 밖이에요.</p>` : '';
-    return `<div class="bounce-board"><h4>기록 순위 <span class="muted">이 기기</span></h4><ol>${rows}</ol>${outside}</div>`;
+    const outside = lastRank < 0 && lastScore > 0 && cardKind === 'over' ? `<p class="muted small bb-out">이번 ${lastScore}점은 10위 밖이에요.</p>` : '';
+    return `<ol>${rows}</ol>${outside}`;
   }
+  function boardHTML() {
+    if (!remote()) return board.length ? `<div class="bounce-board"><h4>기록 순위 <span class="muted">이 기기</span></h4>${localList()}</div>` : '';
+    const tabBtn = (k, label) => `<button class="seg-btn${tab === k ? ' active' : ''}" type="button" role="tab" aria-selected="${tab === k}" data-b="tab-${k}">${label}</button>`;
+    const body = tab === 'all' ? allList() : board.length ? localList() : '<p class="muted small bb-msg">아직 이 기기의 기록이 없어요.</p>';
+    return `<div class="bounce-board${net.busy ? ' busy' : ''}"><div class="seg" role="tablist" aria-label="기록 순위">${tabBtn('all', '전체')}${tabBtn('me', '이 기기')}</div>${body}</div>`;
+  }
+  function allList() {
+    const v = net.view;
+    let html;
+    if (!v) {
+      html = net.busy || !net.fail ? '<p class="muted small bb-msg">전체 순위를 불러오는 중…</p>'
+        : '<p class="muted small bb-msg">지금은 전체 순위를 불러오지 못했어요.</p><button class="btn sm bb-btn" type="button" data-b="retry">다시 불러오기</button>';
+    } else if (!v.top.length) html = '<p class="muted small bb-msg">아직 아무도 올리지 않았어요. 첫 기록을 올려 보세요!</p>';
+    else {
+      const rm = (e) => v.owner && !e.me && e.id ? `<button class="bb-rm" type="button" data-b="rm" data-id="${esc(e.id)}" data-n="${esc(e.n)}" aria-label="${esc(e.n)} 기록 지우기">${ic('x')}</button>` : '';
+      html = `<ol class="bb-all${v.owner ? ' owner' : ''}">` + v.top.map((e) => `<li${e.me ? ' class="me"' : ''}><span class="bb-rk">${e.rank}</span>` +
+        `<span class="bb-name">${esc(e.n)}${e.me ? '<i class="bb-you">나</i>' : ''}</span><b>${e.s}점</b><span class="bb-sub">골 ${e.g} · ${fmtSec(e.sec)}</span>${rm(e)}</li>`).join('') + '</ol>';
+    }
+    return html + noteHTML(v);
+  }
+  // 순위 아래 한두 줄: 내 순위, 올리지 못한 까닭과 할 일, 별명
+  function noteHTML(v) {
+    const u = user(), me = v && v.me, nm = myName(), wait = readSend();
+    let html = '';
+    if (me) html += `<p class="bb-mine">${net.note === 'better' ? '<b>새 기록을 올렸어요!</b> ' : `내 최고 ${me.s}점 · `}전체 ${v.total}명 중 <b>${me.rank}위</b></p>`;
+    if (!u) {
+      html += `<p class="muted small bb-msg">${wait ? `로그인하면 ${wait.s}점 기록을 전체 순위에 올릴 수 있어요.` : '로그인하면 내 기록도 전체 순위에 올라가요.'}</p>` +
+        '<button class="btn sm bb-btn" type="button" data-b="login">로그인하기</button>';
+    } else if (wait && net.note === 'name') {
+      html += `<p class="muted small bb-msg">별명을 정하면 ${wait.s}점 기록이 전체 순위에 올라가요.</p><button class="btn sm primary bb-btn" type="button" data-b="name">별명 정하기</button>`;
+    } else if (wait && net.note === 'offline') {
+      html += `<p class="muted small bb-msg">인터넷에 연결되면 ${wait.s}점 기록을 올릴게요.</p><button class="btn sm bb-btn" type="button" data-b="retry">다시 올리기</button>`;
+    } else if (net.note === 'bad') html += '<p class="muted small bb-msg">이번 기록은 전체 순위에 올리지 못했어요.</p>';
+    if (u && nm) html += `<p class="muted small bb-nick">별명 <b>${esc(nm)}</b><button class="btn link inline" type="button" data-b="name">바꾸기</button></p>`;
+    return html;
+  }
+  // 순위 칸만 새로 그린다 (카드 전체를 다시 그리면 누르던 단추의 초점이 사라진다)
+  function paintBoard() {
+    if (!isOpen()) return;
+    const b = q('#bounce-card .bounce-board');
+    if (!b) return;
+    const a = document.activeElement, focus = a && b.contains(a) ? a.dataset.b : null;
+    const t = document.createElement('div');
+    t.innerHTML = boardHTML();
+    const nb = t.firstElementChild;
+    if (!nb) return;
+    b.replaceWith(nb);
+    scrollMe(nb);
+    const f = focus && nb.querySelector(`[data-b="${focus}"]`);
+    if (f) try { f.focus({ preventScroll: true }); } catch (e) { /* 무시 */ }
+  }
+  function scrollMe(box) {
+    const me = box.querySelector('.bounce-board li.me');
+    if (me) { const ol = me.parentNode; ol.scrollTop = Math.max(0, me.offsetTop - ol.clientHeight / 2); }
+  }
+
+  /* ---------- 전체 순위 (서버와 주고받기) ---------- */
+  const API = 'https://studypromotion-ai.mj-leo6278.workers.dev'; // AI 도우미와 같은 서버 (js/ai.js AI_ENDPOINT)
+  const HOME = 'https://mjleo6278-thecreater.github.io'; // 서버는 이 주소의 앱에서 온 요청만 받는다
+  const remote = () => location.origin === HOME;
+  const net = { view: null, busy: false, fail: false, note: null }; // note: 'better' | 'same' | 'name' | 'offline' | 'bad' | null
+  let tab = 'all', netSeq = 0;
+  const user = () => (root.Cloud && root.Cloud.user) || null;
+  // 별명은 정한 계정과 함께 둔다 { n, u }: 다른 계정으로 바꿔 로그인하면 쓰지 않는다
+  function myName() {
+    try {
+      const o = JSON.parse(lsGet(NAME_KEY) || 'null'), u = user();
+      return o && typeof o === 'object' && (!u || !o.u || o.u === u.uid) ? cleanName(o.n) : null;
+    } catch (e) { return null; }
+  }
+  const setName = (n) => { const u = user(); lsSet(NAME_KEY, JSON.stringify({ n, u: u ? u.uid : null })); };
+  function readSend() {
+    try { const r = JSON.parse(lsGet(SEND_KEY) || 'null'); return r && Number.isInteger(r.s) && r.s > 0 ? r : null; } catch (e) { return null; }
+  }
+  const fail = (code) => Object.assign(new Error(code), { code });
+  async function api(method, body) {
+    const headers = {};
+    const u = user();
+    if (u) {
+      try { headers.Authorization = 'Bearer ' + await u.getIdToken(); }
+      catch (e) { if (method === 'POST') throw fail('offline'); }
+    }
+    if (body) headers['Content-Type'] = 'application/json';
+    const ctl = root.AbortController ? new AbortController() : null;
+    const timer = setTimeout(() => { if (ctl) ctl.abort(); }, 12000);
+    try {
+      let res;
+      try { res = await fetch(API + '/bounce', { method, headers, body: body ? JSON.stringify(body) : undefined, signal: ctl ? ctl.signal : undefined }); }
+      catch (e) { throw fail('offline'); }
+      let j = null;
+      try { j = await res.json(); } catch (e) { /* 아래에서 */ }
+      if (!res.ok || !j || !j.ok) throw fail((j && j.error) || 'server');
+      return j;
+    } finally { clearTimeout(timer); }
+  }
+  function gotView(v) {
+    net.view = v; net.fail = false;
+    if (v.me && cleanName(v.me.n) && user()) setName(v.me.n); // 다른 기기에서 정한 별명도 따른다
+  }
+  // 못 올린 기록이 있으면 올리고(로그인했을 때), 아니면 순위만 받아 온다
+  async function sync() {
+    if (!remote()) return;
+    const seq = ++netSeq;
+    net.busy = true;
+    paintBoard();
+    const rec = readSend(), u = user();
+    let v = null;
+    if (rec && u && (!rec.u || rec.u === u.uid)) v = await sendRec(rec);
+    if (!v) { try { v = await api('GET'); } catch (e) { v = null; } }
+    if (seq !== netSeq) return; // 그새 새로 묻기 시작함
+    if (v) gotView(v); else net.fail = true;
+    net.busy = false;
+    paintBoard();
+  }
+  async function sendRec(rec) {
+    const body = { s: rec.s, g: rec.g, sec: rec.sec };
+    const nm = myName();
+    if (nm) body.name = nm;
+    try {
+      const v = await api('POST', body);
+      const cur = readSend();
+      if (cur && cur.t === rec.t) lsDel(SEND_KEY);
+      net.note = v.better ? 'better' : 'same';
+      return v;
+    } catch (e) {
+      if (e.code === 'name' || e.code === 'badname') { if (e.code === 'badname') lsDel(NAME_KEY); net.note = 'name'; }
+      else if (e.code === 'bad') { lsDel(SEND_KEY); net.note = 'bad'; } // 서버가 말이 안 된다고 본 기록: 다시 보내지 않는다
+      else net.note = 'offline';
+      return null;
+    }
+  }
+  // 별명 정하기·바꾸기
+  const nameOpen = () => !!(el && !q('#bounce-name').hidden);
+  function openName() {
+    const box = q('#bounce-name');
+    box.hidden = false;
+    q('#bn-hint').classList.remove('bad');
+    const inp = q('#bn-input');
+    inp.value = myName() || '';
+    try { inp.focus({ preventScroll: true }); inp.select(); } catch (e) { /* 무시 */ }
+  }
+  function hideName() {
+    if (!el || q('#bounce-name').hidden) return;
+    q('#bounce-name').hidden = true;
+    const b = q('#bounce-card [data-b="name"]');
+    if (b) try { b.focus({ preventScroll: true }); } catch (e) { /* 무시 */ }
+  }
+  async function saveName() {
+    const inp = q('#bn-input');
+    const nm = cleanName(inp.value);
+    if (!nm) { q('#bn-hint').classList.add('bad'); inp.focus(); return; }
+    inp.blur();
+    q('#bounce-name').hidden = true;
+    const had = net.view && net.view.me;
+    setName(nm);
+    if (net.note === 'name') net.note = null;
+    if (readSend() && user()) { await sync(); return; }
+    if (had && had.n !== nm && user()) {
+      net.busy = true; paintBoard();
+      try { gotView(await api('POST', { name: nm, rename: true })); toast('별명을 바꿨어요'); }
+      catch (e) { toast(e.code === 'badname' ? '이 별명은 쓸 수 없어요' : '별명을 바꾸지 못했어요. 인터넷 연결을 확인해 주세요'); }
+      net.busy = false;
+    }
+    paintBoard();
+  }
+  // 주인 계정: 알맞지 않은 별명의 줄을 지운다
+  async function removeRow(id, name) {
+    if (!id) return;
+    const yes = await App.ask(`'${name}' 기록을 전체 순위에서 지울까요?`, { ok: '지우기', danger: true });
+    if (!yes) return;
+    try { gotView(await api('POST', { remove: id })); toast('지웠어요'); }
+    catch (e) { toast('지우지 못했어요'); }
+    paintBoard();
+  }
+  // 로그인하면(js/cloud.js가 알림) 못 올린 기록을 올린다
+  root.addEventListener('cloud-user', () => { if (remote() && (isOpen() || (readSend() && myName() && user()))) sync(); });
 
   /* ---------- 진행 ---------- */
   function play() {
@@ -422,7 +637,13 @@
       const r = addRecord(board, { s: g.score, g: g.goals, sec: Math.round(g.t), t: Date.now() });
       board = r.list; lastRank = r.rank;
       lsSet(BOARD_KEY, JSON.stringify(board));
+      if (remote()) {
+        const u = user();
+        lsSet(SEND_KEY, JSON.stringify(pickSend(readSend(), { s: g.score, g: g.goals, sec: Math.max(1, Math.round(g.t)), t: Date.now(), u: u ? u.uid : null })));
+      }
     }
+    net.note = null;
+    if (remote()) sync();
     scoreUI();
     buzz(60);
     setTimeout(() => { if (isOpen() && g.state === 'over') card('over'); }, 450);
@@ -671,10 +892,13 @@
     card('ready');
     last = 0;
     if (!raf) raf = requestAnimationFrame(loop);
+    net.note = null;
+    if (remote()) sync(); // 순위를 미리 받아 두고, 못 올린 기록이 있으면 올린다
   }
   function close() {
     if (!isOpen()) return;
     hideCrop();
+    q('#bounce-name').hidden = true;
     el.hidden = true;
     document.body.classList.remove('bounce-open');
     cancelAnimationFrame(raf); raf = 0;
@@ -683,10 +907,13 @@
     const again = document.querySelector('[data-egg-game]');
     if (again) try { again.focus({ preventScroll: true }); } catch (e) { /* 무시 */ }
   }
-  // 휴대폰 '뒤로'·Esc: 자르기 창 → 게임 순서로 닫는다. 닫은 게 있으면 true
+  // 휴대폰 '뒤로'·Esc: 별명 창 → 자르기 창 → 순위 카드(시작 카드로) → 게임 순서로 닫는다. 닫은 게 있으면 true
   function back() {
     if (!isOpen()) return false;
-    if (crop) { hideCrop(); card(g.state === 'over' ? 'over' : 'ready'); } else close();
+    if (nameOpen()) hideName();
+    else if (crop) { hideCrop(); card(g.state === 'over' ? 'over' : 'ready'); }
+    else if (cardKind === 'rank') card('ready');
+    else close();
     return true;
   }
 

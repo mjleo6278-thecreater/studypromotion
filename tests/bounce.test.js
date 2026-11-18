@@ -161,3 +161,16 @@ test('화면 크기가 바뀌면(가로로 돌리기) 공과 막대가 비율대
   B.layoutGame(r, 800, 330);
   assert.ok(r.state === 'ready' && Math.abs(r.ball.y + r.r + 1 - r.py) < 1e-9, '기다리는 공은 막대 위에 그대로');
 });
+
+test('전체 순위(v3.9): 별명 규칙은 서버와 같고, 못 올린 기록 중 가장 좋은 것을 남긴다', async () => {
+  const W = await import('../worker/src/index.js');
+  for (const v of ['민재', ' 공부  왕 ', 'Kang-in_7', 'a.com', '', '😀', '가나다라마바사아자차카타파', '<b>', 7]) assert.strictEqual(B.cleanName(v), W.cleanName(v), String(v));
+  const a = { s: 5, g: 1, sec: 30, t: 1, u: null };
+  assert.strictEqual(B.pickSend(null, a), a);
+  assert.strictEqual(B.pickSend(a, { s: 3, g: 0, sec: 20, t: 2, u: null }), a, '낮은 기록은 남은 기록을 바꾸지 않는다');
+  const hi = { s: 9, g: 2, sec: 50, t: 3, u: 'u1' };
+  assert.strictEqual(B.pickSend(a, hi), hi);
+  const other = { s: 2, g: 0, sec: 15, t: 4, u: 'u2' };
+  assert.strictEqual(B.pickSend(hi, other), other, '다른 계정이 남긴 기록은 이 계정 이름으로 올리지 않는다');
+  assert.strictEqual(B.pickSend(a, other), other.s > a.s ? other : a, '로그인 전 기록은 로그인한 계정이 이어 받는다');
+});
