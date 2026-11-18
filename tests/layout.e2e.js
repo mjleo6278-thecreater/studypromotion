@@ -115,7 +115,7 @@ function seed(settings) {
     assert(await page.textContent('#lay-tabs > [data-id="home"] .lay-always') === '항상 켜짐' && !(await page.$('#lay-tabs [data-sw="home"]')), '홈 탭은 끌 수 없음 (항상 켜짐)');
     assert(!(await page.$('#lay-home [data-sw="home-sum"]')), '오늘 요약 칸도 항상 켜짐');
     const subs = await page.$$eval('#lay-subs > *', (els) => els.map((e) => (e.classList.contains('lay-group') ? '#' + e.textContent : [...e.querySelectorAll('.lay-row')].map((r) => r.dataset.id).join(','))).join(' | '));
-    assert(subs === '#타이머 안 | focus,stopwatch,lock | #어디서나 | ai', '탭 안 기능 묶음: ' + subs);
+    assert(subs === '#타이머 안 | focus,stopwatch,lock | #플래너 안 | plcarry,plslot,plreview | #어디서나 | ai', '탭 안 기능 묶음: ' + subs);
     assert(await page.$$eval('#view-layout [data-sw]', (els) => els.every((e) => e.checked && !e.disabled)), '처음엔 모두 켜짐');
     assert(await page.isDisabled('#lay-reset'), '처음 배치면 ‘처음 배치로 되돌리기’는 누를 수 없음');
     assert(await layoutOf(page) === null && await barOf(page) === null, '바꾸기 전에는 아무것도 저장하지 않음');

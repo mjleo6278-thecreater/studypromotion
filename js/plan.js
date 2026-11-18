@@ -128,18 +128,19 @@
 
   /* ---------- 정렬 ---------- */
   // 그날 목록의 차례: 하나라도 장소·시간을 정했으면 장소 목록 순서(안 정한 일은 맨 아래), 아니면 과목 순서
-  // (과목 관리 순서, 과목 없는 일은 맨 아래). 같은 칸 안에서는 과목 → 적은 차례. 반환 { list, by: 'slot'|'subject' }
-  function sortDay(state, list) {
+  // (과목 관리 순서, 과목 없는 일은 맨 아래). 같은 칸 안에서는 과목 → 적은 차례. opts.noSlot: 장소 칸을 꺼 두었으면 과목 순만.
+  // 반환 { list, by: 'slot'|'subject' }
+  function sortDay(state, list, opts) {
     const subs = new Map((state.subjects || []).map((x, i) => [x.id, i]));
     const slots = new Map(slotList(state).map((x, i) => [x.id, i]));
     const BIG = 1e6;
     const si = (t) => (t.subjectId && subs.has(t.subjectId) ? subs.get(t.subjectId) : BIG);
     const pi = (t) => (t.slotId && slots.has(t.slotId) ? slots.get(t.slotId) : BIG);
-    const by = (list || []).some((t) => pi(t) < BIG) ? 'slot' : 'subject';
+    const by = !(opts && opts.noSlot) && (list || []).some((t) => pi(t) < BIG) ? 'slot' : 'subject';
     const out = (list || []).slice().sort((a, b) => (by === 'slot' ? pi(a) - pi(b) : 0) || si(a) - si(b) || byOrder(a, b));
     return { list: out, by };
   }
-  const dayList = (state, key) => sortDay(state, dayTasks(state.tasks, key));
+  const dayList = (state, key, opts) => sortDay(state, dayTasks(state.tasks, key), opts);
 
   /* ---------- 진행 표시 (오른쪽 칸) ---------- */
   // 'o' 끝냄 / 't' 세모(덜 끝냄) / '' 아직
@@ -199,12 +200,13 @@
   /* ---------- 만들기·고치기 ---------- */
   const cleanTitle = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, 120);
   const cleanEst = (v) => { const n = Math.round(+v || 0); return n > 0 ? Math.min(EST_MAX, n) : null; };
-  // 새 할 일 (반복이면 여러 개). input: { title, subjectId, due, estimateMin, topicId, rep: { days, until } }
+  // 새 할 일 (반복이면 여러 개). input: { title, subjectId, due, estimateMin, slotId, topicId, rep: { days, until } }
   // env: { uid, now }. 반환 할 일 목록 (이름이 없으면 빈 목록)
   function makeTasks(input, env) {
     const title = cleanTitle(input.title);
     if (!title) return [];
     const base = { title, subjectId: input.subjectId || null, estimateMin: cleanEst(input.estimateMin), done: false };
+    if (input.slotId) base.slotId = input.slotId;
     const due = S.isKey(input.due) ? input.due : null;
     const days = input.rep && Array.isArray(input.rep.days) ? [...new Set(input.rep.days.map(Number))].filter((d) => d >= 0 && d <= 6).sort() : [];
     if (due && days.length) {
@@ -220,7 +222,7 @@
     if (!t || !t.rep || !t.rep.id) return t ? [t] : [];
     return (tasks || []).filter((x) => x && x.rep && x.rep.id === t.rep.id && (x.id === t.id || (x.due && t.due && x.due >= t.due)));
   }
-  // 할 일 고치기. patch: { title, subjectId, due, estimateMin } (없는 칸은 그대로). all: 반복 묶음의 그날부터 앞으로 모두 (날짜는 이 할 일만)
+  // 할 일 고치기. patch: { title, subjectId, due, estimateMin, slotId } (없는 칸은 그대로). all: 반복 묶음의 그날부터 앞으로 모두 (날짜는 이 할 일만)
   // 끝낸 할 일의 예상 시간을 고치면 오늘 넣은 공부 기록도 새 시간·과목으로 맞춘다. 반환 고친 개수
   function editTask(state, id, patch, now, all) {
     const t = (state.tasks || []).find((x) => x && x.id === id);
@@ -231,6 +233,7 @@
       if ('title' in patch) { const v = cleanTitle(patch.title); if (v) x.title = v; }
       if ('subjectId' in patch) x.subjectId = patch.subjectId || null;
       if ('estimateMin' in patch) x.estimateMin = cleanEst(patch.estimateMin);
+      if ('slotId' in patch) { if (patch.slotId) x.slotId = patch.slotId; else delete x.slotId; }
       if (x.done) {
         const c = (state.sessions || []).find((s) => s.doneOf === 'task:' + x.id && Stats.dayKey(s.endedAt) === today);
         if (c && x.estimateMin) Object.assign(c, { minutes: x.estimateMin, subjectId: x.subjectId, label: x.title });

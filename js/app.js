@@ -243,6 +243,23 @@
     }
     return { added: got.added, removed: got.removed };
   }
+  // 플래너 진행 칸(v3.10): mark 'o' 끝냄 / 't' 세모(덜 끝냄) / '' 아직. ○는 setTaskDone과 같다.
+  // △는 아직 안 끝난 일로 쳐서 공부 시간을 넣지 않는다 (끝냄을 풀면 오늘 넣은 시간은 뺀다)
+  function setTaskMark(id, mark, opts) {
+    if (mark === 'o') return setTaskDone(id, true, opts);
+    const t0 = store.get().tasks.find((x) => x.id === id);
+    if (!t0) return null;
+    const linked = !!(t0.topicId && store.get().topics.some((n) => n.id === t0.topicId));
+    let got = null;
+    store.update((st) => { got = Plan.setMark(st, id, mark, now(), uid); }, { undoable: linked && !!t0.done });
+    if (!got) return null;
+    if (got.changed && !(opts && opts.quiet)) {
+      if (mark === 't') toast(got.removed ? `세모(덜 끝냄)로 바꾸고 공부 시간에서 ${Stats.formatMinutes(got.removed)}을 뺐어요` : got.topic ? '세모(덜 끝냄)로 바꾸고 범위 체크도 풀었어요' : '세모(덜 끝냄)로 표시했어요');
+      else if (got.removed) toast(`완료를 풀어서 공부 시간에서 ${Stats.formatMinutes(got.removed)}을 뺐어요`);
+      else if (got.topic) toast('완료를 풀고 범위 체크도 풀었어요');
+    }
+    return { added: got.added, removed: got.removed };
+  }
 
   /* ---------- 과목 (스터디 플래너 맨 아래 '과목 관리') ----------
      할 일 목록·추가 창·주간 보기는 스터디 플래너(js/planner.js, 계산은 js/plan.js)가 그린다. */
@@ -1689,8 +1706,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.9.1';
-  const APP_DATE = '2026년 11월 18일';
+  const APP_VERSION = '3.10';
+  const APP_DATE = '2026년 11월 19일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
@@ -1998,7 +2015,7 @@
   window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone, openDeck,
     // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
     timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null, taskId: timer.taskId || null } : null),
-    openLog, dropCredit, setTaskDone, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
+    openLog, dropCredit, setTaskDone, setTaskMark, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   const fromCardLink = takeCardLink(); // 방문 기록을 깔기 전에 긴 카드 주소를 #review로 바꿔 둔다 (뒤로 가기로 다시 뜨지 않게)

@@ -216,7 +216,7 @@ const server = http.createServer((req, res) => {
   await page.evaluate((k) => App.store.update((s) => s.tasks.push({ id: 't1', title: '문학 3단원 정리', subjectId: k, due: null, estimateMin: 60, done: false, createdAt: 1 })), kor.id);
   await page.waitForTimeout(100);
   await page.tap('#pl-undated-fold > summary');
-  await page.tap('#pl-undated [data-pl-id="t1"] .pl-more');
+  await page.tap('#pl-undated [data-pl-id="t1"] .pl-title');
   await page.tap('.ui-back.in [data-pl-mi="time"]');
   await page.waitForTimeout(150);
   assert(await page.isVisible('#ev-dlg') && await page.inputValue('#ev-task') === 't1' && await page.inputValue('#ev-subject') === kor.id, '⋯ › 공부할 시각 정하기 → 그 할 일과 과목이 골라진 일정 창');
