@@ -162,6 +162,7 @@
   function closeTopOverlay() {
     const askDlg = $('#ask');
     if (!askDlg.hidden) { if (!askDlg.dataset.mustChoose) $('#ask-cancel').click(); return true; }
+    if (window.Bounce && window.Bounce.back()) return true; // 이스터에그 게임 (사진 자르기 → 게임 순서로 닫힘)
     if (document.querySelector('.ui-back:not(.out)') && window.UI) { window.UI.closeSheet(); return true; }
     const menu = $('#pop-menu');
     if (menu && !menu.hidden) { menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return true; } // 메뉴는 Esc로 닫히게 돼 있다
@@ -1688,7 +1689,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.7';
+  const APP_VERSION = '3.8';
   const APP_DATE = '2026년 11월 18일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }

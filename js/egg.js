@@ -96,6 +96,13 @@
   const embedUrl = (v) => 'https://www.youtube-nocookie.com/embed/' + ytId(v.id) + '?rel=0&playsinline=1&autoplay=1';
   const watchUrl = (v) => 'https://www.youtube.com/watch?v=' + ytId(v.id);
 
+  // 게임 비밀 단어 (v3.8): 넣으면 '벽 튕기기' 게임이 열린다 (js/bounce.js). 이름·영어 이름 여러 꼴로 적어도 열림
+  const GAME_KEYS = {
+    '1pu5q5142ox': 'bounce', k2dbbtic0a: 'bounce', '1eoe21ajffs': 'bounce',
+    '4lz37gcbhh': 'bounce', h2175zvsuz: 'bounce', '16ya0txmdoa': 'bounce', '1ebweudmuqa': 'bounce',
+  };
+  const gameOf = (word) => GAME_KEYS[key(word)] || null;
+
   function find(word) {
     const n = norm(word);
     if (!n) return null;
@@ -103,7 +110,7 @@
     return id ? Object.assign({ id, name: n }, ENTRIES[id]) : null;
   }
 
-  const lib = { norm, hash, key, find, skinOf, videoOf, embedUrl, watchUrl, ENTRIES, KEYS, SKIN_KEYS, VIDEOS, VIDEO_KEYS };
+  const lib = { norm, hash, key, find, skinOf, videoOf, gameOf, embedUrl, watchUrl, ENTRIES, KEYS, SKIN_KEYS, VIDEOS, VIDEO_KEYS, GAME_KEYS };
   if (typeof module !== 'undefined' && module.exports) { module.exports = lib; return; }
 
   const App = root.App;
@@ -113,7 +120,7 @@
   function showSkin(on) {
     const out = $('#egg-out');
     out.hidden = false;
-    out.classList.remove('miss', 'hit', 'egg-video');
+    out.classList.remove('miss', 'hit', 'egg-video', 'egg-game');
     void out.offsetWidth;
     out.classList.add('hit');
     out.innerHTML = on
@@ -124,7 +131,7 @@
   function showVideo(v) {
     const out = $('#egg-out');
     out.hidden = false;
-    out.classList.remove('miss', 'hit');
+    out.classList.remove('miss', 'hit', 'egg-game');
     void out.offsetWidth;
     out.classList.add('hit', 'egg-video');
     const player = (typeof navigator !== 'undefined' && navigator.onLine === false)
@@ -135,10 +142,21 @@
       `<a class="btn sm" href="${watchUrl(v)}" target="_blank" rel="noopener">유튜브에서 열기</a>` +
       '<button class="btn sm" type="button" data-egg-close>닫기</button></div>';
   }
+  // 게임 칸: 찾자마자 게임 창을 열고, 닫은 뒤에 다시 열 수 있게 이 칸에 단추를 남긴다
+  function showGame() {
+    const out = $('#egg-out');
+    out.hidden = false;
+    out.classList.remove('miss', 'hit', 'egg-video', 'egg-game');
+    void out.offsetWidth;
+    out.classList.add('hit', 'egg-game');
+    out.innerHTML = '<h3>벽 튕기기</h3><p class="muted small">막대로 공을 받아 넘겨 벽에 튕기고, 위쪽 골대에 넣어 보세요. 공에 넣을 얼굴 사진은 게임 화면에서 고를 수 있어요.</p>' +
+      '<div class="egg-video-foot"><button class="btn primary sm" type="button" data-egg-game>게임 열기</button><button class="btn sm" type="button" data-egg-close>닫기</button></div>';
+    if (root.Bounce) root.Bounce.open();
+  }
   function closeOut() {
     const out = $('#egg-out');
     out.innerHTML = ''; // 영상도 함께 멈춘다
-    out.classList.remove('miss', 'hit', 'egg-video');
+    out.classList.remove('miss', 'hit', 'egg-video', 'egg-game');
     out.hidden = true;
   }
 
@@ -147,11 +165,12 @@
     if (skin) { showSkin(!!toggleSkin(skin)); return true; }
     const video = videoOf(word);
     if (video) { showVideo(video); return true; }
+    if (gameOf(word)) { showGame(); return true; }
     const out = $('#egg-out');
     const typed = String(word || '').trim().replace(/\s*님$/, '');
     const hit = find(word);
     out.hidden = false;
-    out.classList.remove('miss', 'hit', 'egg-video');
+    out.classList.remove('miss', 'hit', 'egg-video', 'egg-game');
     void out.offsetWidth; // 애니메이션 다시 시작
     if (!hit) {
       out.classList.add('miss');
@@ -175,8 +194,11 @@
     show($('#egg-input').value);
   });
   $('#egg-input').addEventListener('input', () => { if (!$('#egg-out').classList.contains('hit')) $('#egg-out').hidden = true; });
-  $('#egg-out').addEventListener('click', (e) => { if (e.target.closest('[data-egg-close]')) closeOut(); });
+  $('#egg-out').addEventListener('click', (e) => {
+    if (e.target.closest('[data-egg-close]')) closeOut();
+    else if (e.target.closest('[data-egg-game]') && root.Bounce) root.Bounce.open();
+  });
 
-  App.egg = { show, find, key, KEYS, toggleSkin, getSkin, videoOf, close: closeOut };
+  App.egg = { show, find, key, KEYS, toggleSkin, getSkin, videoOf, gameOf, close: closeOut };
   applySkin(getSkin());
 })(typeof window !== 'undefined' ? window : globalThis);
