@@ -22,7 +22,7 @@
  *   못 할 때:     { error: "login" | "name"(처음이라 별명이 필요) | "badname" | "bad" | "owner" | "server" }
  *   한 사람에 한 줄(그 사람의 최고 기록)만 남긴다. 사람을 가리키는 번호는 Firebase 사용자 번호를 SHA-256으로 바꾼 것이고, 이메일·이름은 받지 않는다
  *
- * 그룹 스터디 (v3.11, 앱 쪽은 js/group.js, 서버 쪽 처리는 worker/src/group.js). AI 도우미 설정(OPEN_TO, 하루 횟수)과 상관없다
+ * 그룹 스터디 (v4.0, 앱 쪽은 js/group.js, 서버 쪽 처리는 worker/src/group.js). AI 도우미 설정(OPEN_TO, 하루 횟수)과 상관없다
  *   GET  /group   Authorization: Bearer <확인표>   내 별명과 내가 든 그룹들 (그룹마다 사람들의 별명·날별 공부 시간·공부 중 표시·목표·응원)
  *   POST /group   Authorization: Bearer <확인표>   { op: 'sync' | 'name' | 'create' | 'peek' | 'join' | 'leave' | 'cheer' | 'room' | ... , ... }
  *   못 할 때:     { error: "login" | "name"(별명이 필요) | "badname" | "gname" | "code"(없는 초대 코드) | "full" | "many" | "banned" | "lead"(리더만) | "nogroup" | "wait" | "slow" | "bad" | "server" }

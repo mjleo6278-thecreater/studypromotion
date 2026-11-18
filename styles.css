@@ -2616,7 +2616,7 @@ body.bounce-open { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .pl-sorting > li { transition: none; } }
 @media (hover: hover) { :where(:root:not(.touch)) .pl-mark:hover { border-color: var(--accent); } :where(:root:not(.touch)) .pl-sp-item:hover, :where(:root:not(.touch)) .pl-slot:hover { background: color-mix(in srgb, var(--line) 60%, var(--bg)); } :where(:root:not(.touch)) .pl-rv-name:not(.on):hover { border-color: var(--accent); } :where(:root:not(.touch)) .pl-tch-name:hover b, :where(:root:not(.touch)) .pl-slot-name:hover b { text-decoration: underline; text-underline-offset: 3px; } }
 
-/* ===================== 그룹 스터디 (v3.11, js/group.js) =====================
+/* ===================== 그룹 스터디 (v4.0, js/group.js) =====================
    친구들과 공부 시간을 나누는 화면. 흑백 바탕에 지금 공부 중·오늘·내 줄만 포인트 색,
    사람마다 동그란 첫 글자 (색은 과목 색 팔레트에서 별명 번호로 고른다), 하루 목표를 채우면 왕관. */
 .gr-head { margin-bottom: 12px; }
@@ -2875,7 +2875,7 @@ body.bounce-open { overflow: hidden; }
 }
 .gr-grid .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
-/* 탭 7개(v3.11, 그룹 탭): 가운데 폭(721~920px, 세로로 든 태블릿·가로로 눕힌 휴대폰)에서는 위 탭 막대가 옆으로 넘치지 않게
+/* 탭 7개(v4.0, 그룹 탭): 가운데 폭(721~920px, 세로로 든 태블릿·가로로 눕힌 휴대폰)에서는 위 탭 막대가 옆으로 넘치지 않게
    아래 탭 막대처럼 아이콘 위·글자 아래로 좁게 놓는다 */
 @media (min-width: 721px) and (max-width: 920px) {
   .topbar { gap: 12px; }

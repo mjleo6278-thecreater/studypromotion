@@ -20,7 +20,7 @@ test('설정이 없으면 지금 모습 그대로 (탭 7개, 모두 켜짐)', ()
 
 test('저장된 순서를 따르고, 빠진 탭은 기본 순서에서 바로 앞 탭 뒤에 끼운다', () => {
   assert.deepStrictEqual(F.read(S({ tabs: ['timer', 'home', 'board', 'plan', 'review', 'stats', 'group'] })).tabs, ['timer', 'home', 'board', 'plan', 'review', 'stats', 'group']);
-  // 3.11 전에 순서를 바꿔 둔 사람: 새 그룹 탭은 통계 바로 뒤에
+  // 4.0 전에 순서를 바꿔 둔 사람: 새 그룹 탭은 통계 바로 뒤에
   assert.deepStrictEqual(F.read(S({ tabs: ['timer', 'stats', 'home', 'board', 'plan', 'review'] })).tabs, ['timer', 'stats', 'group', 'home', 'board', 'plan', 'review']);
   // plan이 빠짐 → board 뒤로
   assert.deepStrictEqual(F.read(S({ tabs: ['stats', 'board', 'home', 'timer', 'review'] })).tabs, ['stats', 'group', 'board', 'plan', 'home', 'timer', 'review']);

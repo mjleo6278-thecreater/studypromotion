@@ -1,4 +1,4 @@
-// 그룹 스터디 (v3.11): 앱 쪽 계산 (js/group.js의 순수 함수) — 이번 주, 공부 중, 순위, 함께 정한 목표, 보낼 날별 시간, 받은 값 검사
+// 그룹 스터디 (v4.0): 앱 쪽 계산 (js/group.js의 순수 함수) — 이번 주, 공부 중, 순위, 함께 정한 목표, 보낼 날별 시간, 받은 값 검사
 const test = require('node:test');
 const assert = require('node:assert');
 const G = require('../js/group.js');
