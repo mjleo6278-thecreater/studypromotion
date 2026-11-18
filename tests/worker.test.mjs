@@ -3,7 +3,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handle, verifyToken, isOwner, cleanMessages, pieceOf, Counter, forgetKeys } from '../worker/src/index.js';
+import { handle, verifyToken, isOwner, cleanMessages, pieceOf, Counter, forgetKeys, cleanName, cleanScore, maxScore, BOARD_TOP, BOARD_KEEP, BOARD_STORE } from '../worker/src/index.js';
 
 const PROJECT = 'demo-project';
 const ORIGIN = 'https://app.example';
@@ -515,4 +515,126 @@ test('모델이 오류를 내면 주인 계정에만 까닭을 적어 보낸다'
   assert.deepEqual(other.json, { error: 'server' });
   w.answer = () => sse(['응']);
   assert.equal((await w.ask(await token(), { v: 2 })).headers.get('x-ai-left'), '19'); // 실패는 세지 않았다
+});
+
+/* ---------- 벽 튕기기 전체 순위 (/bounce) ---------- */
+const post = (w, tok, body, o) => w.ask(tok, Object.assign({ path: '/bounce', raw: JSON.stringify(body) }, o));
+const look = (w, tok, o) => w.ask(tok, Object.assign({ path: '/bounce', method: 'GET' }, o));
+
+test('순위 별명·기록 검사', () => {
+  assert.equal(cleanName('  민재  '), '민재');
+  assert.equal(cleanName('Kang  in-7_K'), 'Kang in-7_K');
+  assert.equal(cleanName('가나다라마바사아자차카타'), '가나다라마바사아자차카타'); // 12글자
+  assert.equal(cleanName('가나다라마바사아자차카타파'), null); // 13글자
+  for (const bad of ['', '   ', 'a.com', 'http://x', '<b>', '😀', 'a/b', 12, null]) assert.equal(cleanName(bad), null, String(bad));
+  assert.equal(cleanName('한'), '한'); // 풀어 쓴 한글은 합친다
+  assert.deepEqual(cleanScore({ s: 12, g: 3, sec: 40, extra: 1 }), { s: 12, g: 3, sec: 40 });
+  assert.equal(cleanScore({ s: 0, g: 0, sec: 10 }), null);
+  assert.equal(cleanScore({ s: 5, g: 4, sec: 30 }), null); // 골이 너무 많다
+  assert.deepEqual(cleanScore({ s: 1, g: 1, sec: 3 }), { s: 1, g: 1, sec: 3 }); // 첫 공이 바로 골
+  assert.equal(cleanScore({ s: 1.5, g: 0, sec: 10 }), null);
+  assert.equal(cleanScore({ s: '9', g: 0, sec: 10 }), null);
+  assert.equal(cleanScore({ s: maxScore(30) + 1, g: 0, sec: 30 }), null); // 30초에 낼 수 없는 점수
+  assert.ok(cleanScore({ s: maxScore(30), g: 0, sec: 30 }));
+  assert.ok(maxScore(60) > 2.4 * (60 + 0.006 * 3600) + 2); // 진짜로 낼 수 있는 가장 큰 점수보다 넉넉하다
+});
+
+test('순위: 로그인 없이 보기, 올리려면 로그인과 별명', async () => {
+  const w = world({ env: { OPEN_TO: 'owner' } }); // AI 도우미를 닫아 두어도 순위는 쓴다
+  const empty = await look(w, null);
+  assert.equal(empty.status, 200);
+  assert.deepEqual(empty.json, { signedIn: false, ok: true, top: [], total: 0, me: null, owner: false });
+  assert.equal(empty.headers.get('access-control-allow-origin'), ORIGIN);
+  assert.equal((await post(w, null, { s: 3, g: 1, sec: 20, name: '민재' })).json.error, 'login');
+  const me = await token();
+  const noName = await post(w, me, { s: 3, g: 1, sec: 20 });
+  assert.equal(noName.status, 400);
+  assert.equal(noName.json.error, 'name');
+  assert.equal((await post(w, me, { s: 3, g: 1, sec: 20, name: 'www.x.com' })).json.error, 'badname');
+  assert.equal((await post(w, me, { s: 999, g: 1, sec: 20, name: '민재' })).json.error, 'bad'); // 20초에 999점은 말이 안 된다
+  assert.equal((await post(w, me, { name: '민재' })).json.error, 'bad'); // 기록도 별명 바꾸기도 아님
+  const first = await post(w, me, { s: 3, g: 1, sec: 20, name: '민재' });
+  assert.equal(first.status, 200);
+  assert.equal(first.json.better, true);
+  assert.equal(first.json.total, 1);
+  assert.deepEqual(first.json.me, { rank: 1, n: '민재', s: 3, g: 1, sec: 20, t: NOW, me: true });
+  assert.equal(first.json.top[0].id, undefined); // 다른 사람의 번호는 주인에게만
+  assert.equal((await post(w, me, { s: 3, g: 1, sec: 20 }, { origin: 'https://evil.example' })).status, 403);
+  // 저장소에는 사용자 번호·이메일이 그대로 남지 않는다
+  const kept = JSON.stringify([...w.stores.get(BOARD_STORE).values()]);
+  assert.doesNotMatch(kept, /user-1|someone@example/);
+  assert.equal(w.runs.length, 0); // 모델은 부르지 않는다
+  // 로그인한 사람이 보면 내 줄이 표시된다. 틀린 확인표면 그냥 로그인 안 한 사람으로 보여 준다
+  assert.equal((await look(w, me)).json.top[0].me, true);
+  const bad = await look(w, me + 'x');
+  assert.equal(bad.status, 200);
+  assert.equal(bad.json.signedIn, false);
+  assert.equal(bad.json.top[0].me, undefined);
+});
+
+test('순위: 한 사람에 한 줄, 더 높을 때만 바꾸고, 같은 점수는 먼저 낸 사람이 위', async () => {
+  const w = world();
+  const a = await token({ sub: 'a' }), b = await token({ sub: 'b' }), c = await token({ sub: 'c' });
+  await post(w, a, { s: 10, g: 2, sec: 40, name: '가' });
+  w.now += 1000;
+  await post(w, b, { s: 10, g: 4, sec: 30, name: '나' });
+  w.now += 1000;
+  let r = await post(w, c, { s: 25, g: 5, sec: 60, name: '다' });
+  assert.deepEqual(r.json.top.map((e) => [e.rank, e.n, e.s]), [[1, '다', 25], [2, '가', 10], [3, '나', 10]]);
+  // 낮은 기록은 바꾸지 않는다 (별명도 그대로: 처음 올릴 때만 쓴다)
+  r = await post(w, a, { s: 4, g: 0, sec: 20, name: '바뀐이름' });
+  assert.equal(r.json.better, false);
+  assert.deepEqual([r.json.me.rank, r.json.me.n, r.json.me.s, r.json.me.t], [2, '가', 10, NOW]);
+  // 높으면 바꾸고 순서를 다시 맞춘다
+  w.now += 1000;
+  r = await post(w, b, { s: 30, g: 6, sec: 70 });
+  assert.equal(r.json.better, true);
+  assert.deepEqual(r.json.top.map((e) => e.n), ['나', '다', '가']);
+  assert.equal(r.json.total, 3);
+  // 별명 바꾸기
+  r = await post(w, a, { name: '새 별명', rename: true });
+  assert.equal(r.json.me.n, '새 별명');
+  assert.equal(r.json.better, false);
+  // 기록이 없는 사람이 별명만 바꾸면 아무것도 남지 않는다
+  r = await post(w, await token({ sub: 'd' }), { name: '라', rename: true });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.me, null);
+  assert.equal(r.json.total, 3);
+});
+
+test('순위: 위 20줄만 보내고 내 순위는 따로, 500명까지 남긴다', async () => {
+  const w = world();
+  // 저장소에 미리 많은 사람을 넣어 둔다 (요청 520번 대신)
+  const many = Array.from({ length: BOARD_KEEP }, (_, i) => ({ id: 'p' + i, n: '사람' + i, s: 1000 - i, g: 0, sec: 600, t: NOW - 1000 }));
+  w.stores.set(BOARD_STORE, new Map([['board', many]]));
+  const me = await token({ sub: 'late' });
+  let r = await post(w, me, { s: 991, g: 0, sec: 600, name: '늦게' });
+  assert.equal(r.json.top.length, BOARD_TOP);
+  assert.equal(r.json.total, BOARD_KEEP); // 꼴찌가 빠지고 내가 들어갔다
+  assert.equal(r.json.me.rank, 11); // 991점: 1000~992점 9명과 먼저 낸 991점 1명 다음
+  assert.equal(r.json.top[10].me, true);
+  assert.deepEqual([r.json.top[9].s, r.json.top[9].me], [991, undefined]);
+  assert.equal(r.json.top[11].s, 990);
+  // 남겨 두는 끝보다 낮은 기록은 들어가지 못한다
+  r = await post(w, await token({ sub: 'low' }), { s: 1, g: 0, sec: 10, name: '낮음' });
+  assert.equal(r.json.me, null);
+  assert.equal(r.json.total, BOARD_KEEP);
+});
+
+test('순위: 주인 계정만 줄을 지울 수 있다', async () => {
+  const w = world();
+  const a = await token({ sub: 'a' });
+  await post(w, a, { s: 8, g: 1, sec: 30, name: '나쁜별명' });
+  const boss = await token({ sub: 'owner-1', email: OWNER });
+  const seen = await look(w, boss);
+  assert.equal(seen.json.owner, true);
+  const id = seen.json.top[0].id;
+  assert.match(id, /^[0-9a-f]{16}$/);
+  assert.equal((await post(w, a, { remove: id })).json.error, 'owner');
+  assert.equal((await post(w, await token({ sub: 'b' }), { remove: id })).status, 403);
+  const gone = await post(w, boss, { remove: id });
+  assert.equal(gone.status, 200);
+  assert.equal(gone.json.total, 0);
+  // 다시 올릴 수 있다 (처음처럼 별명이 필요)
+  assert.equal((await post(w, a, { s: 3, g: 0, sec: 20 })).json.error, 'name');
 });

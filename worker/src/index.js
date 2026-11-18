@@ -14,6 +14,14 @@
  *   GET /me      (로그인 확인표는 있어도 되고 없어도 된다) AI 버튼을 보여 줄지 앱이 묻는 곳
  *   답:          { "open": true|false, "signedIn": true|false, "unlimited": true|false, "left": 19, "limit": 20 }
  *
+ * 이스터에그 게임 '벽 튕기기'의 전체 순위 (앱 쪽은 js/bounce.js). AI 도우미 설정(OPEN_TO, 하루 횟수)과 상관없다
+ *   GET  /bounce  (로그인 확인표는 있어도 되고 없어도 된다)
+ *   POST /bounce  Authorization: Bearer <확인표>  { s 점수, g 골, sec 버틴 초, name 별명(처음 올릴 때) }
+ *                 별명만 바꾸기: { name, rename: true }   주인 계정만: { remove: 줄 번호 }
+ *   답:           { ok, top: [{ rank, n 별명, s, g, sec, t, me?, id?(주인에게만) }], total, me: { rank, n, s, g, sec, t } | null, owner, better? }
+ *   못 할 때:     { error: "login" | "name"(처음이라 별명이 필요) | "badname" | "bad" | "owner" | "server" }
+ *   한 사람에 한 줄(그 사람의 최고 기록)만 남긴다. 사람을 가리키는 번호는 Firebase 사용자 번호를 SHA-256으로 바꾼 것이고, 이메일·이름은 받지 않는다
+ *
  * 설정 (wrangler.toml의 [vars]. OWNER_EMAILS만 Cloudflare 화면에서 비밀 값으로)
  *   FIREBASE_PROJECT_ID  로그인 확인에 쓰는 Firebase 프로젝트
  *   DAILY_LIMIT          한 사람이 하루에 쓸 수 있는 횟수. 0시 UTC(한국 오전 9시)에 다시 채운다
@@ -115,7 +123,9 @@ export class Counter {
   // { op: 'take' | 'refund' | 'peek', day: '2026-11-14', limit, q, at, again } → { ok, left, free }
   //  q: 질문의 짧은 지문(글 자체는 받지 않는다), at: 지금 시각, again: 앱이 '앱 정보를 붙여 같은 질문을 다시 묻는' 것
   async fetch(request) {
-    const { op, day, limit, q, at, again } = await request.json();
+    const msg = await request.json();
+    if (String(msg.op).startsWith('board')) return Response.json(await boardOp(this.state.storage, msg)); // 벽 튕기기 순위 저장소 (아래)
+    const { op, day, limit, q, at, again } = msg;
     const st = this.state.storage, key = 'n:' + day;
     const n = (await st.get(key)) || 0;
     if (op === 'peek') return Response.json({ ok: true, left: Math.max(0, limit - n) }); // 세지 않고 남은 횟수만
@@ -141,6 +151,62 @@ export class Counter {
   }
 }
 
+/* ---------- 벽 튕기기 전체 순위 ---------- */
+// 순위는 하나뿐인 작은 저장소(사람별 횟수 저장소와 같은 종류, 이름만 다름)에 목록 하나로 둔다. Firebase 사용자 번호에는 ':'가 없어 이름이 겹치지 않는다
+export const BOARD_STORE = 'bounce:board';
+export const BOARD_TOP = 20;   // 앱에 보여 주는 줄 수
+export const BOARD_KEEP = 500; // 남겨 두는 사람 수 (한 사람에 한 줄)
+const NAME_MAX = 12;
+// 별명: 빈칸은 하나로, 한글·영어·숫자·빈칸·_·-만, 1~12글자. 아니면 null (주소나 이상한 글자를 막는다)
+export function cleanName(v) {
+  if (typeof v !== 'string') return null;
+  const s = v.normalize('NFC').replace(/\s+/g, ' ').trim();
+  const n = [...s].length;
+  if (!n || n > NAME_MAX || !/^[0-9A-Za-z가-힣ㄱ-ㅎㅏ-ㅣ _-]+$/.test(s)) return null;
+  return s;
+}
+// sec초 동안 낼 수 있는 점수의 넉넉한 끝: 막대와 천장 사이를 한 번 오갈 때 많아야 2점(치기 1 + 골 1),
+// 공은 아주 낮은 화면(높이 200px)에서도 처음엔 1초에 1.2번쯤밖에 못 오가고, 1초마다 처음 빠르기의 1.2%씩 빨라진다(js/bounce.js SPEED_PER_SEC).
+// 그렇게 낼 수 있는 2.4 × (sec + 0.006 sec²)점보다 넉넉하게 잡는다
+export const maxScore = (sec) => Math.floor(10 + 4 * sec * (1 + 0.006 * sec));
+// 받은 기록이 말이 되면 { s, g, sec }, 아니면 null. 골은 많아야 (점수+1)/2 (첫 공은 치지 않고 바로 골에 들어갈 수 있다)
+export function cleanScore(b) {
+  const int = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
+  if (!b || !int(b.s, 1, 1000000) || !int(b.g, 0, 1000000) || !int(b.sec, 1, 86400)) return null;
+  if (2 * b.g > b.s + 1 || b.s > maxScore(b.sec)) return null;
+  return { s: b.s, g: b.g, sec: b.sec };
+}
+// 높은 점수 먼저, 같으면 먼저 낸 사람 먼저
+const byScore = (a, b) => b.s - a.s || a.t - b.t;
+// 앱에 보낼 모양: 위 BOARD_TOP줄 + 내 줄. 다른 사람의 번호(id)는 주인 계정에게만 보낸다 (지우기 단추)
+export function boardView(list, id, owner) {
+  const i = id ? list.findIndex((e) => e.id === id) : -1;
+  const row = (e, k) => Object.assign({ rank: k + 1, n: e.n, s: e.s, g: e.g, sec: e.sec, t: e.t }, e.id === id ? { me: true } : null, owner ? { id: e.id } : null);
+  return { ok: true, top: list.slice(0, BOARD_TOP).map(row), total: list.length, me: i >= 0 ? row(list[i], i) : null, owner: !!owner };
+}
+// msg: { op: 'board-get' | 'board-put' | 'board-remove', id, owner, at, name, score, rename, target }
+export async function boardOp(st, msg) {
+  let list = (await st.get('board')) || [];
+  const { id, owner, at } = msg;
+  let changed = false, better = false;
+  if (msg.op === 'board-put' && id) {
+    const e = list.find((x) => x.id === id);
+    if (!e && msg.score && !msg.name) return { error: 'name' }; // 처음 올리는 사람은 별명이 있어야 한다
+    if (e && msg.name && msg.rename && e.n !== msg.name) { e.n = msg.name; changed = true; }
+    if (msg.score) {
+      if (!e) { list.push(Object.assign({ id, n: msg.name, t: at }, msg.score)); changed = better = true; }
+      else if (msg.score.s > e.s) { Object.assign(e, msg.score, { t: at }); changed = better = true; }
+    }
+    if (changed) { list.sort(byScore); list = list.slice(0, BOARD_KEEP); }
+  } else if (msg.op === 'board-remove' && owner && msg.target) {
+    const n = list.length;
+    list = list.filter((x) => x.id !== msg.target);
+    changed = list.length !== n;
+  }
+  if (changed) await st.put('board', list);
+  return Object.assign(boardView(list, id, owner), msg.op === 'board-put' ? { better } : null);
+}
+
 /* ---------- 모델의 답 읽기 ---------- */
 // 모델이 보내는 한 줄에서 글 조각만 꺼낸다 (모델에 따라 모양이 조금 다르다)
 export function pieceOf(line) {
@@ -156,6 +222,39 @@ export function pieceOf(line) {
 }
 // 앱 전체의 하루 무료 양을 다 썼을 때 Workers AI가 내는 오류인지
 const usedUp = (e) => /4006|daily free allocation|neurons/i.test(String((e && e.message) || e));
+
+/* ---------- 벽 튕기기 순위 요청 ---------- */
+async function bounce(request, env, deps, now, json) {
+  const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.get('Authorization') || '');
+  const post = request.method === 'POST';
+  let user = null;
+  if (bearer) {
+    try { user = await verifyToken(bearer[1], env.FIREBASE_PROJECT_ID, { now, fetch: deps.fetch }); }
+    catch (e) { if (post) return json({ error: 'server' }, 503); } // 보기만 할 때는 로그인 없이 보여 준다
+  }
+  if (post && !user) return json({ error: 'login' }, 401);
+  const id = user ? await fingerprint('bounce:' + user.sub) : null;
+  const owner = !!user && isOwner(user, env);
+  const store = env.COUNTER.get(env.COUNTER.idFromName(BOARD_STORE));
+  const call = async (msg) => (await store.fetch('https://board/', { method: 'POST', body: JSON.stringify(Object.assign({ id, owner, at: now }, msg)) })).json();
+  if (!post) return json(Object.assign({ signedIn: !!user }, await call({ op: 'board-get' })));
+
+  let body = null;
+  try { body = await request.json(); } catch (e) { /* 아래에서 거절 */ }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'bad' }, 400);
+  if (body.remove != null) {
+    if (!owner) return json({ error: 'owner' }, 403);
+    return json(Object.assign({ signedIn: true }, await call({ op: 'board-remove', target: String(body.remove).slice(0, 64) })));
+  }
+  const name = body.name == null || body.name === '' ? null : cleanName(body.name);
+  if (body.name != null && body.name !== '' && !name) return json({ error: 'badname' }, 400);
+  const score = body.s == null ? null : cleanScore(body);
+  if (body.s != null && !score) return json({ error: 'bad' }, 400);
+  if (!score && !(name && body.rename === true)) return json({ error: 'bad' }, 400);
+  const r = await call({ op: 'board-put', name, score, rename: body.rename === true });
+  if (r.error) return json(r, 400);
+  return json(Object.assign({ signedIn: true }, r));
+}
 
 /* ---------- 요청 처리 ---------- */
 // deps: 테스트에서 시계(now)와 열쇠 받아 오기(fetch)를 바꿔 끼운다
@@ -177,6 +276,10 @@ export async function handle(request, env, deps, ctx) {
 
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
   if (request.method === 'GET' && url.pathname === '/') return json({ ok: true, name: 'studypromotion-ai' }); // 주소가 살아 있는지 브라우저로 열어 볼 때
+  if (url.pathname === '/bounce' && (request.method === 'GET' || request.method === 'POST')) {
+    if (origin && allowed.length && !allowed.includes(origin)) return json({ error: 'origin' }, 403);
+    return bounce(request, env, deps, now, json);
+  }
   const isMe = request.method === 'GET' && url.pathname === '/me';
   if (!isMe && (request.method !== 'POST' || url.pathname !== '/chat')) return json({ error: 'not_found' }, 404);
   if (origin && allowed.length && !allowed.includes(origin)) return json({ error: 'origin' }, 403);
