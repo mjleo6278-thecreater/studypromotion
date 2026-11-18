@@ -83,10 +83,10 @@ function seed() {
   st = await state(page);
   assert(st.tasks.find((t) => t.id === 'd2').done && st.sessions.some((s) => s.doneOf === 'task:d2' && s.minutes === 40) && await page.isVisible(row('d2') + '.done .pl-mark.o'), '한 번 누르면 ○: 끝냄, 예상 40분이 공부 시간에');
   assert(/\+40분/.test(await toastOf(page)) && (await minutesToday(page)) === 40, '알림과 오늘 공부 40분');
-  assert(await page.$eval(row('d2') + ' .pl-mark', (b) => b.classList.contains('draw') && getComputedStyle(b.querySelector('.pl-mk path')).animationName === 'pl-draw') && (await page.$$('#pl-list .pl-mark.draw')).length === 1, '방금 누른 칸만 펜으로 그려지는 움직임');
+  assert(await page.$eval(row('d2') + ' .pl-mark', (b) => b.classList.contains('pop') && getComputedStyle(b.querySelector('.pl-mk')).animationName === 'pl-pop') && (await page.$$('#pl-list .pl-mark.pop')).length === 1, '방금 누른 칸만 톡 튀어나오는 움직임');
   await page.clock.runFor(1200);
   await page.evaluate(() => Planner.render());
-  assert(!(await page.$('#pl-list .pl-mark.draw')), '조금 지나 다시 그리면 움직임 없이 그대로');
+  assert(!(await page.$('#pl-list .pl-mark.pop')), '조금 지나 다시 그리면 움직임 없이 그대로');
   await page.tap(row('d2') + ' .pl-mark');
   await page.waitForTimeout(150);
   st = await state(page);

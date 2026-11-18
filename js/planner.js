@@ -22,10 +22,10 @@
   const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
   const EST_OPTS = [10, 15, 20, 30, 40, 45, 60, 90, 120, 180];
   const ASK_KEY = 'studypromotion.plCarryAsk'; // 어제 못 끝낸 일을 물어본 날 (이 기기)
-  // 손으로 그린 ○·△ (펜으로 한 번에 그린 듯 살짝 삐뚤고 끝이 겹친다. pathLength=1은 그려지는 움직임용)
+  // 동글동글한 ○·△ (굵고 둥근 선)
   const MARK_SVG = {
-    o: '<svg class="pl-mk" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M14.1 5.6C13.6 5.6 12.0 5.4 11.0 5.6C10.0 5.8 8.9 6.2 8.0 6.7C7.2 7.3 6.3 8.1 5.8 8.9C5.2 9.7 4.8 10.7 4.7 11.6C4.6 12.5 4.7 13.5 4.9 14.4C5.2 15.3 5.8 16.1 6.5 16.8C7.2 17.4 8.1 18.0 9.0 18.3C10.0 18.6 11.1 18.8 12.1 18.7C13.1 18.7 14.3 18.4 15.2 17.9C16.1 17.5 17.0 16.8 17.7 16.1C18.4 15.3 18.9 14.4 19.2 13.5C19.5 12.5 19.6 11.5 19.5 10.6C19.4 9.6 19.0 8.6 18.4 7.8C17.8 7.0 17.0 6.3 16.1 5.8C15.2 5.3 14.0 4.9 12.9 4.8C11.8 4.7 10.0 5.1 9.4 5.1"/></svg>',
-    t: '<svg class="pl-mk" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M12.6 4.4C10.5 8.7 8 13.1 5.2 17.6C9.5 18.4 14.4 18.5 19.4 17.9C17.4 13.6 15.1 9.3 12.4 5.2C12 4.6 11.4 4.0 10.8 3.6"/></svg>',
+    o: '<svg class="pl-mk" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.9"/></svg>',
+    t: '<svg class="pl-mk" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.2 18.9 17.4H5.1z"/></svg>',
     '': '',
   };
   const MARK_NAME = { '': '아직 안 함', o: '끝냄(○)', t: '덜 끝냄(△)' };
@@ -59,11 +59,11 @@
     return o ? { text: `${P.shortDay(o.date).split(' ')[0]} ${hm(o)}`, key: o.date } : null;
   }
   // 오른쪽 진행 칸: 누를 때마다 빈칸 → ○ → △ → 빈칸
-  let drawn = null; // 방금 누른 진행 칸 { id, at }: 그 칸만 펜으로 그려지는 움직임
+  let drawn = null; // 방금 누른 진행 칸 { id, at }: 그 칸만 톡 튀어나오는 움직임
   function markHTML(t, sm) {
     const m = P.markOf(t);
     const draw = m && drawn && drawn.id === t.id && Date.now() - drawn.at < 900;
-    return `<button type="button" class="pl-mark${sm ? ' sm' : ''}${m ? ' ' + m : ''}${draw ? ' draw' : ''}" data-pl-mark aria-label="${esc(t.title)} ${MARK_NAME[m]}. 누르면 ${MARK_NAME[P.nextMark(m)]}">${MARK_SVG[m]}</button>`;
+    return `<button type="button" class="pl-mark${sm ? ' sm' : ''}${m ? ' ' + m : ''}${draw ? ' pop' : ''}" data-pl-mark aria-label="${esc(t.title)} ${MARK_NAME[m]}. 누르면 ${MARK_NAME[P.nextMark(m)]}">${MARK_SVG[m]}</button>`;
   }
   // 왼쪽 장소·시간 칸 (정하지 않아도 된다)
   function slotHTML(t) {
