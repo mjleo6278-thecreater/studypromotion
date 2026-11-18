@@ -85,6 +85,8 @@
     <symbol id="i-carry" viewBox="0 0 24 24"><path d="M15.6 5.2l4 4-4 4"/><path d="M19.2 9.2H9.6a5 5 0 0 0 0 10h4.6"/></symbol>
     <symbol id="i-next" viewBox="0 0 24 24"><path d="M4.6 12h12.6"/><path d="m12.6 6.8 5.2 5.2-5.2 5.2"/></symbol>
     <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
+    <symbol id="i-group" viewBox="0 0 24 24"><circle cx="9.2" cy="8.6" r="3.5"/><path d="M2.8 19.6c.9-3.6 3.4-5.6 6.4-5.6s5.5 2 6.4 5.6"/><path d="M15.2 5.3a3.4 3.4 0 0 1 0 6.6"/><path d="M17.4 14.4c2 .6 3.3 2.3 3.9 5.2"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.4 13.6a3.9 3.9 0 0 0 5.5 0l2.9-2.9a3.9 3.9 0 0 0-5.5-5.5l-1.2 1.2"/><path d="M13.6 10.4a3.9 3.9 0 0 0-5.5 0l-2.9 2.9a3.9 3.9 0 0 0 5.5 5.5l1.2-1.2"/></symbol>
   </svg>
   <header class="topbar">
     <a class="brand" href="#home" data-view="home" title="홈으로" aria-label="스터디 프로모션, 홈으로 가기"><img class="brand-mark" src="icons/favicon-64.png" alt="" width="28" height="28">스터디 프로모션</a>
@@ -101,6 +103,7 @@
       <button class="tab" data-view="timer" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-timer"/></svg></span><span>타이머</span></button>
       <button class="tab" data-view="review" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-review"/></svg></span><span>복습</span></button>
       <button class="tab" data-view="stats" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-stats"/></svg></span><span>통계</span></button>
+      <button class="tab" data-view="group" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-group"/></svg></span><span>그룹</span></button>
     </nav>
   </header>
 
@@ -140,6 +143,10 @@
         <div class="stat" data-feature="plan"><div class="stat-label">오늘 남은 할 일</div><div class="stat-value" id="h-tasks">0</div><div class="stat-sub" id="h-tasks-sub"></div></div>
         <div class="stat" data-feature="review"><div class="stat-label">복습 대기 카드</div><div class="stat-value" id="h-due">0</div><div class="stat-sub"><a href="#review" data-go="review">복습하러 가기</a></div></div>
         <div class="stat"><div class="stat-label">연속 학습일</div><div class="stat-value" id="h-streak">0일</div><div class="stat-sub">하루에 조금이라도</div></div>
+      </div>
+      <div class="panel gr-home" id="h-group-panel" data-home="home-group" data-feature="home-group" hidden>
+        <div class="panel-head"><h2><svg class="ic" aria-hidden="true"><use href="#i-group"/></svg><span id="h-group-title">우리 그룹</span></h2><a href="#group" data-go="group">그룹 보기</a></div>
+        <div id="h-group"></div>
       </div>
       <div class="panel tt-home" id="h-tt-panel" data-home="home-tt" data-feature="home-tt">
         <div class="panel-head"><h2>오늘 타임테이블</h2><a href="#timetable" data-go="timetable">전체 보기</a></div>
@@ -467,6 +474,15 @@
       <p class="muted small stats-foot">하루 목표와 집중·휴식 시간은 <a href="#account" data-go="account">계정·설정</a>에서 바꿀 수 있어요.</p>
     </section>
 
+    <!-- 그룹 스터디 (js/group.js가 그린다) -->
+    <section id="view-group" class="view">
+      <div class="timer-head gr-head">
+        <h1>그룹 스터디</h1>
+        <div class="gr-head-btns" id="gr-head-btns"></div>
+      </div>
+      <div id="gr-body"></div>
+    </section>
+
     <!-- 타임테이블 -->
     <section id="view-timetable" class="view">
       <div class="timer-head tt-head">
@@ -733,6 +749,20 @@
           <p>새벽까지 공부한다면 <a href="#account" data-go="account">계정·설정</a>의 <b>하루 시작 시각</b>을 새벽으로 옮겨 보세요. 그 전의 새벽 공부는 전날 공부로 세요.</p>
         </details>
         <details>
+          <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-group"/></svg>그룹 스터디</summary>
+          <p>친구들과 그룹을 만들어 서로의 공부 시간을 보고, 목표를 같이 정하고, 같은 시각에 끝나는 집중 타이머를 함께 켜요. 로그인해야 쓸 수 있어요.</p>
+          <ul>
+            <li><b>만들기·초대</b>: <a href="#group" data-go="group">그룹</a> 탭에서 <b>그룹 만들기</b>를 누르고 이름과 목표를 정해요. 만든 사람이 리더예요. <b><svg class="ic" aria-hidden="true"><use href="#i-link"/></svg>초대</b>를 누르면 6자리 초대 코드와 링크가 나와요. 링크를 받은 친구가 누르면 앱이 열리고 그 그룹에 들어갈지 물어봐요. <b>초대 코드로 들어가기</b>에 코드를 적어도 돼요.</li>
+            <li><b>별명</b>: 그룹 사람들에게는 이메일이나 계정 이름 대신 내가 정한 별명만 보여요. 별명은 모든 그룹에서 같고, 그룹 화면 맨 아래에서 바꿔요.</li>
+            <li><b>무엇이 보이나요</b>: 날마다 공부한 시간(분)과 ‘지금 공부 중’ 표시(스톱워치·집중 타이머·폰 잠금 중 무엇으로 재는지, 언제 시작했는지)만 그룹에 올라가요. 할 일·시험 범위·메모·카드는 올라가지 않아요. 공부 중일 때 과목 이름을 보일지도 그룹 화면 맨 아래에서 정해요.</li>
+            <li><b>순위와 출석표</b>: 오늘·이번 주·지난주 공부 시간 순위와, 이번 주 날마다 공부한 만큼 칠한 출석표가 나와요. 지금 재는 시간도 바로 더해져요. 하루 목표를 채우면 왕관(♛)이 붙어요.</li>
+            <li><b>함께 정한 목표</b>: 리더가 한 사람당 <b>하루 목표</b>와 다 같이 채울 <b>주간 목표</b>를 정해요. 주간 목표는 월요일부터 일요일까지 모두의 시간을 더해서 폰이 걷는 체스 칸으로 보여 주고, 하루에 얼마씩 더 하면 되는지 알려 줘요.</li>
+            <li><b>응원</b>: 친구 이름을 누르면 이번 주 날마다의 기록이 나오고, 👏 🔥 💪 ☕ 응원을 보낼 수 있어요. 같은 친구에게는 10분에 한 번 보낼 수 있고, 받은 응원은 앱을 열 때 알려 줘요.</li>
+            <li><b>함께 집중</b>: 25·50·90분 중에 골라 시작하면 그룹 사람들에게 보이고, <b>같이 하기</b>를 누른 친구는 같은 시각에 끝나는 집중 타이머가 켜져요. 집중한 시간은 각자의 기록에 들어가요.</li>
+            <li><b>리더</b>는 그룹 이름·목표를 바꾸고, 초대 코드를 새로 만들고, 사람을 내보내거나 리더를 넘겨요. 그룹은 20명까지, 한 사람은 그룹 5개까지 들 수 있어요. 리더가 나가면 먼저 들어온 사람이 리더를 이어받아요.</li>
+          </ul>
+        </details>
+        <details>
           <summary><svg class="sum-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 3.6l1.7 4.7a2 2 0 0 0 1.2 1.2l4.7 1.7-4.7 1.7a2 2 0 0 0-1.2 1.2L11 18.8l-1.7-4.7a2 2 0 0 0-1.2-1.2l-4.7-1.7 4.7-1.7a2 2 0 0 0 1.2-1.2z"/><path d="M18.6 15.6l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6-1.6-.6 1.6-.6z"/></svg>AI 도우미 세컨드</summary>
           <p>오른쪽 아래 둥근 단추를 누르면 AI 도우미 <b>세컨드</b>와 이야기할 수 있어요. 로그인하면 누구나 쓸 수 있어요.</p>
           <ul>
@@ -792,6 +822,15 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="3.11" data-date="2026년 11월 19일">
+            <ul class="news">
+              <li><b>그룹 스터디</b>: 새 ‘그룹’ 탭에서 친구들과 그룹을 만들어요. 초대 링크나 6자리 초대 코드로 친구를 부르고, 그룹 사람들에게는 이메일이나 계정 이름 대신 내가 정한 별명만 보여요</li>
+              <li><b>공부 시간 나누기</b>: 서로의 오늘·이번 주·지난주 공부 시간과 순위, 이번 주 출석표, 지금 누가 공부 중인지가 바로 보여요. 날마다 공부한 시간만 올라가고 할 일·범위·메모는 올라가지 않아요</li>
+              <li><b>함께 정한 목표</b>: 한 사람당 하루 목표를 채우면 왕관(♛)이 붙고, 다 같이 채우는 주간 목표는 폰이 걷는 체스 칸으로 보여요</li>
+              <li><b>응원과 함께 집중</b>: 친구에게 👏 🔥 💪 ☕ 응원을 보내고, ‘함께 집중’을 켜면 같이 하기를 누른 친구와 같은 시각에 끝나는 집중 타이머가 돌아요</li>
+              <li>홈에 ‘우리 그룹’ 칸이 생겨요. 그룹 탭과 홈 칸은 ‘기능과 탭 편집’에서 끌 수 있어요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="3.10" data-date="2026년 11월 19일">
             <ul class="news">
               <li><b>○·△ 진행 칸</b>: 할 일 오른쪽 칸을 누를 때마다 빈칸 → ○(끝냄) → △(덜 끝냄)으로 바뀌어요. ○은 지금까지의 체크와 같아서 예상 시간이 공부 시간에 들어가고, △는 아직 안 끝난 일로 쳐서 공부 시간은 넣지 않아요. 홈과 주간 보기도 같은 칸이에요</li>
@@ -1226,6 +1265,16 @@
     </div>
   </div>
 
+  <!-- 그룹: 만들기 · 초대 코드로 들어가기 · 별명 · 목표 (js/group.js) -->
+  <div class="ask-backdrop" id="gr-dlg" hidden>
+    <form class="ask-box gr-box" id="gr-form" role="dialog" aria-modal="true" aria-labelledby="gr-dlg-h" novalidate>
+      <h2 id="gr-dlg-h">그룹</h2>
+      <div id="gr-dlg-body"></div>
+      <p class="gr-err" id="gr-dlg-err" role="alert" hidden></p>
+      <div class="ask-actions"><button class="btn" type="button" id="gr-dlg-cancel">취소</button><button class="btn primary" type="submit" id="gr-dlg-ok">확인</button></div>
+    </form>
+  </div>
+
   <div class="ask-backdrop" id="ask" hidden>
     <div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-msg">
       <p id="ask-msg"></p>
@@ -1259,5 +1308,6 @@
   <script src="js/aicore.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/cloud.js"></script>
+  <script src="js/group.js"></script>
 </body>
 </html>
