@@ -4,7 +4,7 @@
  * - 공 얼굴: '얼굴 사진'으로 기기 안의 사진을 고르면 얼굴 부분을 동그랗게 잘라 공으로 쓴다.
  *   잘린 사진은 이 기기의 localStorage(studypromotion.eggBall)에만 둔다. 공부 기록(studypromotion.v1)과 따로라
  *   계정 동기화·자동 백업·내보내기에 들어가지 않고, 앱 파일과 저장소에도 사진을 담지 않는다.
- * - 사진을 안 고르면 기본 공(빨강·흰 세로 줄무늬에 남색 테두리. 구단 문장·글자는 넣지 않는다).
+ * - 사진을 안 고르면 기본 공(빨강·흰 세로 줄무늬에 남색 테두리, 가운데 'K7'. 구단 문장은 넣지 않는다).
  * 계산(자르기 처음 자리, 공 움직임)은 화면 없이도 돌아서 tests/bounce.test.js가 확인한다. */
 (function (root) {
   const BALL_KEY = 'studypromotion.eggBall';
@@ -284,6 +284,7 @@
     root.addEventListener('blur', () => { if (isOpen() && g.state === 'play') pause(); });
     try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (isOpen()) readColors(); }); } catch (e) { /* 무시 */ }
     loadFace();
+    try { document.fonts.ready.then(() => { sprite = null; if (isOpen() && !q('#bounce-card').hidden) refreshCard(); }); } catch (e) { /* 무시 */ }
   }
 
   function onKey(e) {
@@ -307,14 +308,20 @@
     img.onerror = () => { face = null; };
     img.src = url;
   }
-  // 기본 공: 빨강·흰 세로 줄무늬에 남색 테두리 (아틀레티코 유니폼 색 느낌만, 구단 문장·글자는 넣지 않는다)
-  const STRIPE_RED = '#cb3524', STRIPE_NAVY = '#272e61';
+  // 기본 공: 빨강·흰 세로 줄무늬에 남색 테두리, 가운데 'K7' (아틀레티코 유니폼 색 느낌만, 구단 문장은 넣지 않는다)
+  const STRIPE_RED = '#cb3524', STRIPE_NAVY = '#272e61', BALL_TEXT = 'K7';
   function stripedBall(x, R) {
     const n = 7, w = (2 * R) / n; // 가운데 줄이 빨강, 양끝은 흰색
     for (let i = 0; i < n; i++) { x.fillStyle = i % 2 ? STRIPE_RED : '#ffffff'; x.fillRect(-R + i * w - 0.3, -R, w + 0.6, 2 * R); }
     const gr = x.createRadialGradient(0, 0, R * 0.25, 0, 0, R); // 가장자리를 살짝 어둡게 해서 둥글게
     gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(0.7, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.2)');
     x.fillStyle = gr; x.fillRect(-R, -R, 2 * R, 2 * R);
+    // 가운데 글자 'K7' (사용자 요청): 남색 글자에 흰 테를 둘러 줄무늬 위에서도 잘 보이게
+    x.font = `900 ${Math.round(R * 0.8)}px "Pretendard Variable", Pretendard, system-ui, sans-serif`;
+    x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineJoin = 'round';
+    x.lineWidth = Math.max(2, R * 0.16); x.strokeStyle = '#ffffff';
+    x.strokeText(BALL_TEXT, 0, R * 0.05);
+    x.fillStyle = STRIPE_NAVY; x.fillText(BALL_TEXT, 0, R * 0.05);
   }
   function paintBall(x, R, img) {
     x.save();

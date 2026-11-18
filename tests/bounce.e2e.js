@@ -45,10 +45,13 @@ const PHOTO = { name: 'test.png', mimeType: 'image/png', buffer: fs.readFileSync
   const px = await page.$eval('.bounce-prev', (c) => {
     const x = c.getContext('2d'), w = c.width;
     const at = (fx, fy) => Array.from(x.getImageData(Math.round(w * fx), Math.round(w * fy), 1, 1).data);
-    return { mid: at(0.5, 0.5), side: at(0.5 - 0.134, 0.5), ring: at(0.5, 0.052) };
+    const box = x.getImageData(Math.round(w * 0.25), Math.round(w * 0.35), Math.round(w * 0.5), Math.round(w * 0.3)).data;
+    let ink = 0;
+    for (let i = 0; i < box.length; i += 4) if (box[i + 2] > box[i] + 20 && box[i] < 90) ink++;
+    return { mid: at(0.5, 0.2), side: at(0.5 - 0.134, 0.2), ring: at(0.5, 0.052), ink };
   });
   const red = (c) => c[0] > 160 && c[1] < 90 && c[2] < 90, white = (c) => c[0] > 220 && c[1] > 220 && c[2] > 220, navy = (c) => c[2] > c[0] + 20 && c[0] < 90;
-  assert(red(px.mid) && white(px.side) && navy(px.ring), '기본 공: 가운데 빨강, 옆 흰 줄, 남색 테두리 ' + JSON.stringify(px));
+  assert(red(px.mid) && white(px.side) && navy(px.ring) && px.ink > 60, '기본 공: 가운데 줄 빨강, 옆 흰 줄, 남색 테두리, 가운데 남색 글자(K7) ' + JSON.stringify(px));
   const box = await page.$eval('#bounce-stage', (s) => { const r = s.getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; });
   assert(box.w === 390 && box.h > 600, '게임 판이 화면을 거의 채움 (' + box.w + 'x' + Math.round(box.h) + ')');
   const cover = await page.evaluate(() => { const r = document.querySelector('#bounce').getBoundingClientRect(); const f = document.querySelector('.ai-fab'); return { full: r.width === innerWidth && r.height === innerHeight, fabHidden: !f || document.elementFromPoint(f.getBoundingClientRect().left + 5, f.getBoundingClientRect().top + 5).closest('#bounce') !== null }; });
