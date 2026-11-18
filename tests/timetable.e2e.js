@@ -105,8 +105,8 @@ const SW = 'studypromotion.stopwatch';
   await page.waitForSelector('.ui-back.in .start-sheet');
   assert(/수학/.test(await sheetTitle(page)) && /할 일/.test(await sheetTitle(page)), '둘째 창: 수학의 할 일 고르기');
   let opts = await sheetOpts(page);
-  assert(opts.join(' | ') === '문제집 3단원 풀기 | 오답 노트 정리 | 할 일 없이 수학만 공부하기', '수학의 안 끝낸 할 일만, 마감이 있는 것부터, 맨 아래는 과목만: ' + opts.join(' | '));
-  assert(/오늘까지 · 1시간/.test(await page.textContent('.ui-back.in .ch-opt >> nth=0')), '할 일 아래에 마감과 예상 시간');
+  assert(opts.join(' | ') === '문제집 3단원 풀기 | 오답 노트 정리 | 할 일 없이 수학만 공부하기', '수학의 안 끝낸 할 일만, 날짜가 있는 것부터, 맨 아래는 과목만: ' + opts.join(' | '));
+  assert(/오늘 · 1시간/.test(await page.textContent('.ui-back.in .ch-opt >> nth=0')), '할 일 아래에 플래너 날짜와 예상 시간');
   // 할 일 창을 닫아도 시작하지 않는다
   await page.tap('.ui-back.in [data-ui-close]');
   await page.waitForTimeout(300);
@@ -306,9 +306,12 @@ const SW = 'studypromotion.stopwatch';
   await page.waitForFunction(() => window.App);
   const tabs = await page.$$eval('#ver-tabs [data-ver-tab]', (els) => els.map((e) => ({ v: e.dataset.verTab, on: e.classList.contains('active'), sel: e.getAttribute('aria-selected') })));
   assert(tabs.length >= 9 && tabs[0].v === await page.evaluate(() => App.version) && tabs[0].on && tabs[0].sel === 'true' && tabs.filter((t) => t.on).length === 1, '버전마다 탭 하나, 맨 앞이 지금 버전(' + tabs[0].v + ')이고 처음에 골라져 있음: ' + tabs.map((t) => t.v).join(' '));
-  assert(/버전 3\.6/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
+  assert(/버전 3\.7/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
   const shown = () => page.$$eval('#about-news .ver', (els) => els.filter((e) => !e.hidden && e.offsetParent !== null).map((e) => ({ v: e.dataset.ver, when: e.querySelector('.ver-when').textContent, n: e.querySelectorAll('.news li').length })));
   let sh = await shown();
+  assert(sh.length === 1 && sh[0].v === '3.7' && /버전 3\.7 · 2026년 11월 18일 업데이트/.test(sh[0].when) && /스터디 플래너/.test(await page.textContent('#about-news .ver:not([hidden])')) && /범위와 한 몸/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.7 소식: 스터디 플래너, 범위와 한 몸 ' + sh[0].when);
+  await page.tap('#ver-tabs [data-ver-tab="3.6"]');
+  sh = await shown();
   assert(sh.length === 1 && sh[0].v === '3.6' && /버전 3\.6 · 2026년 11월 18일 업데이트/.test(sh[0].when) && /기능과 탭 편집/.test(await page.textContent('#about-news .ver:not([hidden])')) && /홈 화면도 원하는 차례로/.test(await page.textContent('#about-news .ver:not([hidden])')), '3.6 소식: 기능과 탭 편집, 홈 화면 순서 ' + sh[0].when);
   await page.tap('#ver-tabs [data-ver-tab="3.5.1"]');
   sh = await shown();
@@ -365,7 +368,7 @@ const SW = 'studypromotion.stopwatch';
   await page.tap('#toast .toast-act');
   await page.waitForTimeout(300);
   sh = await shown();
-  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '3.6' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
+  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '3.7' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
   await page.context().close();
 
   /* ===== 8) PC 화면, 어두운 화면 ===== */

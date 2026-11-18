@@ -48,6 +48,7 @@ const server = http.createServer((req, res) => {
     localStorage.setItem('studypromotion.welcomeClosed', '1');
     App.store.update((s) => { s.subjects = [{ id: 's-kor', name: '국어', color: '#e05a4f' }, { id: 's-math', name: '수학', color: '#3d96e0' }]; });
   });
+  await page.tap('#pl-subjects-fold > summary'); // 과목 관리는 플래너 맨 아래에 접혀 있다
   await page.tap('#subject-list [data-del-subject]');
   let a = await askInfo(page);
   assert(a.open && a.ok === '삭제' && a.cancel === '취소', "과목 삭제 확인 창의 버튼이 '삭제'라고 적혀 있음 (전에는 '확인')");

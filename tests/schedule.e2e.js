@@ -215,9 +215,11 @@ const server = http.createServer((req, res) => {
   const kor = st.subjects.find((s) => s.name === '국어');
   await page.evaluate((k) => App.store.update((s) => s.tasks.push({ id: 't1', title: '문학 3단원 정리', subjectId: k, due: null, estimateMin: 60, done: false, createdAt: 1 })), kor.id);
   await page.waitForTimeout(100);
-  await page.tap('#tasklist .task-plan-btn');
+  await page.tap('#pl-undated-fold > summary');
+  await page.tap('#pl-undated [data-pl-id="t1"] .pl-more');
+  await page.tap('.ui-back.in [data-pl-mi="time"]');
   await page.waitForTimeout(150);
-  assert(await page.isVisible('#ev-dlg') && await page.inputValue('#ev-task') === 't1' && await page.inputValue('#ev-subject') === kor.id, '시간 정하기 → 그 할 일과 과목이 골라진 일정 창');
+  assert(await page.isVisible('#ev-dlg') && await page.inputValue('#ev-task') === 't1' && await page.inputValue('#ev-subject') === kor.id, '⋯ › 공부할 시각 정하기 → 그 할 일과 과목이 골라진 일정 창');
   const tomorrow = await key(page, 1);
   await page.evaluate((k) => { const el = document.querySelector('#ev-date'); el.value = k; el.dispatchEvent(new Event('change', { bubbles: true })); }, tomorrow);
   await fillTime(page, 20, 0, 21, 30);
@@ -225,8 +227,9 @@ const server = http.createServer((req, res) => {
   await page.waitForTimeout(200);
   st = await state(page);
   assert(st.events.length === 1 && st.events[0].taskId === 't1' && st.events[0].subjectId === kor.id && st.events[0].date === tomorrow, '할 일과 연결된 일정 저장');
-  assert(/20:00/.test(await page.textContent('#tasklist .task-plan')), '할 일에 정한 날짜·시각: ' + await page.textContent('#tasklist .task-plan'));
-  await page.tap('#tasklist .task-plan');
+  const atText = await page.textContent('#pl-undated [data-pl-id="t1"] .pl-tag.at');
+  assert(/^\d+\/\d+ 20:00$/.test(atText), '할 일에 정한 날짜·시각 (다른 날이면 날짜도): ' + atText);
+  await page.tap('#pl-undated [data-pl-id="t1"] .pl-tag.at');
   await page.waitForTimeout(150);
   assert(await page.evaluate(() => App.view) === 'timetable' && await page.evaluate(() => Timetable.day) === tomorrow && /할 일: 문학 3단원 정리/.test(await page.textContent('#ttv-plans')), '할 일의 날짜를 누르면 그날 타임테이블, 일정에 할 일 이름');
   // 과목을 지워도 일정은 이름으로 남는다

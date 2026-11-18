@@ -68,24 +68,27 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   const order = (await state()).cards.map((c) => c.id).join(',');
   assert(order === 'c1,c2', '되돌리기로 같은 자리에 복구 (' + order + ')');
 
-  // 할 일 삭제도 되돌리기
-  await page.evaluate(() => App.store.update((s) => s.tasks.push({ id: 'tk', title: '수학 익힘책', done: false, createdAt: Date.now() })));
+  // 할 일 삭제도 되돌리기 (플래너 ⋯ › 지우기)
+  await page.evaluate(() => App.store.update((s) => s.tasks.push({ id: 'tk', title: '수학 익힘책', due: Stats.dayKey(Date.now()), done: false, createdAt: Date.now() })));
   await page.goto(base + '#plan');
-  await page.tap('#tasklist [data-id="tk"] .task-del');
+  await page.tap('#pl-list [data-pl-id="tk"] .pl-more');
+  await page.tap('.ui-back.in [data-pl-mi="del"]');
   assert(!(await state()).tasks.some((x) => x.id === 'tk'), '할 일 삭제');
   await page.tap('#toast .toast-act');
   assert((await state()).tasks.some((x) => x.id === 'tk'), '할 일 되돌리기');
-  // 할 일 고치기: 이름·과목·마감일·예상 시간
-  await page.tap('#tasklist [data-id="tk"] .task-edit-btn');
-  assert(await page.isVisible('#tasklist .task-edit'), '할 일 ✎ 누르면 고치기');
-  await page.fill('#tasklist .task-edit [name="title"]', '수학 익힘책 40~45쪽');
-  await page.selectOption('#tasklist .task-edit [name="subject"]', { label: '수학' });
-  await page.fill('#tasklist .task-edit [name="due"]', '2030-01-05');
-  await page.fill('#tasklist .task-edit [name="est"]', '45');
-  await page.tap('#tasklist .task-edit button[type="submit"]');
+  // 할 일 고치기: 이름·과목·날짜·예상 시간 (줄을 누르면 메뉴 → 고치기)
+  await page.waitForSelector('#pl-list [data-pl-id="tk"]');
+  await page.tap('#pl-list [data-pl-id="tk"] .pl-title');
+  await page.tap('.ui-back.in [data-pl-mi="edit"]');
+  assert(await page.isVisible('#pl-dlg') && (await page.inputValue('#pl-title')) === '수학 익힘책', '할 일을 누르고 고치기를 고르면 고치기 창');
+  await page.fill('#pl-title', '수학 익힘책 40~45쪽');
+  await page.tap('#pl-subj .chip:has-text("수학")');
+  await page.fill('#pl-date', '2030-01-05');
+  await page.selectOption('#pl-est', '45');
+  await page.tap('#pl-save');
   const tk = (await state()).tasks.find((x) => x.id === 'tk');
   assert(tk.title === '수학 익힘책 40~45쪽' && tk.due === '2030-01-05' && tk.estimateMin === 45 && tk.subjectId === (await state()).subjects.find((x) => x.name === '수학').id, '할 일 내용이 바뀜');
-  assert(!(await page.isVisible('#tasklist .task-edit')), '저장하면 닫힘');
+  assert(!(await page.isVisible('#pl-dlg')), '저장하면 닫힘');
   // 알림이 사라진 뒤에는 그 자리를 눌러도 아무 일 없음 (보이지 않는 버튼이 막지 않게)
   assert(await page.evaluate(() => getComputedStyle(document.querySelector('#toast')).pointerEvents === 'none'), '닫힌 알림은 터치를 막지 않음');
 

@@ -261,23 +261,23 @@ function seed(settings) {
     await flip(page, 'board');
     assert(await page.isDisabled('#lay-home [data-sw="home-exams"]') && await page.isDisabled('#lay-home [data-sw="home-next"]'), '범위 탭이 꺼지면 시험 준비·오늘 할 범위 스위치는 잠김');
     assert(await page.textContent('#lay-d-home-exams') === '범위 탭이 꺼져 있어서 안 보여요' && await page.isChecked('#lay-home [data-sw="home-exams"]'), '까닭을 보여 주고, 제 스위치 값(켜짐)은 그대로');
-    // 계획 탭을 끄면 오늘 할 일 칸과 남은 할 일 카드도
+    // 플래너 탭을 끄면 오늘 할 일 칸과 남은 할 일 카드도
     await flip(page, 'plan');
     await page.evaluate(() => App.go('home'));
     await page.waitForTimeout(150);
-    assert(await homeOrder(page) === 'home-sum', '범위·계획을 끄면 홈에는 요약만: ' + await homeOrder(page));
+    assert(await homeOrder(page) === 'home-sum', '범위·플래너를 끄면 홈에는 요약만: ' + await homeOrder(page));
     assert(await page.getAttribute('#view-home .cards4', 'data-n') === '3' && await page.isHidden('#view-home .cards4 > [data-feature="plan"]'), '요약 카드 3장 (남은 할 일 카드 숨김)');
     // 범위 탭을 다시 켜면 숨기지 않은 칸은 돌아오고, 숨긴 칸은 그대로
     await page.evaluate(() => Features.set('board', true));
     await page.waitForTimeout(150);
     assert(await homeOrder(page) === 'home-exams,home-sum,home-next', '범위를 켜면 두 칸이 정한 자리로: ' + await homeOrder(page));
-    // 범위 화면의 ⋯ 메뉴: 계획이 꺼져 있으면 ‘할 일로 보내기’가 없음
+    // 범위 화면의 ⋯ 메뉴: 플래너가 꺼져 있으면 ‘플래너에 넣기’가 없음
     await page.evaluate(() => App.go('board'));
     await page.waitForSelector('.list-mode .bitem');
     await page.tap('.bitem[data-id="k1"] > .brow [data-menu]');
     await page.waitForTimeout(150);
     const acts = await page.$$eval('#pop-menu [data-act]', (els) => els.map((e) => e.dataset.act));
-    assert(!acts.includes('to-task') && acts.includes('focus'), '할 일로 보내기는 빠지고 타이머는 그대로: ' + acts.join(','));
+    assert(!acts.includes('to-task') && acts.includes('focus'), '플래너에 넣기는 빠지고 타이머는 그대로: ' + acts.join(','));
     await page.keyboard.press('Escape');
     await ctx.close();
   }

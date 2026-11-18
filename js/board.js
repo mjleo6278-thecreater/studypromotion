@@ -132,9 +132,15 @@
   }
   // 체크가 바뀌는 변경: 소요시간을 적어 둔 항목을 끝내면 그 시간을 오늘 공부 기록에 넣고,
   // 체크를 풀면 오늘 넣은 것을 뺀다 (stats.js syncTopicCredits). 반환 { added, removed, ids }
+  // 이 범위와 이은 플래너 할 일도 같이 끝냄·풀기 (plan.js syncLinked)
   function mutateDone(fn, undoable) {
     let got = null;
-    mutate((s) => { const before = Stats.doneTopicIds(s); fn(s); got = Stats.syncTopicCredits(s, before, Date.now(), uid); }, undoable);
+    mutate((s) => {
+      const before = Stats.doneTopicIds(s), links = window.Plan ? Plan.linkState(s) : null;
+      fn(s);
+      got = Stats.syncTopicCredits(s, before, Date.now(), uid);
+      if (links) { const r = Plan.syncLinked(s, links, Date.now()); got.removed += r.removed; }
+    }, undoable);
     return got;
   }
 
@@ -1162,7 +1168,7 @@
       html += mItem('page:flags', '표시', { sub: true, hint: on });
       // 기능과 탭 편집에서 타이머·계획을 꺼 두었으면 그 메뉴는 빼고
       if (!window.Features || window.Features.on('timer')) html += mItem('focus', '이 범위로 타이머 시작');
-      if (!window.Features || window.Features.on('plan')) html += mItem('to-task', '오늘 할 일로 보내기');
+      if (!window.Features || window.Features.on('plan')) html += mItem('to-task', '플래너에 넣기');
       if (p.state === 'some') html += mItem('uncheck-all', '체크 모두 해제');
       if (isCard && hasKids) {
         const anyOpen = Scope.subtreeIds(st().topics, id, index).some((x) => x !== id && kidsOf(x).length && !byId(x).collapsed);
@@ -1278,6 +1284,8 @@
       while (card.parentId) card = byId(card.parentId);
       A.focusOn({ label: card.id === n.id ? n.title : `${card.title} · ${n.title}`, subjectName: card.title, topicId: n.id });
     } else if (act === 'to-task') {
+      // 스터디 플래너의 오늘·내일·고른 날에 할 일로 (js/planner.js). 끝내면 이 범위에도 체크된다
+      if (window.Planner) { window.Planner.placeTopic(n.id); return; }
       let card = n;
       while (card.parentId) card = byId(card.parentId);
       const title = card.id === n.id ? n.title : `${card.title} · ${n.title}`;
@@ -1473,11 +1481,11 @@
   $('#bb-undo').addEventListener('click', undo);
 
   function undo() {
-    const before = Stats.doneTopicIds(st());
+    const before = Stats.doneTopicIds(st()), links = window.Plan ? Plan.linkState(st()) : null;
     if (!store.undo()) return;
-    // 되돌리기는 범위만 되돌리고 공부 기록은 그대로 두므로, 끝냄이 되돌아간 항목의 공부 시간은 여기서 맞춘다
+    // 되돌리기는 범위만 되돌리고 공부 기록·할 일은 그대로 두므로, 끝냄이 되돌아간 항목의 공부 시간과 이은 할 일은 여기서 맞춘다
     let got = null;
-    store.update((s) => { got = Stats.syncTopicCredits(s, before, Date.now(), uid); });
+    store.update((s) => { got = Stats.syncTopicCredits(s, before, Date.now(), uid); if (links) got.removed += Plan.syncLinked(s, links, Date.now()).removed; });
     toast(got.removed ? `되돌렸어요 · 공부 시간에서 ${fm(got.removed)}을 뺐어요` : got.added ? `되돌렸어요 · 공부 시간 +${fm(got.added)}` : '되돌렸어요');
   }
 

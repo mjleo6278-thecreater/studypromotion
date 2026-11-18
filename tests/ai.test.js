@@ -17,7 +17,7 @@ function sample() {
     { id: 'k1', title: '영어 단어 50개', subjectId: 's-eng', due: '2026-11-13', done: false, createdAt: 1 },
     { id: 'k2', title: '국어 문법 정리', subjectId: 's-kor', due: '2026-11-14', done: false, createdAt: 2 },
     { id: 'k3', title: '끝낸 일', subjectId: null, due: '2026-11-10', done: true, createdAt: 3 },
-    { id: 'k4', title: '마감 없는 일', subjectId: null, due: null, done: false, createdAt: 4 },
+    { id: 'k4', title: '날짜 없는 일', subjectId: null, due: null, done: false, createdAt: 4 },
   ];
   st.exams = [{ id: 'x1', name: '기말고사', date: '2026-12-01', createdAt: 1 }];
   st.decks = [{ id: 'd1', name: '스페인어', createdAt: 1 }];
@@ -43,7 +43,7 @@ const check = (actions, st) => { st = st || sample(); const ctx = AI.buildContex
 /* ---------- AI에게 보낼 정보 ---------- */
 test('AI에게는 안 끝낸 할 일만, 짧은 번호로 보낸다', () => {
   const ctx = AI.buildContext(sample(), NOW);
-  assert.deepStrictEqual(ctx.tasks.map((t) => t.title), ['영어 단어 50개', '국어 문법 정리', '마감 없는 일']);
+  assert.deepStrictEqual(ctx.tasks.map((t) => t.title), ['영어 단어 50개', '국어 문법 정리', '날짜 없는 일']);
   assert.deepStrictEqual(ctx.tasks.map((t) => t.k), ['t1', 't2', 't3']);
   assert.strictEqual(ctx.keys.tasks.t1, 'k1');
   assert.strictEqual(ctx.keys.exams.e1, 'x1');
@@ -55,7 +55,7 @@ test('AI에게 보내는 글에는 기록의 id나 공부 기록 전체가 없�
   st.events = events();
   const text = AI.contextText(AI.buildContext(st, NOW));
   for (const secret of ['k1', 'x1', 's-kor', 'ss1', 'ev-a', '비밀 카드', '끝낸 일']) assert.ok(!text.includes(secret), secret);
-  assert.match(text, /t1 "영어 단어 50개" \[영어\] 마감 2026-11-13/);
+  assert.match(text, /t1 "영어 단어 50개" \[영어\] 날짜 2026-11-13/);
   assert.match(text, /e1 "기말고사" 2026-12-01/);
 });
 test('날짜표에 오늘·내일·요일과 이번 주·다음 주가 들어간다', () => {
@@ -179,11 +179,11 @@ test('앱에 없는 동작, 지우는 동작은 버린다', () => {
   assert.strictEqual(res.rejected.length, 6);
   assert.match(res.rejected[0], /앱에 없는 동작이라 뺐어요: delete_task/);
 });
-test('할 일 추가: 과목·마감일·예상 시간을 맞춰 준다', () => {
+test('할 일 추가: 과목·날짜(하는 날)·예상 시간을 맞춰 준다', () => {
   const { res } = check([{ type: 'add_task', title: '  영어  본문 암기 ', subject: '영어', due: '2026-11-15', minutes: 60 }]);
   assert.deepStrictEqual(res.ops[0].data, { title: '영어 본문 암기', subjectId: 's-eng', due: '2026-11-15', est: 60 });
   assert.strictEqual(res.ops[0].line, '할 일 추가: 영어 본문 암기');
-  assert.strictEqual(res.ops[0].sub, '영어 · 내일 11/15(일)까지 · 1시간');
+  assert.strictEqual(res.ops[0].sub, '영어 · 내일 11/15(일) · 1시간');
 });
 test('할 일 추가: 이름이 없거나 날짜가 틀리면 뺀다', () => {
   const { res } = check([{ type: 'add_task', title: '' }, { type: 'add_task', title: '가', due: '2026-02-30' }, { type: 'add_task', title: '나', due: '내일' }, { type: 'add_task', title: '다', due: '2099-01-01' }]);
@@ -198,7 +198,7 @@ test('없는 과목은 과목 없이, 여러 개에 맞으면 고르게 한다',
   assert.match(res.ops[1].warn, /골라 주세요/);
   assert.strictEqual(res.ops[2].data.subjectId, 's-m1');
 });
-test('마감일 옮기기: 번호로 가리킨 할 일만, 같은 날짜면 건너뛴다', () => {
+test('할 일 날짜 옮기기: 번호로 가리킨 할 일만, 같은 날짜면 건너뛴다', () => {
   const { res } = check([{ type: 'move_task', task: 't1', due: '2026-11-15' }, { type: 'move_task', task: 't2', due: '2026-11-14' }, { type: 'move_task', task: 't9', due: '2026-11-15' }, { type: 'move_task', task: 'k1', due: '2026-11-15' }]);
   assert.strictEqual(res.ops.length, 1);
   assert.deepStrictEqual(res.ops[0].data, { id: 'k1', due: '2026-11-15', prev: '2026-11-13' });
@@ -315,6 +315,25 @@ test('할 일을 완료로 표시하면 예상 시간이 공부 기록에 들어
   assert.deepStrictEqual([rec.minutes, rec.kind, rec.manual, rec.subjectId, rec.taskId], [45, 'done', true, 's-kor', 'k2']);
   assert.ok(AI.undoOps(st, inv) > 0);
   assert.strictEqual(JSON.stringify(st), before);
+});
+test('범위와 이은 할 일을 완료로 표시하면 범위도 체크되고, 되돌리면 둘 다 풀린다 (v3.7 플래너)', () => {
+  const st = sample();
+  st.topics = [
+    { id: 'c1', examId: 'x1', parentId: null, kind: 'topic', title: '국어', order: 0, flags: {} },
+    { id: 'n1', examId: 'x1', parentId: 'c1', kind: 'topic', title: '문법', order: 0, est: 40, flags: {} },
+  ];
+  st.tasks.find((t) => t.id === 'k2').topicId = 'n1';
+  st.tasks.find((t) => t.id === 'k4').estimateMin = 20;
+  const { res } = check([{ type: 'complete_task', task: 't2' }, { type: 'complete_task', task: 't3' }], st);
+  const inv = AI.applyOps(st, res.ops, env());
+  assert.strictEqual(st.topics.find((n) => n.id === 'n1').done, true, '이은 범위도 체크');
+  // 할 일에 예상 시간이 없으면 범위의 소요시간이 한 번만 들어간다
+  assert.deepStrictEqual(st.sessions.filter((x) => x.kind === 'done').map((x) => [x.minutes, x.doneOf]), [[40, 'topic:n1'], [20, 'task:k4']]);
+  assert.strictEqual(st.tasks.find((t) => t.id === 'k4').due, '2026-11-14', '날짜 없던 할 일은 끝낸 날의 할 일로');
+  assert.ok(AI.undoOps(st, inv) > 0);
+  assert.strictEqual(st.topics.find((n) => n.id === 'n1').done, false, '되돌리면 범위 체크도 풀림');
+  assert.deepStrictEqual(st.tasks.filter((t) => t.id === 'k2' || t.id === 'k4').map((t) => [t.done, t.due]), [[false, '2026-11-14'], [false, null]]);
+  assert.strictEqual(st.sessions.filter((x) => x.kind === 'done').length, 0);
 });
 test('되돌릴 때 그사이 직접 고친 것은 건드리지 않는다', () => {
   const { st, res } = check([{ type: 'move_task', task: 't1', due: '2026-11-15' }, { type: 'set_goal', dailyMinutes: 180 }, { type: 'add_subject', name: '스페인어' }]);
@@ -547,7 +566,7 @@ test('시각·날짜를 조금 다르게 적어도 읽는다 (v3.3.1)', () => {
     '11/17(화) 18:30~20:30',
     '11/18(수) 19:00~21:30',
     '11/19(목) 7:00~12:00',
-    '11/20(금)까지',
+    '11/20(금)',
     '11/21(토) 23:00~1:00',
     '11/22(일) 12:00~13:30',
   ]);

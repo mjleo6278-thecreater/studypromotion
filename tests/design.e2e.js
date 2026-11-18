@@ -41,8 +41,9 @@ const url = process.env.APP_URL || 'file://' + path.resolve(__dirname, '../index
   const card = await page.evaluate(() => { const s = window.App.store.get(); return s.topics.find((t) => !t.parentId && t.kind !== 'note').color; });
   assert(card === picked, '고른 색이 과목 카드에 반영');
 
-  // 계획: 과목 선택창, 과목 색 버튼
+  // 스터디 플래너: 과목 색 버튼, 할 일 추가 창의 선택창·달력
   await page.goto(url + '#plan');
+  await page.click('#pl-subjects-fold > summary');
   assert(await page.isVisible('#subject-form .color-btn'), '과목 추가에 색 버튼 (기본 색 입력창 대신)');
   await page.click('#subject-form .color-btn');
   await page.click('.ui-sw[data-color="#e36299"]');
@@ -50,31 +51,34 @@ const url = process.env.APP_URL || 'file://' + path.resolve(__dirname, '../index
   await page.click('#subject-form button[type=submit]');
   const art = await page.evaluate(() => window.App.store.get().subjects.find((s) => s.name === '미술'));
   assert(art && art.color === '#e36299', '고른 색으로 과목 추가');
-  await page.click('[data-for="t-subject"]');
-  await page.locator('.ui-opt', { hasText: '미술' }).click();
-  assert((await page.$eval('#t-subject', (s) => s.options[s.selectedIndex].textContent)) === '미술', '시트에서 고르면 원래 select 값이 바뀜');
-  assert((await page.textContent('[data-for="t-subject"]')).includes('미술'), '버튼 글자도 바뀜');
-  await page.selectOption('#t-subject', { label: '과목 없음' });
-  assert((await page.textContent('[data-for="t-subject"]')).includes('과목 없음'), '코드로 값을 바꿔도 버튼이 따라옴');
+  await page.click('#pl-todo [data-pl-add]');
+  assert((await page.textContent('#pl-subj')).includes('미술'), '할 일 추가 창의 과목 칩에도 새 과목');
+  await page.click('[data-for="pl-est"]');
+  await page.locator('.ui-opt', { hasText: '1시간 30분' }).click();
+  assert((await page.$eval('#pl-est', (s) => s.value)) === '90', '시트에서 고르면 원래 select 값이 바뀜');
+  assert((await page.textContent('[data-for="pl-est"]')).includes('1시간 30분'), '버튼 글자도 바뀜');
+  await page.selectOption('#pl-est', '');
+  assert((await page.textContent('[data-for="pl-est"]')).includes('정하지 않음'), '코드로 값을 바꿔도 버튼이 따라옴');
 
   // 날짜: 앱 모양 달력 시트
-  assert(await page.isVisible('[data-for="t-due"]'), '마감일이 달력 버튼으로');
-  await page.click('[data-for="t-due"]');
+  assert(await page.isVisible('[data-for="pl-date"]'), '날짜가 달력 버튼으로');
+  await page.click('[data-for="pl-date"]');
   assert(await page.isVisible('.ui-date .ui-day.today'), '달력 시트에 오늘 표시');
   await page.click('.ui-cal-nav[data-nav="1"]');
   await page.locator('.ui-date .ui-day', { hasText: /^15$/ }).click();
-  const due = await page.$eval('#t-due', (i) => i.value);
+  const due = await page.$eval('#pl-date', (i) => i.value);
   const d = new Date(); const nm = new Date(d.getFullYear(), d.getMonth() + 1, 15);
   const want = `${nm.getFullYear()}-${String(nm.getMonth() + 1).padStart(2, '0')}-15`;
   assert(due === want, '다음 달 15일을 고르면 input 값이 바뀜: ' + due);
-  assert((await page.textContent('[data-for="t-due"]')).includes(`${nm.getMonth() + 1}월 15일`), '버튼에 고른 날짜');
-  await page.fill('#t-due', '');
-  assert((await page.textContent('[data-for="t-due"]')).includes('마감일'), '값을 지우면 안내 글자');
-  await page.click('[data-for="t-due"]');
+  assert((await page.textContent('[data-for="pl-date"]')).includes(`${nm.getMonth() + 1}월 15일`), '버튼에 고른 날짜');
+  await page.fill('#pl-date', '');
+  assert((await page.textContent('[data-for="pl-date"]')).includes('날짜 안 정함'), '값을 지우면 안내 글자');
+  await page.click('[data-for="pl-date"]');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('Enter');
   const tmr = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
-  assert((await page.$eval('#t-due', (i) => i.value)) === `${tmr.getFullYear()}-${String(tmr.getMonth() + 1).padStart(2, '0')}-${String(tmr.getDate()).padStart(2, '0')}`, '키보드(→, Enter)로 내일 고르기');
+  assert((await page.$eval('#pl-date', (i) => i.value)) === `${tmr.getFullYear()}-${String(tmr.getMonth() + 1).padStart(2, '0')}-${String(tmr.getDate()).padStart(2, '0')}`, '키보드(→, Enter)로 내일 고르기');
+  await page.click('#pl-cancel');
 
   // 비밀 단어로 전체 핑크 테마 켜고 끄기
   await page.goto(url + '#about');
