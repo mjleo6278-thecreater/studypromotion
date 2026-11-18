@@ -270,6 +270,13 @@
     catch (e) { failed = e.code; if (e.code === 'login') forgetState(); }
     finally { busy = false; paint(); }
   }
+  // 그룹을 쓰지 않는 사람은 서버를 덜 부른다: 그룹 화면을 보거나, 그룹에 들었거나, 초대 코드를 기다리거나,
+  // 이 계정으로 받은 적이 없거나, 받은 지 반나절이 지났을 때만 (다른 기기에서 들어간 그룹도 언젠가는 홈에 보이게)
+  function worth() {
+    if (App.view === 'group' || cleanCode(lsGet(JOIN_KEY))) return true;
+    const s = state();
+    return !s || s.groups.length > 0 || Date.now() - sAt > 12 * HOUR;
+  }
   // 보낼 것이 있으면 보내면서 받고, 없으면 받기만
   async function refresh() {
     if (inGroups() && sigOf(payload()) !== sentSig && await push()) return;
@@ -955,13 +962,13 @@
     if (doc.visibilityState === 'hidden') { if (canTalk() && inGroups() && sigOf(payload()) !== sentSig) push({ keepalive: true }); }
     else if (canTalk() && Date.now() - sAt > 20000 && (inGroups() || App.view === 'group')) refresh();
   });
-  root.addEventListener('online', () => { if (canTalk()) refresh(); });
+  root.addEventListener('online', () => { if (canTalk() && worth()) refresh(); });
   // 로그인이 바뀌면 (js/cloud.js가 알림)
   root.addEventListener('cloud-user', () => {
     const u = user();
     if (!u) { forgetState(); return; }
     if (sUid && sUid !== u.uid) { S = null; sentSig = null; }
-    if (remote() && featOn()) refresh();
+    if (remote() && featOn() && worth()) refresh();
     paint();
     resumeJoin();
   });
@@ -979,7 +986,7 @@
     }, 300);
   }
   // 그룹 탭을 다시 켜면 바로 맞춘다
-  if (root.Features) root.Features.onChange(() => { if (featOn() && canTalk()) refresh(); paint(); });
+  if (root.Features) root.Features.onChange(() => { if (featOn() && canTalk() && worth()) refresh(); paint(); });
 
   paint(); // 처음 한 번 (app.js가 먼저 그렸을 때는 이 파일이 없었다)
 

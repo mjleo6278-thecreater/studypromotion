@@ -3,11 +3,11 @@ const test = require('node:test');
 const assert = require('node:assert');
 const F = require('../js/features.js');
 
-const TABS = ['home', 'board', 'plan', 'timer', 'review', 'stats'];
-const HOME = ['home-sum', 'home-tt', 'home-exams', 'home-next', 'home-tasks'];
+const TABS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'group'];
+const HOME = ['home-sum', 'home-group', 'home-tt', 'home-exams', 'home-next', 'home-tasks'];
 const S = (layout) => ({ dailyGoalMin: 120, layout });
 
-test('설정이 없으면 지금 모습 그대로 (탭 6개, 모두 켜짐)', () => {
+test('설정이 없으면 지금 모습 그대로 (탭 7개, 모두 켜짐)', () => {
   for (const s of [null, {}, S(undefined), S('x'), S([1, 2]), S({ tabs: 'no', off: 3 })]) {
     const L = F.read(s);
     assert.deepStrictEqual(L.tabs, TABS);
@@ -19,13 +19,15 @@ test('설정이 없으면 지금 모습 그대로 (탭 6개, 모두 켜짐)', ()
 });
 
 test('저장된 순서를 따르고, 빠진 탭은 기본 순서에서 바로 앞 탭 뒤에 끼운다', () => {
-  assert.deepStrictEqual(F.read(S({ tabs: ['timer', 'home', 'board', 'plan', 'review', 'stats'] })).tabs, ['timer', 'home', 'board', 'plan', 'review', 'stats']);
+  assert.deepStrictEqual(F.read(S({ tabs: ['timer', 'home', 'board', 'plan', 'review', 'stats', 'group'] })).tabs, ['timer', 'home', 'board', 'plan', 'review', 'stats', 'group']);
+  // 3.11 전에 순서를 바꿔 둔 사람: 새 그룹 탭은 통계 바로 뒤에
+  assert.deepStrictEqual(F.read(S({ tabs: ['timer', 'stats', 'home', 'board', 'plan', 'review'] })).tabs, ['timer', 'stats', 'group', 'home', 'board', 'plan', 'review']);
   // plan이 빠짐 → board 뒤로
-  assert.deepStrictEqual(F.read(S({ tabs: ['stats', 'board', 'home', 'timer', 'review'] })).tabs, ['stats', 'board', 'plan', 'home', 'timer', 'review']);
+  assert.deepStrictEqual(F.read(S({ tabs: ['stats', 'board', 'home', 'timer', 'review'] })).tabs, ['stats', 'group', 'board', 'plan', 'home', 'timer', 'review']);
   // 맨 앞(home)이 빠짐 → 맨 앞으로
-  assert.deepStrictEqual(F.read(S({ tabs: ['stats', 'board'] })).tabs, ['home', 'stats', 'board', 'plan', 'timer', 'review']);
+  assert.deepStrictEqual(F.read(S({ tabs: ['stats', 'board'] })).tabs, ['home', 'stats', 'group', 'board', 'plan', 'timer', 'review']);
   // 겹치거나 모르는 이름은 빼고 읽는다
-  assert.deepStrictEqual(F.read(S({ tabs: ['review', 'review', 'planner', 7, 'home'] })).tabs, ['review', 'stats', 'home', 'board', 'plan', 'timer']);
+  assert.deepStrictEqual(F.read(S({ tabs: ['review', 'review', 'planner', 7, 'home'] })).tabs, ['review', 'stats', 'group', 'home', 'board', 'plan', 'timer']);
 });
 
 test('mergeOrder: 새 기능은 기본 순서의 자리에 들어간다', () => {
@@ -46,6 +48,9 @@ test('끈 기능: 딸린 기능도 꺼지고, 홈 칸은 필요한 탭이 꺼지
   assert.ok(F.isOn(L, 'home-tt') && F.isOn(L, 'home-sum'));
   assert.match(F.lockReason(L, 'home-exams'), /범위 탭이 꺼져/);
   assert.match(F.lockReason(L, 'home-tasks'), /플래너 탭이 꺼져/);
+  L = F.read(S({ off: ['group'] }));
+  assert.ok(!F.isOn(L, 'home-group') && F.isOn(L, 'stats'), '그룹 탭을 끄면 홈의 우리 그룹 칸도');
+  assert.match(F.lockReason(L, 'home-group'), /그룹 탭이 꺼져/);
 });
 
 test('홈과 오늘 요약은 끌 수 없다', () => {
@@ -70,10 +75,10 @@ test('집중 타이머와 스톱워치는 함께 끌 수 없다', () => {
 
 test('순서 바꾸기: moveTo', () => {
   const L = F.read(null);
-  assert.deepStrictEqual(F.moveTo(L, 'tabs', 'timer', 0).tabs, ['timer', 'home', 'board', 'plan', 'review', 'stats']);
-  assert.deepStrictEqual(F.moveTo(L, 'tabs', 'home', 2).tabs, ['board', 'plan', 'home', 'timer', 'review', 'stats']);
-  assert.deepStrictEqual(F.moveTo(L, 'tabs', 'stats', 99).tabs, TABS);
-  assert.deepStrictEqual(F.moveTo(L, 'home', 'home-exams', 0).home, ['home-exams', 'home-sum', 'home-tt', 'home-next', 'home-tasks']);
+  assert.deepStrictEqual(F.moveTo(L, 'tabs', 'timer', 0).tabs, ['timer', 'home', 'board', 'plan', 'review', 'stats', 'group']);
+  assert.deepStrictEqual(F.moveTo(L, 'tabs', 'home', 2).tabs, ['board', 'plan', 'home', 'timer', 'review', 'stats', 'group']);
+  assert.deepStrictEqual(F.moveTo(L, 'tabs', 'group', 99).tabs, TABS);
+  assert.deepStrictEqual(F.moveTo(L, 'home', 'home-exams', 0).home, ['home-exams', 'home-sum', 'home-group', 'home-tt', 'home-next', 'home-tasks']);
   assert.strictEqual(F.moveTo(L, 'tabs', 'nope', 0), L);
   assert.ok(!F.isDefault(F.moveTo(L, 'tabs', 'timer', 0)));
 });
@@ -85,8 +90,8 @@ test('저장할 때 이 버전이 모르는 기능(새 버전의 탭·꺼 둔 �
   assert.ok(F.isOn(L, 'board') && !F.isOn(L, 'review'));
   assert.ok(!F.isOn(L, 'planner') && F.isOn(L, 'something-new'), '모르는 이름은 off에 없으면 켜진 것으로');
   const next = F.pack(F.toggle(F.moveTo(L, 'tabs', 'stats', 0), 'review', true), prev);
-  assert.deepStrictEqual(next.tabs, ['stats', 'home', 'planner', 'board', 'plan', 'timer', 'review'], '모르는 탭은 전에 있던 자리(홈 바로 뒤)에');
-  assert.deepStrictEqual(next.home, ['home-sum', 'home-week', 'home-tt', 'home-exams', 'home-next', 'home-tasks']);
+  assert.deepStrictEqual(next.tabs, ['stats', 'home', 'planner', 'board', 'plan', 'timer', 'review', 'group'], '모르는 탭은 전에 있던 자리(홈 바로 뒤)에');
+  assert.deepStrictEqual(next.home, ['home-sum', 'home-week', 'home-group', 'home-tt', 'home-exams', 'home-next', 'home-tasks']);
   // 맨 앞에 있던 모르는 이름은 맨 앞에
   assert.deepStrictEqual(F.pack(F.read(null), { tabs: ['planner', 'home'] }).tabs, ['planner'].concat(TABS));
   assert.deepStrictEqual(next.off, ['planner']);

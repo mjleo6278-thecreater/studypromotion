@@ -69,6 +69,8 @@ const FAKE = `
         if (!everyone) return json(route, { open: false, signedIn: true });
         return json(route, { open: true, signedIn: true, unlimited: false, left: srv.limit - srv.used, limit: srv.limit });
       }
+      // 그룹 스터디(v3.11): 이 시험의 사람들은 그룹에 들지 않았다
+      if (where === '/group') return token ? json(route, { ok: true, me: { id: '0123456789abcdef', n: null }, groups: [], lim: { members: 20, groups: 5 } }) : json(route, { error: 'login' }, 401);
       if (where !== '/chat') return json(route, { error: 'not_found' }, 404);
       if (!token) return json(route, { error: 'login' }, 401);
       if (!owner && !everyone) return json(route, { error: 'closed' }, 403);
