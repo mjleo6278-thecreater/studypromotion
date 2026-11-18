@@ -2523,15 +2523,19 @@ body.bounce-open { overflow: hidden; }
 .pl-item.done .pl-slot:not(.empty) { opacity: .55; }
 .pl-slot:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* 오른쪽 진행 칸: 빈칸 → ○ → △ */
-.pl-mark { flex: none; width: 32px; height: 32px; padding: 0; border: 1.5px dashed color-mix(in srgb, var(--muted) 50%, transparent); border-radius: 8px; background: none; display: grid; place-items: center; cursor: pointer; transition: background-color .12s, border-color .12s; }
-.pl-mk { width: 21px; height: 21px; fill: none; stroke-width: 2.5; stroke-linejoin: round; }
-.pl-mark.o { border-style: solid; border-color: color-mix(in srgb, var(--accent) 35%, transparent); background: var(--accent-soft); }
+.pl-mark { flex: none; width: 32px; height: 32px; padding: 0; border: 1.5px solid color-mix(in srgb, var(--line) 90%, var(--muted)); border-radius: 10px; background: var(--surface); display: grid; place-items: center; cursor: pointer; transition: background-color .15s, border-color .15s; }
+.pl-mk { width: 24px; height: 24px; fill: none; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+.pl-mark.o { border-color: transparent; background: var(--accent-soft); }
 .pl-mark.o .pl-mk { stroke: var(--accent); }
-.pl-mark.t { border-style: solid; border-color: color-mix(in srgb, var(--text) 30%, transparent); background: var(--bg); }
+.pl-mark.t { border-color: transparent; background: color-mix(in srgb, var(--line) 70%, var(--bg)); }
 .pl-mark.t .pl-mk { stroke: var(--text); }
+/* 방금 누른 칸: 펜으로 쓱 그려진다 */
+.pl-mark.draw .pl-mk path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: pl-draw .34s cubic-bezier(.4, .1, .3, 1) forwards; }
+@keyframes pl-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .pl-mark.draw .pl-mk path { animation: none; stroke-dashoffset: 0; } }
 .pl-mark:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.pl-mark.sm { width: 24px; height: 24px; border-radius: 6px; border-width: 1.3px; }
-.pl-mark.sm .pl-mk { width: 16px; height: 16px; }
+.pl-mark.sm { width: 24px; height: 24px; border-radius: 7px; border-width: 1.3px; }
+.pl-mark.sm .pl-mk { width: 18px; height: 18px; }
 .pl-item .pl-play { width: 32px; height: 32px; }
 .pl-tag.from { color: var(--text); opacity: .7; font-weight: 700; }
 .pl-tag.from .ic { width: 12px; height: 12px; }
@@ -2559,9 +2563,9 @@ body.bounce-open { overflow: hidden; }
 .pl-cy-day { margin: 10px 12px 2px; }
 .pl-cy .pl-sc-item { padding: 9px 10px; }
 .pl-cy .pl-sc-text { flex: 1; }
-.pl-cy-mark { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; border: 1.5px dashed color-mix(in srgb, var(--muted) 50%, transparent); }
-.pl-cy-mark .pl-mk { width: 17px; height: 17px; stroke: var(--text); }
-.pl-cy-mark.t { border-style: solid; border-color: color-mix(in srgb, var(--text) 30%, transparent); background: var(--bg); }
+.pl-cy-mark { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; border: 1.5px solid color-mix(in srgb, var(--line) 90%, var(--muted)); }
+.pl-cy-mark .pl-mk { width: 20px; height: 20px; stroke: var(--text); }
+.pl-cy-mark.t { border-color: transparent; background: color-mix(in srgb, var(--line) 70%, var(--bg)); }
 .pl-cy-note { margin: 6px 8px 0; padding: 9px 11px; border-radius: 10px; background: var(--bg); font-size: 12.8px; color: var(--muted); line-height: 1.5; }
 .pl-cy-foot { position: sticky; bottom: 0; display: flex; gap: 8px; margin-top: 10px; padding: 10px 4px 12px; border-top: 1px solid var(--line); background: var(--surface); }
 .pl-cy-foot .btn { flex: 1; padding: 11px 10px; }
