@@ -374,6 +374,19 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.goBack();
   await page.waitForTimeout(150);
   assert((await page.evaluate(() => ({ m: Board.mode, v: App.view }))).m === 'list' && (await page.evaluate(() => App.view)) === 'board' && (await page.isVisible('.tabs')), '뒤로 가기: 보드 전체 화면에서 목록으로');
+  // 3.9.1: 보드를 아주 멀리 본 뒤(확대 45% 아래) 목록으로 돌아와도 과목 제목·진행률 글씨는 목록 크기 그대로
+  const headSize = () => page.evaluate(() => { const c = document.querySelector('#board-cards .bcard:not(.note)'); return { t: parseFloat(getComputedStyle(c.querySelector('.bcard-title')).fontSize), p: parseFloat(getComputedStyle(c.querySelector('.bcard-prog')).fontSize), bar: c.querySelector('.bbar').getBoundingClientRect().height }; });
+  const listSize = await headSize();
+  await page.click('[data-scope-mode=board]');
+  await page.evaluate(() => Board.zoomAt(0.3, 195, 400));
+  const farSize = await headSize();
+  assert(farSize.t > listSize.t + 10, '보드를 멀리 보면 과목 제목을 크게 (' + farSize.t + 'px)');
+  await page.click('[data-scope-mode=list]');
+  const backSize = await headSize();
+  assert(backSize.t === listSize.t && backSize.p === listSize.p && backSize.bar === listSize.bar && !(await page.evaluate(() => document.querySelector('#board-viewport').classList.contains('zoomed-out'))), '보드를 멀리 본 뒤 목록으로 와도 과목 제목·남은 시간 글씨는 그대로 (' + backSize.t + 'px, ' + backSize.p + 'px)');
+  await page.click('[data-scope-mode=board]');
+  assert(await page.evaluate(() => document.querySelector('#board-viewport').classList.contains('zoomed-out')) && (await headSize()).t === farSize.t, '보드로 다시 가면 멀리 보기 글씨가 돌아옴');
+  await page.click('[data-scope-mode=list]');
 
   // 목록 ↔ 보드 전환 효과 (View Transitions): 자동 테스트는 평소 효과 없이 바로 바뀌므로, 효과를 켠 주소(?vt)로 따로 연다
   const vtCtx = await browser.newContext({ viewport: { width: 390, height: 800 }, hasTouch: true, isMobile: true });

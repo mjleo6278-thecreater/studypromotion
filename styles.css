@@ -357,10 +357,10 @@ body.board-mode { overflow: hidden; }
 .bnote-text .muted { color: #a89a50; }
 .bnote-edit { width: 100%; min-height: 90px; background: #fffbe0; color: #3d3500; border-color: #e6d36d; font-size: 15px; }
 
-/* 아주 멀리서 볼 때: 큰 제목과 진행률만 또렷하게 */
-.board-viewport.zoomed-out .bcard-title { font-size: 26px; }
-.board-viewport.zoomed-out .bcard-prog { font-size: 18px; }
-.board-viewport.zoomed-out .bbar { height: 12px; border-radius: 6px; }
+/* 아주 멀리서 볼 때: 큰 제목과 진행률만 또렷하게 (보드 보기에서만, 목록 보기는 그대로) */
+.board-viewport.zoomed-out:not(.list-mode) .bcard-title { font-size: 26px; }
+.board-viewport.zoomed-out:not(.list-mode) .bcard-prog { font-size: 18px; }
+.board-viewport.zoomed-out:not(.list-mode) .bbar { height: 12px; border-radius: 6px; }
 
 /* 팝업 메뉴 */
 .pop-menu {
@@ -427,9 +427,9 @@ html:has(body.board-mode) { overflow: hidden; }
 .bb-group { flex: none; }
 body.board-mode main { margin: 0; width: 100%; }
 .board-bar.disabled { display: none; }
-.board-viewport.zoomed-out .bcard-title { font-size: min(44px, calc(15px / var(--z, 1))); }
-.board-viewport.zoomed-out .bcard-prog { font-size: min(28px, calc(11px / var(--z, 1))); }
-.board-viewport.zoomed-out .bcard-prog .bbar { height: min(16px, calc(6px / var(--z, 1))); }
+.board-viewport.zoomed-out:not(.list-mode) .bcard-title { font-size: min(44px, calc(15px / var(--z, 1))); }
+.board-viewport.zoomed-out:not(.list-mode) .bcard-prog { font-size: min(28px, calc(11px / var(--z, 1))); }
+.board-viewport.zoomed-out:not(.list-mode) .bcard-prog .bbar { height: min(16px, calc(6px / var(--z, 1))); }
 .bstamp { top: 10px; right: 44px; font-size: 13px; padding: 1px 8px; }
 .bcard.complete .bcard-title { padding-right: 64px; }
 .board-bar { gap: 6px 10px; }

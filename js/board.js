@@ -489,6 +489,7 @@
       dock.classList.toggle('disabled', !has);
       $('#view-board').classList.toggle('list-mode', list);
       vp.classList.toggle('list-mode', list);
+      if (list) vp.classList.remove('zoomed-out'); // 보드에서 멀리 볼 때 커진 제목·진행률 글씨가 목록에 남지 않게 (3.9.1)
       $$('[data-scope-mode]').forEach((b) => { const on = b.dataset.scopeMode === mode; b.classList.toggle('active', on); b.setAttribute('aria-pressed', String(on)); });
       $('#board-empty').hidden = has;
       world.hidden = !has;
