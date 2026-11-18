@@ -2428,6 +2428,7 @@ body.bounce-open { overflow: hidden; }
 .bounce-scores > span { font-size: 14px; font-weight: 600; }
 .bounce-scores .bounce-best { margin-left: 10px; color: var(--muted); font-size: 13px; font-weight: 500; }
 .bounce-scores .bounce-best b { font-weight: 700; color: var(--text); }
+.bounce-speed { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent-text); font-size: 12px !important; font-weight: 700 !important; }
 .bounce-x { flex: none; width: 40px; height: 40px; display: grid; place-items: center; padding: 0; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: var(--text); cursor: pointer; }
 .bounce-x .ic { width: 20px; height: 20px; }
 .bounce-stage { position: relative; flex: 1; min-height: 0; width: min(100%, 560px); margin: 0 auto; }
@@ -2443,6 +2444,20 @@ body.bounce-open { overflow: hidden; }
 .bounce-acts .btn { width: 100%; padding: 11px 14px; }
 .bounce-acts .btn.link { margin: 0; padding: 6px 0; }
 .bounce-note { margin-top: 12px !important; font-size: 12.5px; }
+/* 기록 순위 (끝 카드) */
+.bounce-board { margin-top: 12px; text-align: left; }
+.bounce-board h4 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+.bounce-board h4 span { margin-left: 4px; font-weight: 500; }
+.bounce-board ol { list-style: none; margin: 0; padding: 0; max-height: 172px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.bounce-board li { display: grid; grid-template-columns: 20px auto 1fr auto; align-items: baseline; gap: 6px; padding: 7px 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.bounce-board li + li { border-top: 1px solid var(--line); }
+.bounce-board li.me { background: var(--accent-soft); }
+.bb-rk { font-weight: 800; color: var(--muted); }
+.bounce-board li:nth-child(-n+3) .bb-rk { color: var(--text); }
+.bb-sub { min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bb-when { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.bounce-board li.me .bb-when { color: var(--accent-text); font-weight: 700; }
+.bb-out { margin-top: 6px !important; }
 /* 사진 자르기 */
 .bounce-crop { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; overflow: auto; background: var(--bg);
   padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); }
@@ -2467,6 +2482,12 @@ body.bounce-open { overflow: hidden; }
   .bounce-acts { flex-direction: row; flex-wrap: wrap; margin-top: 10px; }
   .bounce-acts .btn { flex: 1 1 40%; width: auto; padding: 9px 12px; }
   .bounce-note { display: none; }
+  .bounce-card.over { width: min(560px, calc(100% - 24px)); display: grid; grid-template-columns: 1fr 1.15fr; grid-template-areas: "h board" "p board" "acts board" ". board"; grid-template-rows: auto auto auto 1fr; column-gap: 16px; align-items: start; text-align: left; }
+  .bounce-card.over h3 { grid-area: h; margin-top: 0; }
+  .bounce-card.over > p { grid-area: p; }
+  .bounce-card.over .bounce-acts { grid-area: acts; }
+  .bounce-card.over .bounce-board { grid-area: board; margin-top: 0; }
+  .bounce-board ol { max-height: 150px; }
   .crop-box { width: min(100%, 640px); display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto 1fr auto auto; column-gap: 18px; row-gap: 8px; text-align: left; }
   .crop-canvas { --cs: min(70vh, 300px); grid-column: 1; grid-row: 1 / 6; }
   .crop-box > :not(.crop-canvas) { grid-column: 2; }

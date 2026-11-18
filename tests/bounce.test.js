@@ -80,32 +80,48 @@ test('막대: 치면 1점, 가운데는 곧게 끝은 비스듬히, 빨라도 �
   assert.ok(Math.abs(g.ball.vx) < 1e-6, '가운데는 곧게 위로');
   hit(g, g.px + g.pw / 2);
   assert.ok(g.ball.vx > 0 && g.ball.vy < 0 && g.score === 2, '오른쪽 끝으로 받으면 오른쪽 위로');
-  Object.assign(g.ball, { x: g.px, y: g.py - g.r - 30, vx: 0, vy: g.base * 1.9 });
+  g.t = 300; // 5분 버틴 셈: 처음의 4.6배
+  Object.assign(g.ball, { x: g.px, y: g.py - g.r - 30, vx: 0, vy: 1 });
   B.step(g, 0.034);
-  assert.ok(g.ball.vy < 0 && g.ball.y + g.r <= g.py + 1 && g.score === 3, '아주 빠른 공도 받음');
+  assert.ok(g.ball.vy < 0 && g.ball.y + g.r <= g.py + 1 && g.score === 3 && speed(g) > g.base * 4.5, '아주 빠른 공도 뚫고 지나가지 않고 받음');
 });
 
-test('빠르기: 5점마다 한 단계씩 빨라지고, 그 사이에는 그대로다 (골 점수도 함께 센다)', () => {
+test('빠르기: 시간이 갈수록 끝없이 빨라지고, 친 횟수·점수와는 상관없다', () => {
   const g = fresh();
   B.launch(g, 0.5);
   const s0 = g.base;
-  for (let i = 1; i <= 4; i++) { const ev = hit(g); assert.ok(Math.abs(speed(g) - s0) < 1e-6 && !ev.some((e) => e.type === 'faster'), i + '점: 처음 빠르기 그대로'); }
-  let ev = hit(g);
-  assert.ok(g.score === 5 && g.level === 1 && ev.some((e) => e.type === 'faster' && e.level === 1), '5점 → 1단계 빨라짐 ' + JSON.stringify(ev.map((e) => e.type)));
-  assert.ok(Math.abs(speed(g) - s0 * (1 + B.SPEED_STEP)) < 1e-6, '5점부터 12% 빠름');
-  for (let i = 6; i <= 9; i++) { hit(g); assert.ok(Math.abs(speed(g) - s0 * (1 + B.SPEED_STEP)) < 1e-6, i + '점: 같은 단계에서는 그대로'); }
-  // 9점에서 골(+1) → 10점: 날고 있는 공이 바로 빨라진다
+  const fly = (sec) => { let ev = []; for (let k = 0; k < sec * 60; k++) { Object.assign(g.ball, { x: g.W / 2, y: g.H / 2 }); ev = ev.concat(B.step(g, 1 / 60)); } return ev; };
+  let ev = fly(10);
+  assert.ok(Math.abs(speed(g) / s0 - 1.12) < 0.01, '10초 뒤 1.12배: ' + (speed(g) / s0).toFixed(3));
+  assert.ok(!ev.some((e) => e.type === 'faster'), '15초 전에는 알림 없음');
+  ev = fly(5);
+  assert.ok(ev.filter((e) => e.type === 'faster').length === 1, '15초에 ‘빨라져요’ 알림 한 번');
+  hit(g); hit(g); hit(g);
+  assert.ok(Math.abs(speed(g) - B.speedOf(g)) < 1e-6 && g.score === 3, '쳐도 빠르기는 시간으로만 정해짐');
   Object.assign(g.ball, { x: g.gx, y: g.r + 3, vx: 0, vy: -speed(g) });
   ev = B.step(g, 0.02);
-  assert.ok(g.score === 10 && g.level === 2 && ev.some((e) => e.type === 'goal') && ev.some((e) => e.type === 'faster'), '골로 10점 → 2단계');
-  assert.ok(Math.abs(speed(g) - s0 * (1 + 2 * B.SPEED_STEP)) < 1e-6 && g.ball.vy > 0, '골 뒤 내려오는 공이 바로 빨라짐');
-  // 끝없이 빨라지지는 않는다
-  for (let i = 0; i < 80; i++) hit(g);
-  assert.ok(Math.abs(speed(g) - s0 * B.SPEED_MAX) < 1e-6, '최고 빠르기 ' + (speed(g) / s0).toFixed(2) + '배');
+  assert.ok(ev.some((e) => e.type === 'goal') && g.score === 4, '친 공(1점) + 골(1점 더)');
+  fly(185); // 모두 200초쯤
+  assert.ok(speed(g) / s0 > 3.3, '상한 없이 계속 빨라짐: ' + (speed(g) / s0).toFixed(2) + '배');
   B.serve(g);
-  assert.ok(g.level === 0 && g.score === 0, '새 판은 다시 처음 빠르기');
   B.launch(g, 0.5);
-  assert.ok(Math.abs(speed(g) - s0) < 1e-6);
+  assert.ok(g.t === 0 && Math.abs(speed(g) - s0) < 1e-6 && g.cue === 0, '새 판은 다시 처음 빠르기');
+});
+
+test('기록 순위: 점수 높은 순으로 10개까지, 같은 점수면 먼저 낸 기록이 위, 넣은 자리를 알려 준다', () => {
+  let list = [];
+  const add = (sc, t) => { const r = B.addRecord(list, { s: sc, g: 0, sec: 10, t }); list = r.list; return r.rank; };
+  assert.strictEqual(add(5, 1), 0);
+  assert.strictEqual(add(9, 2), 0);
+  assert.strictEqual(add(5, 3), 2, '같은 5점이면 먼저 낸 기록 아래');
+  assert.deepStrictEqual(list.map((r) => r.t), [2, 1, 3]);
+  for (let i = 0; i < 10; i++) add(20 + i, 10 + i);
+  assert.strictEqual(list.length, B.BOARD_MAX);
+  assert.strictEqual(list[0].s, 29);
+  assert.strictEqual(add(1, 99), -1, '10위 밖');
+  assert.ok(!list.some((r) => r.t === 99));
+  assert.strictEqual(B.addRecord('깨진 값', { s: 3 }).rank, 0, '저장값이 이상해도 새로 시작');
+  assert.deepStrictEqual([B.fmtSec(0), B.fmtSec(45.4), B.fmtSec(72), B.fmtSec(120)], ['0초', '45초', '1분 12초', '2분']);
 });
 
 test('놓치면 끝: 막대 옆으로 떨어진 공은 아래로 나가고 판이 끝난다', () => {
