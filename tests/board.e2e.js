@@ -338,6 +338,14 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.waitForTimeout(400);
   const ses = (await state()).sessions.pop();
   assert(ses && ses.label === '수학 · 인수분해', '집중 기록에 범위 이름 저장');
+  // 범위에서 시작한 집중이 끝나면 0.5초 뒤에 '끝냈나요?'를 묻고, 이어서 무엇을 할지 고르는 창이 뜬다.
+  // 기다렸다가 닫는다 (늦게 뜬 창이 뒤의 클릭을 가로막지 않게. 컴퓨터가 바쁘면 가끔 그랬다)
+  await page.waitForSelector('#ask:not([hidden])');
+  assert(/공부를 끝냈나요/.test(await page.textContent('#ask-msg')), '범위에서 시작한 집중이 끝나면 끝냈는지 물어봄');
+  await page.click('#ask-cancel');
+  await page.waitForSelector('.ui-back.in .next-sheet');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.ui-back.in') && document.querySelector('#ask').hidden);
   assert(!(await page.evaluate(() => Board.full)) && (await page.isVisible('.topbar')), '다른 화면으로 가면 전체 화면이 풀림');
   await page.click('.tab[data-view=board]');
   assert((await page.evaluate(() => Board.mode)) === 'list', '범위 탭으로 돌아오면 목록부터');

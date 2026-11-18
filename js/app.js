@@ -107,7 +107,7 @@
   }
 
   /* ---------- 라우팅 ---------- */
-  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'timetable', 'account', 'about', 'layout'];
+  const VIEWS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'group', 'timetable', 'account', 'about', 'layout'];
   let currentView = 'home';
 
   function go(view) {
@@ -152,7 +152,15 @@
   const takeCardLink = () => !!(window.CardLink && window.CardLink.take(location.hash));
   // 복습을 꺼 두었으면 화면은 그대로 두고, 켤지는 카드 링크 창이 묻는다 (js/cardlink.js)
   const cardView = () => (featOn('review') ? 'review' : currentView);
-  window.addEventListener('hashchange', () => go(takeCardLink() ? cardView() : location.hash.slice(1)));
+  // 그룹 초대 링크(…/#join=코드): 코드를 맡겨 두고 주소를 #group으로 바꾼다. 들어갈지는 그룹 화면이 묻는다 (js/group.js)
+  function takeJoinLink() {
+    const m = /^#(?:group&)?join=([0-9A-Za-z-]{4,12})$/.exec(location.hash);
+    if (!m) return false;
+    try { localStorage.setItem('studypromotion.groupJoin', m[1].toUpperCase().replace(/-/g, '')); } catch (e) { /* 저장이 막힌 환경 */ }
+    try { history.replaceState(history.state, '', location.pathname + location.search + '#group'); } catch (e) { /* 무시 */ }
+    return true;
+  }
+  window.addEventListener('hashchange', () => go(takeCardLink() ? cardView() : takeJoinLink() ? 'group' : location.hash.slice(1)));
 
   /* ---------- 휴대폰 '뒤로' 버튼 ----------
      열린 창이 있으면 그 창만 닫고, 없으면 홈으로 가고, 홈에서는 앱을 나간다(설치한 앱은 한 번 더 눌러야 닫힘).
@@ -398,6 +406,7 @@
     renderHomeNext();
     renderWelcome();
     if (window.Planner) window.Planner.renderHome(); // '오늘 할 일' 칸과 요약 카드: 스터디 플래너의 오늘 칸 (js/planner.js)
+    if (window.Group) window.Group.renderHome(); // '우리 그룹' 칸 (js/group.js)
   }
 
   // 시험마다 오늘 아침 남은 양을 기록해 둔다 (그래야 오늘 한 양·오늘 남은 양이 맞다)
@@ -717,6 +726,7 @@
   // 집중 타이머가 돌거나 멈춰 있는 중이면 'focus'/'break', 아니면 null (스톱워치와 동시에 재지 않게)
   function timerBusy() { return timer.running || timer.remaining < timer.total ? timer.mode : null; }
   // AI 도우미가 말로 집중 타이머를 켤 때: 과목과 (있으면) 길이를 정하고 바로 시작한다. 이미 무언가 재고 있으면 아무것도 하지 않고 false
+  // opts.seconds: 이번 한 번만 이 길이(초)로 (그룹 '함께 집중'이 같은 시각에 끝나게). 설정의 집중 시간은 바꾸지 않는다
   function startFocus(opts) {
     opts = opts || {};
     if (timerBusy() || (window.Stopwatch && window.Stopwatch.running()) || (window.Lock && window.Lock.state)) return false;
@@ -727,7 +737,8 @@
     timer.taskId = opts.taskId || null;
     timer.startedAt = 0;
     setMode('focus');
-    if (opts.minutes) setLen(opts.minutes);
+    if (opts.seconds > 0) { timer.total = timer.remaining = Math.max(1, Math.min(LEN_MAX.focus * 60, Math.round(opts.seconds))); saveTimer(); }
+    else if (opts.minutes) setLen(opts.minutes);
     go('timer');
     startTimer();
     return true;
@@ -1706,7 +1717,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.10';
+  const APP_VERSION = '4.0';
   const APP_DATE = '2026년 11월 19일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
@@ -1845,6 +1856,7 @@
       if (!$('#deck-detail').hidden) renderDeckDetail();
       else if ($('#study').hidden) renderDecks();
     } else if (currentView === 'stats') renderStats();
+    else if (currentView === 'group') { if (window.Group) window.Group.render(); }
     else if (currentView === 'account') renderAccount();
     else if (currentView === 'about') renderAbout();
     else if (currentView === 'board' && window.Board) window.Board.render();
@@ -2014,13 +2026,14 @@
 
   window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone, openDeck,
     // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
-    timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null, taskId: timer.taskId || null } : null),
+    timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), end: timer.endAt, subjectId: timer.subjectId || null, label: timer.label || null, taskId: timer.taskId || null } : null),
     openLog, dropCredit, setTaskDone, setTaskMark, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   const fromCardLink = takeCardLink(); // 방문 기록을 깔기 전에 긴 카드 주소를 #review로 바꿔 둔다 (뒤로 가기로 다시 뜨지 않게)
+  const fromJoinLink = !fromCardLink && takeJoinLink(); // 그룹 초대 링크도 같게 (#group으로)
   initHistory();
-  go(fromCardLink ? cardView() : (location.hash.slice(1) || 'home'));
+  go(fromCardLink ? cardView() : fromJoinLink ? 'group' : (location.hash.slice(1) || 'home'));
 
   // 테스트/디버그용
   window.__studypromotion = { store, timer, finishPhase, parseBulk, afterFocus };

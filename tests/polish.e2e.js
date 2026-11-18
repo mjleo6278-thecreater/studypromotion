@@ -30,7 +30,7 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   await page.goto(base + '#home');
   // 하단 탭: 글꼴 기호 대신 같은 크기의 선 아이콘
   const icoSizes = await page.$$eval('.tab .ico svg', (els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));
-  assert(icoSizes.length === 6 && icoSizes.every((w) => w === icoSizes[0] && w >= 20), '하단 탭 아이콘 6개가 같은 크기 (' + icoSizes.join(',') + ')');
+  assert(icoSizes.length === 7 && icoSizes.every((w) => w === icoSizes[0] && w >= 20), '하단 탭 아이콘 7개(그룹 포함)가 같은 크기 (' + icoSizes.join(',') + ')');
 
   // 1) 플래시카드 고치기
   await page.evaluate(() => {

@@ -17,8 +17,10 @@ const server = http.createServer((req, res) => {
   res.end(fs.readFileSync(file));
 });
 
-const TABS = ['home', 'board', 'plan', 'timer', 'review', 'stats'];
-const HOME = ['home-sum', 'home-tt', 'home-exams', 'home-next', 'home-tasks'];
+const TABS = ['home', 'board', 'plan', 'timer', 'review', 'stats', 'group'];
+const HOME = ['home-sum', 'home-group', 'home-tt', 'home-exams', 'home-next', 'home-tasks'];
+// 홈에 보이는 칸: '우리 그룹'은 그룹에 들어 있을 때만 보인다 (이 시험에서는 그룹이 없다)
+const HOME_SHOWN = HOME.filter((x) => x !== 'home-group');
 const BAR = 'studypromotion.tabbar';
 const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
@@ -139,7 +141,7 @@ function seed(settings) {
     await page.tap('#lay-entry');
     await flip(page, 'review');
     assert(await toastOf(page) === '복습 탭을 껐어요. 기록은 그대로 있어요.', '끄면 알림: ' + await toastOf(page));
-    assert(await shownTabs(page) === 'home,board,plan,timer,stats', '탭 막대에서 복습이 빠짐: ' + await shownTabs(page));
+    assert(await shownTabs(page) === 'home,board,plan,timer,stats,group', '탭 막대에서 복습이 빠짐: ' + await shownTabs(page));
     assert(JSON.stringify(await layoutOf(page)) === JSON.stringify({ tabs: TABS, home: HOME, off: ['review'] }), '기록(settings.layout)에 저장: ' + JSON.stringify(await layoutOf(page)));
     assert(await barOf(page) === JSON.stringify({ o: TABS, x: ['review'] }), '첫 화면용 탭 사본도');
     const cls = await page.getAttribute('#lay-tabs > [data-id="review"]', 'class');
@@ -168,9 +170,9 @@ function seed(settings) {
     // 새로 고쳐도 그대로
     await page.reload();
     await page.waitForTimeout(300);
-    assert(await shownTabs(page) === 'home,board,plan,timer,review' && !(await page.$('#tabbar-pre')), '새로 고침 뒤에도 통계 꺼짐 (첫 화면용 스타일은 정리됨)');
+    assert(await shownTabs(page) === 'home,board,plan,timer,review,group' && !(await page.$('#tabbar-pre')), '새로 고침 뒤에도 통계 꺼짐 (첫 화면용 스타일은 정리됨)');
     // 탭을 다 끄면 탭 막대를 숨긴다 (홈만)
-    await page.evaluate(() => ['board', 'plan', 'timer', 'review'].forEach((id) => Features.set(id, false)));
+    await page.evaluate(() => ['board', 'plan', 'timer', 'review', 'group'].forEach((id) => Features.set(id, false)));
     await page.waitForTimeout(150);
     assert(await page.isHidden('nav.tabs') && await page.evaluate(() => document.documentElement.classList.contains('one-tab')), '홈만 남으면 탭 막대 숨김');
     assert(await page.getAttribute('#view-home .cards4', 'data-n') === '2' && await page.isHidden('#h-start'), '홈 요약은 오늘 공부·연속 학습일 두 장, 공부 시작하기 단추도 숨김(타이머 꺼짐)');
@@ -190,33 +192,33 @@ function seed(settings) {
     // 손잡이를 잡으면 바로 끌린다: 타이머를 맨 앞으로
     const t0 = await rowBox(page, 'lay-tabs', 'timer'), h0 = await rowBox(page, 'lay-tabs', 'home');
     await touchDrag(page, page.locator('#lay-tabs > [data-id="timer"] .lay-grip'), h0.y - t0.y - 6, 0);
-    assert(await rows(page, 'lay-tabs') === 'timer,home,board,plan,review,stats', '손잡이로 타이머를 맨 앞으로: ' + await rows(page, 'lay-tabs'));
-    assert(await shownTabs(page) === 'timer,home,board,plan,review,stats', '탭 막대도 바로 그 순서로: ' + await shownTabs(page));
-    assert(JSON.stringify((await layoutOf(page)).tabs) === JSON.stringify(['timer', 'home', 'board', 'plan', 'review', 'stats']) && (await layoutOf(page)).off.length === 0, '순서 저장');
+    assert(await rows(page, 'lay-tabs') === 'timer,home,board,plan,review,stats,group', '손잡이로 타이머를 맨 앞으로: ' + await rows(page, 'lay-tabs'));
+    assert(await shownTabs(page) === 'timer,home,board,plan,review,stats,group', '탭 막대도 바로 그 순서로: ' + await shownTabs(page));
+    assert(JSON.stringify((await layoutOf(page)).tabs) === JSON.stringify(['timer', 'home', 'board', 'plan', 'review', 'stats', 'group']) && (await layoutOf(page)).off.length === 0, '순서 저장');
     assert(await page.textContent('#lay-live') === '타이머, 1번째로 옮겼어요', '화면 읽기 프로그램에 알림: ' + await page.textContent('#lay-live'));
     assert(!(await page.$('#view-layout .drag-lift')) && !(await page.$('#lay-tabs > .lay-row[style*="translate"]')), '놓으면 들린 모양·밀린 줄 원래대로');
     // 줄을 꾹(0.4초) 누르고 끌기: 통계를 한 칸 위로
     const s0 = await rowBox(page, 'lay-tabs', 'stats');
     await touchDrag(page, page.locator('#lay-tabs > [data-id="stats"] .lay-text'), -s0.height * 1.1, 550);
-    assert(await rows(page, 'lay-tabs') === 'timer,home,board,plan,stats,review', '줄을 꾹 눌러 끌어도: ' + await rows(page, 'lay-tabs'));
+    assert(await rows(page, 'lay-tabs') === 'timer,home,board,plan,stats,review,group', '줄을 꾹 눌러 끌어도: ' + await rows(page, 'lay-tabs'));
     // 꾹 누르지 않고 바로 밀면 그냥 화면 굴리기 (순서 그대로)
     await touchDrag(page, page.locator('#lay-tabs > [data-id="board"] .lay-text'), 90, 0);
-    assert(await rows(page, 'lay-tabs') === 'timer,home,board,plan,stats,review', '바로 밀면 순서는 그대로');
+    assert(await rows(page, 'lay-tabs') === 'timer,home,board,plan,stats,review,group', '바로 밀면 순서는 그대로');
     // 꾹 눌렀다가 그 자리에 놓으면 아무 일 없음
     await touchDrag(page, page.locator('#lay-tabs > [data-id="plan"] .lay-text'), 0, 600, 1);
-    assert(await rows(page, 'lay-tabs') === 'timer,home,board,plan,stats,review' && !(await page.$('#view-layout .drag-lift')), '그 자리에 놓으면 그대로');
+    assert(await rows(page, 'lay-tabs') === 'timer,home,board,plan,stats,review,group' && !(await page.$('#view-layout .drag-lift')), '그 자리에 놓으면 그대로');
     // 끄고 있는 동안에 스위치를 누른 것으로 치지 않음 (놓은 자리의 스위치)
     assert(await page.isChecked('#lay-tabs [data-sw="plan"]') && await page.isChecked('#lay-tabs [data-sw="stats"]'), '끌다 놓아도 스위치는 그대로');
     // 손잡이에서 화살표 키
     await page.focus('#lay-tabs > [data-id="board"] .lay-grip');
     await page.keyboard.press('ArrowDown');
     await page.waitForTimeout(100);
-    assert(await rows(page, 'lay-tabs') === 'timer,home,plan,board,stats,review', '아래 화살표 키로 한 칸 아래: ' + await rows(page, 'lay-tabs'));
+    assert(await rows(page, 'lay-tabs') === 'timer,home,plan,board,stats,review,group', '아래 화살표 키로 한 칸 아래: ' + await rows(page, 'lay-tabs'));
     assert(await page.evaluate(() => document.activeElement.closest('.lay-row').dataset.id) === 'board' && await page.textContent('#lay-live') === '범위, 4번째로 옮겼어요', '손잡이에 초점이 남고 알림');
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await page.waitForTimeout(100);
-    assert(await rows(page, 'lay-tabs') === 'timer,board,home,plan,stats,review', '위 화살표 두 번');
+    assert(await rows(page, 'lay-tabs') === 'timer,board,home,plan,stats,review,group', '위 화살표 두 번');
     // 탭 막대·첫 화면: 다음에 열 때 앱 코드가 오기 전부터 정한 순서로 그린다
     await page.evaluate(() => Features.set('review', false));
     await page.waitForTimeout(100);
@@ -225,10 +227,10 @@ function seed(settings) {
     await page.waitForSelector('nav.tabs .tab[data-view="stats"]', { state: 'attached' });
     const early = await page.evaluate(() => ({ pre: !!document.getElementById('tabbar-pre'), F: !!window.Features }));
     const earlyTabs = await shownTabs(page);
-    assert(early.pre && !early.F && earlyTabs === 'timer,board,home,plan,stats', '앱 코드가 오기 전 첫 화면부터 정한 순서·꺼진 탭 숨김: ' + earlyTabs + ' ' + JSON.stringify(early));
+    assert(early.pre && !early.F && earlyTabs === 'timer,board,home,plan,stats,group', '앱 코드가 오기 전 첫 화면부터 정한 순서·꺼진 탭 숨김: ' + earlyTabs + ' ' + JSON.stringify(early));
     await page.waitForFunction(() => window.App && window.Features);
     await page.waitForTimeout(200);
-    assert(!(await page.$('#tabbar-pre')) && await shownTabs(page) === 'timer,board,home,plan,stats', '앱이 뜨면 탭을 실제로 옮기고 임시 스타일은 지움');
+    assert(!(await page.$('#tabbar-pre')) && await shownTabs(page) === 'timer,board,home,plan,stats,group', '앱이 뜨면 탭을 실제로 옮기고 임시 스타일은 지움');
     await page.unroute('**/js/features.js');
     // 다른 화면에서 탭 막대를 눌러도 정한 순서대로 (첫 탭 = 타이머)
     await page.tap('nav.tabs .tab:visible >> nth=0');
@@ -242,13 +244,13 @@ function seed(settings) {
     const { ctx, page } = await open();
     await page.goto(base + '#home');
     await page.waitForSelector('#view-home .cards4');
-    assert(await homeOrder(page) === HOME.join(','), '처음 홈 화면: ' + await homeOrder(page));
+    assert(await homeOrder(page) === HOME_SHOWN.join(','), '처음 홈 화면: ' + await homeOrder(page));
     await openEditor(page);
     // 시험 준비 칸을 맨 위로
     await page.locator('#lay-home').scrollIntoViewIfNeeded();
     const e0 = await rowBox(page, 'lay-home', 'home-exams'), top0 = await rowBox(page, 'lay-home', 'home-sum');
     await touchDrag(page, page.locator('#lay-home > [data-id="home-exams"] .lay-grip'), top0.y - e0.y - 6, 0, 16);
-    assert(await rows(page, 'lay-home') === 'home-exams,home-sum,home-tt,home-next,home-tasks', '시험 준비 칸을 맨 위로: ' + await rows(page, 'lay-home'));
+    assert(await rows(page, 'lay-home') === 'home-exams,home-sum,home-group,home-tt,home-next,home-tasks', '시험 준비 칸을 맨 위로: ' + await rows(page, 'lay-home'));
     // 오늘 타임테이블 칸 숨기기
     await flip(page, 'home-tt');
     assert(await toastOf(page) === '홈에서 오늘 타임테이블 칸을 숨겼어요', '숨기면 알림: ' + await toastOf(page));
@@ -397,17 +399,17 @@ function seed(settings) {
     const { ctx, page } = await open({ settings: { layout: newer } });
     await page.goto(base + '#layout');
     await page.waitForSelector('#lay-tabs > .lay-row');
-    assert(await rows(page, 'lay-tabs') === 'stats,home,board,plan,timer,review', '새로 고침해서 바로 편집 화면으로 열어도 그려짐 (모르는 탭은 빼고): ' + await rows(page, 'lay-tabs'));
-    assert(await rows(page, 'lay-home') === 'home-tasks,home-sum,home-tt,home-exams,home-next', '홈 칸: 빠진 칸은 기본 순서의 바로 앞 칸 뒤에: ' + await rows(page, 'lay-home'));
+    assert(await rows(page, 'lay-tabs') === 'stats,group,home,board,plan,timer,review', '새로 고침해서 바로 편집 화면으로 열어도 그려짐 (모르는 탭은 빼고, 새 그룹 탭은 기본 순서의 바로 앞 탭 뒤에): ' + await rows(page, 'lay-tabs'));
+    assert(await rows(page, 'lay-home') === 'home-tasks,home-sum,home-group,home-tt,home-exams,home-next', '홈 칸: 빠진 칸은 기본 순서의 바로 앞 칸 뒤에: ' + await rows(page, 'lay-home'));
     // 하나 바꿔도 이 버전이 모르는 탭 자리·꺼 둔 것은 남긴다 (다른 기기의 새 버전)
     await flip(page, 'review');
     let L = await layoutOf(page);
-    assert(L.tabs.join(',') === 'stats,home,planner,board,plan,timer,review' && L.home.join(',') === 'home-tasks,home-sum,home-week,home-tt,home-exams,home-next' && JSON.stringify(L.off) === JSON.stringify(['planner-goal']), '새 버전의 기능 이름은 지우지 않고 제자리에: ' + JSON.stringify(L));
+    assert(L.tabs.join(',') === 'stats,group,home,planner,board,plan,timer,review' && L.home.join(',') === 'home-tasks,home-sum,home-week,home-group,home-tt,home-exams,home-next' && JSON.stringify(L.off) === JSON.stringify(['planner-goal']), '새 버전의 기능 이름은 지우지 않고 제자리에: ' + JSON.stringify(L));
     // 다른 기기에서 배치가 바뀌면(계정 동기화) 이 화면도 바로
     await page.evaluate(() => App.store.update((st) => { st.settings.layout = { tabs: ['plan', 'home', 'board', 'timer', 'review', 'stats'], off: ['board'] }; }));
     await page.waitForTimeout(150);
-    assert(await rows(page, 'lay-tabs') === 'plan,home,board,timer,review,stats' && !(await page.isChecked('#lay-tabs [data-sw="board"]')), '편집 화면도 새 배치로 다시 그림');
-    assert(await shownTabs(page) === 'plan,home,timer,review,stats', '탭 막대도: ' + await shownTabs(page));
+    assert(await rows(page, 'lay-tabs') === 'plan,home,board,timer,review,stats,group' && !(await page.isChecked('#lay-tabs [data-sw="board"]')), '편집 화면도 새 배치로 다시 그림');
+    assert(await shownTabs(page) === 'plan,home,timer,review,stats,group', '탭 막대도: ' + await shownTabs(page));
     // 처음 배치로 되돌리기 → 묻고, 모두 처음대로
     await page.locator('#lay-reset').scrollIntoViewIfNeeded();
     await page.tap('#lay-reset');
@@ -429,10 +431,10 @@ function seed(settings) {
     const { ctx, page } = await open({ ctx: { viewport: { width: 1280, height: 860 }, hasTouch: false, isMobile: false }, settings: { layout: { tabs: ['timer', 'home', 'board', 'plan', 'review', 'stats'], off: ['review'] } } });
     await page.goto(base + '#home');
     await page.waitForSelector('nav.tabs .tab');
-    assert(await shownTabs(page) === 'timer,home,board,plan,stats', '컴퓨터 탭 막대도 정한 순서: ' + await shownTabs(page));
+    assert(await shownTabs(page) === 'timer,home,board,plan,stats,group', '컴퓨터 탭 막대도 정한 순서: ' + await shownTabs(page));
     await openEditor(page);
     // 마우스로 줄을 꾹 눌러 끌기: 범위를 맨 아래로
-    const b = await rowBox(page, 'lay-tabs', 'board'), last = await rowBox(page, 'lay-tabs', 'stats');
+    const b = await rowBox(page, 'lay-tabs', 'board'), last = await rowBox(page, 'lay-tabs', 'group');
     await page.mouse.move(b.x + 120, b.y + b.height / 2);
     await page.mouse.down();
     await page.waitForTimeout(500);
@@ -440,12 +442,12 @@ function seed(settings) {
     assert(await page.$('#lay-tabs > .lay-row.drag-lift'), '마우스로 꾹 누르면 줄이 들림');
     await page.mouse.up();
     await page.waitForTimeout(150);
-    assert(await rows(page, 'lay-tabs') === 'timer,home,plan,review,stats,board', '마우스로 맨 아래로: ' + await rows(page, 'lay-tabs'));
+    assert(await rows(page, 'lay-tabs') === 'timer,home,plan,review,stats,group,board', '마우스로 맨 아래로: ' + await rows(page, 'lay-tabs'));
     // 그냥 누르면(짧게 클릭) 아무 일 없음, 스위치 클릭은 그대로
     await page.click('#lay-tabs > [data-id="plan"] .lay-text');
     await page.click('#lay-tabs [data-sw="plan"]');
     await page.waitForTimeout(150);
-    assert(await rows(page, 'lay-tabs') === 'timer,home,plan,review,stats,board' && !(await page.evaluate(() => Features.on('plan'))), '짧게 클릭은 순서 그대로, 스위치는 바로 끔');
+    assert(await rows(page, 'lay-tabs') === 'timer,home,plan,review,stats,group,board' && !(await page.evaluate(() => Features.on('plan'))), '짧게 클릭은 순서 그대로, 스위치는 바로 끔');
     await ctx.close();
   }
   {
