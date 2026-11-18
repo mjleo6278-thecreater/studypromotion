@@ -169,7 +169,9 @@
       if (topicId && App.askTopicDone) App.askTopicDone(topicId, label);
     } else if (sec === 0) toast('1분이 안 돼서 기록하지 않았어요');
   }
+  // 알림의 '할 일 완료': 플래너에서 체크한 것과 같게 (범위와 이은 할 일이면 범위도 체크. 잰 시간이 있으니 공부 시간은 더 넣지 않는다)
   function finishTask(id) {
+    if (App.setTaskDone) { App.setTaskDone(id, true); return; }
     store.update((st) => { const t = st.tasks.find((x) => x.id === id); if (t && !t.done) { t.done = true; t.doneAt = now(); } });
     toast('잘했어요! 할 일 하나 완료');
   }
@@ -321,13 +323,14 @@
     $(`[data-ttab="${tab}"]`).focus();
   });
   /* ---------- 홈 ‘공부 시작하기’: 과목 → 할 일이나 범위 → 스톱워치 ---------- */
+  // 할 일 아래 한 줄: 플래너의 날짜(오늘·지난 날 못 한 일·다른 날)와 예상 시간
   function taskHint(t) {
     const parts = [];
-    if (t.due) { const tk = App.todayKey(); parts.push(t.due < tk ? '기한 지남' : t.due === tk ? '오늘까지' : `${+t.due.slice(5, 7)}/${+t.due.slice(8)}까지`); }
+    if (t.due) { const tk = App.todayKey(), md = `${+t.due.slice(5, 7)}/${+t.due.slice(8)}`; parts.push(t.due < tk ? `못 한 일 · ${md}` : t.due === tk ? '오늘' : md); }
     if (t.estimateMin) parts.push(Stats.formatMinutes(t.estimateMin));
     return parts.join(' · ');
   }
-  // 그 과목의 아직 안 끝낸 할 일 (마감이 빠른 순, 마감 없는 것은 뒤)
+  // 그 과목의 아직 안 끝낸 할 일 (플래너 날짜가 빠른 순, 날짜 없는 것은 뒤)
   function openTasks(sid) {
     return store.get().tasks.filter((t) => !t.done && (t.subjectId && subjectOf(t.subjectId) ? t.subjectId : '') === sid)
       .sort((a, b) => { const ad = a.due || '9999', bd = b.due || '9999'; return ad !== bd ? (ad < bd ? -1 : 1) : a.createdAt - b.createdAt; });
@@ -472,7 +475,7 @@
   const todayMinutes = () => sw.running ? Math.floor(runTodaySec(now()) / 60) : 0;
 
   // 지금 재고 있는 구간 (타임테이블이 실시간으로 그린다). 재는 중이 아니면 null
-  const live = () => (sw.running ? { from: sw.startAt, to: now(), subjectId: sw.subjectId && subjectOf(sw.subjectId) ? sw.subjectId : null, label: sw.label } : null);
+  const live = () => (sw.running ? { from: sw.startAt, to: now(), subjectId: sw.subjectId && subjectOf(sw.subjectId) ? sw.subjectId : null, label: sw.label, taskId: sw.taskId || null } : null);
 
   window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: curTab, showTab, render, todayMinutes, live, startFlow, startPlan };
   if (sw.running) begin();

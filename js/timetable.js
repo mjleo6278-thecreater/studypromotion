@@ -92,20 +92,26 @@
   }
 
   /* ---------- 홈: 오늘 하루를 한 줄로, 지금·다음 일정 ---------- */
+  // 하루를 한 줄로 줄인 띠 (홈·스터디 플래너). 일정은 점선, 공부한 시간은 과목 색, 오늘이면 지금 표시.
+  // open: 누르면 그날의 타임테이블 (없으면 타임테이블 화면만 연다). label: 화면 읽기 프로그램이 읽을 이름
+  function stripHTML(key, d, opts) {
+    opts = opts || {};
+    const t = now();
+    let segs = planSegs(d.plans, d.d0, d.d1);
+    d.tl.hours.forEach((h, i) => h.segs.forEach((g) => { segs += segHTML(g, ((i * 60 + g.from) / DAY_MIN) * 100, ((g.to - g.from) / DAY_MIN) * 100); }));
+    const nowMark = key === today() ? `<em class="ds-now" style="left:${Math.max(0, Math.min(100, ((t - d.d0) / 60000 / DAY_MIN) * 100)).toFixed(2)}%"></em>` : '';
+    const h0 = d.tl.hours.length ? d.tl.hours[0].hour : 0;
+    const ticks = [0, 6, 12, 18, 24].map((n) => `<span>${n === 24 && !h0 ? 24 : (h0 + n) % 24}</span>`).join('');
+    const range = d.tl.start !== null ? `${hm(d.tl.start)}부터 ${hmEnd(d.tl.end, key)}까지, ` : '';
+    return `<a class="day-strip" href="#timetable" ${opts.open ? `data-tt-open="${esc(key)}"` : 'data-go="timetable"'} aria-label="${esc(opts.label || '타임테이블')}: ${range}공부 ${fm(d.total)}${d.planned ? `, 계획한 공부 ${fm(d.planned)}` : ''}. 눌러서 전체 보기">` +
+      `<span class="ds-bar">${segs}${nowMark}</span><span class="ds-ticks" aria-hidden="true">${ticks}</span></a>`;
+  }
   function renderHome() {
     const el = $('#h-tt');
     if (!el) return;
     const key = today();
     const d = dayData(key);
-    const t = now();
-    let segs = planSegs(d.plans, d.d0, d.d1);
-    d.tl.hours.forEach((h, i) => h.segs.forEach((g) => { segs += segHTML(g, ((i * 60 + g.from) / DAY_MIN) * 100, ((g.to - g.from) / DAY_MIN) * 100); }));
-    const nowPct = Math.max(0, Math.min(100, ((t - d.d0) / 60000 / DAY_MIN) * 100));
-    const h0 = d.tl.hours.length ? d.tl.hours[0].hour : 0;
-    const ticks = [0, 6, 12, 18, 24].map((n) => `<span>${n === 24 && !h0 ? 24 : (h0 + n) % 24}</span>`).join('');
-    const range = d.tl.start !== null ? `${hm(d.tl.start)}부터 ${hmEnd(d.tl.end, key)}까지, ` : '';
-    el.innerHTML = `<a class="day-strip" href="#timetable" data-go="timetable" aria-label="오늘 타임테이블: ${range}공부 ${fm(d.total)}${d.planned ? `, 계획한 공부 ${fm(d.planned)}` : ''}. 눌러서 전체 보기">` +
-      `<span class="ds-bar">${segs}<em class="ds-now" style="left:${nowPct.toFixed(2)}%"></em></span><span class="ds-ticks" aria-hidden="true">${ticks}</span></a>` +
+    el.innerHTML = stripHTML(key, d, { label: '오늘 타임테이블' }) +
       (d.subjects.length ? `<div class="tt-legend">${legendHTML(d.subjects)}</div>`
         : d.plans.length ? '' : '<p class="muted small tt-empty">공부를 시작하면 공부한 시간대가 과목 색으로 칠해져요.</p>');
     renderHomePlan(d);
@@ -170,10 +176,10 @@
     return rows.join('');
   }
 
-  // 그날의 일정 목록: 시각, 무엇, 계획대로 했는지 / 시작 / 계획대로 했어요
-  function plansHTML(d, key) {
+  // 그날의 일정 목록: 시각, 무엇, 계획대로 했는지 / 시작 / 계획대로 했어요. empty: 일정이 없을 때 쓸 말 (없으면 타임테이블 화면의 말)
+  function plansHTML(d, key, empty) {
     const tk = today();
-    if (!d.plans.length) return `<li class="empty">${key >= tk ? '이날은 일정이 없어요. 시간표의 빈칸을 누르거나 ‘＋ 일정 추가’로 넣어 보세요.' : '이날은 일정이 없었어요.'}</li>`;
+    if (!d.plans.length) return `<li class="empty">${esc(empty || (key >= tk ? '이날은 일정이 없어요. 시간표의 빈칸을 누르거나 ‘＋ 일정 추가’로 넣어 보세요.' : '이날은 일정이 없었어요.'))}</li>`;
     const t = now();
     return d.plans.map((o) => {
       const ev = o.ev;
@@ -434,6 +440,17 @@
   }, 30000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') render(); });
 
-  window.Timetable = { render, open, setMode, get day() { return viewKey(); }, get week() { return weekKey(); }, get mode() { return mode; } };
+  // 스터디 플래너가 그날의 시간 계획 칸에 쓰는 조각: 띠(+ 과목별 공부 시간)와 일정 목록
+  function dayParts(key, empty) {
+    const d = dayData(key);
+    return {
+      strip: stripHTML(key, d, { open: true, label: dayTitle(key) + ' 타임테이블' }) + (d.subjects.length ? `<div class="tt-legend">${legendHTML(d.subjects)}</div>` : ''),
+      plans: plansHTML(d, key, empty),
+      planned: d.planned,
+      count: d.plans.length,
+    };
+  }
+
+  window.Timetable = { render, open, setMode, dayParts, get day() { return viewKey(); }, get week() { return weekKey(); }, get mode() { return mode; } };
   render();
 })();

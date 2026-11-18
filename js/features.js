@@ -14,7 +14,7 @@
   const LIST = [
     { id: 'home', kind: 'tab', name: '홈', icon: 'home', desc: '오늘 공부와 시험 준비를 한눈에', always: true },
     { id: 'board', kind: 'tab', name: '범위', icon: 'board', desc: '시험 범위 목록 · 화이트보드' },
-    { id: 'plan', kind: 'tab', name: '계획', icon: 'plan', desc: '할 일 · 과목' },
+    { id: 'plan', kind: 'tab', name: '플래너', icon: 'planner', desc: '오늘과 앞날의 할 일 · 목표 · 과목' },
     { id: 'timer', kind: 'tab', name: '타이머', icon: 'timer', desc: '집중 타이머 · 스톱워치 · 폰 잠금' },
     { id: 'review', kind: 'tab', name: '복습', icon: 'review', desc: '플래시카드' },
     { id: 'stats', kind: 'tab', name: '통계', icon: 'stats', desc: '월간 · 최근 7일 · 공부 달력' },
@@ -26,7 +26,7 @@
     { id: 'home-tt', kind: 'home', name: '오늘 타임테이블', desc: '오늘 언제 공부했는지 · 지금과 다음 일정' },
     { id: 'home-exams', kind: 'home', name: '시험 준비', desc: 'D-day · 진행률 · 오늘 더 할 양', needs: 'board' },
     { id: 'home-next', kind: 'home', name: '오늘 할 범위', desc: '가까운 시험에서 오늘 할 양 추천', needs: 'board' },
-    { id: 'home-tasks', kind: 'home', name: '오늘 할 일', desc: '오늘까지 할 일', needs: 'plan' },
+    { id: 'home-tasks', kind: 'home', name: '오늘 할 일', desc: '플래너의 오늘 칸', needs: 'plan' },
   ];
   // 한꺼번에 끌 수 없는 묶음 (타이머 탭이 빈 화면이 되지 않게). 둘 다 꺼진 기록이 오면 둘 다 켠다
   const ONE_OF = [['focus', 'stopwatch']];

@@ -16,6 +16,8 @@ const server = http.createServer((req, res) => {
 });
 
 // 시험 하나, 과목 카드 셋(국어 항목 6개 + 하위 단계, 수학, 영어), 할 일 셋
+// 오늘 날짜 'YYYY-MM-DD' (처음 기록의 할 일은 플래너의 오늘 칸에)
+const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 function seed() {
   const topics = [
     { id: 'c1', examId: 'e1', parentId: null, kind: 'topic', title: '국어', order: 0, x: 0, y: 0, color: '#e05a4f', flags: {} },
@@ -30,9 +32,9 @@ function seed() {
   return {
     subjects: [{ id: 's1', name: '국어', color: '#e05a4f' }, { id: 's2', name: '수학', color: '#3d96e0' }, { id: 's3', name: '영어', color: '#45a865' }],
     tasks: [
-      { id: 't1', title: '수학 문제집 3쪽', subjectId: 's2', due: null, estimateMin: 45, done: false, createdAt: 1 },
-      { id: 't2', title: '단어 외우기', subjectId: 's3', due: null, estimateMin: null, done: false, createdAt: 2 },
-      { id: 't3', title: '국어 오답', subjectId: 's1', due: null, estimateMin: 30, done: false, createdAt: 3 },
+      { id: 't1', title: '수학 문제집 3쪽', subjectId: 's2', due: todayKey(), estimateMin: 45, done: false, createdAt: 1 },
+      { id: 't2', title: '단어 외우기', subjectId: 's3', due: todayKey(), estimateMin: null, done: false, createdAt: 2 },
+      { id: 't3', title: '국어 오답', subjectId: 's1', due: todayKey(), estimateMin: 30, done: false, createdAt: 3 },
     ],
     exams: [{ id: 'e1', name: '기말고사', date: '2026-12-20', createdAt: 1 }],
     activeExamId: 'e1',
@@ -87,10 +89,11 @@ function seed() {
   {
     const { ctx, page } = await open();
     await page.goto(base + '#plan');
-    await page.waitForSelector('#tasklist .task');
+    await page.waitForSelector('#pl-list .pl-item');
+    const chk = (id) => page.tap(`#pl-list [data-pl-id="${id}"] .pl-check`);
     assert(await todayMin(page) === 0, '처음엔 오늘 공부 0분');
     // 예상 시간 45분인 할 일을 끝내면 45분이 들어간다
-    await page.tap('#tasklist .task[data-id="t1"] .task-check');
+    await chk('t1');
     await page.waitForTimeout(100);
     let s = await state(page);
     let rec = s.sessions.find((x) => x.doneOf === 'task:t1');
@@ -98,18 +101,17 @@ function seed() {
     assert(/공부 시간 \+45분/.test(await toastOf(page)), '알림에 더한 시간: ' + (await toastOf(page)));
     assert(await todayMin(page) === 45, '오늘 공부 45분');
     // 예상 시간이 없는 할 일은 그대로
-    await page.tap('#tasklist .task[data-id="t2"] .task-check');
+    await chk('t2');
     await page.waitForTimeout(100);
     assert((await state(page)).sessions.length === 1, '예상 시간이 없는 할 일은 기록 안 함');
-    // 완료 필터에서 체크를 풀면 뺀다
-    await page.tap('#task-filters [data-filter="done"]');
-    await page.tap('#tasklist .task[data-id="t1"] .task-check');
+    // 끝낸 할 일도 그 자리에 남아 있어서 체크를 바로 풀 수 있다. 풀면 뺀다
+    assert(await page.isVisible('#pl-list [data-pl-id="t1"].done'), '끝낸 할 일은 줄을 그은 채 그 자리에');
+    await chk('t1');
     await page.waitForTimeout(100);
     assert(!(await state(page)).sessions.some((x) => x.doneOf === 'task:t1'), '완료를 풀면 기록에서 뺌');
     assert(/45분을 뺐어요/.test(await toastOf(page)), '뺀 알림: ' + (await toastOf(page)));
     // 다시 끝내고 알림의 ‘시간 빼기’ → 완료는 그대로, 시간만 뺌
-    await page.tap('#task-filters [data-filter="open"]'); // 완료를 풀면 완료 목록에서 빠지므로 남은 할 일에서
-    await page.tap('#tasklist .task[data-id="t1"] .task-check');
+    await chk('t1');
     await page.waitForTimeout(100);
     assert(await todayMin(page) === 45, '다시 끝내면 다시 45분');
     await page.tap('#toast .toast-act');
@@ -117,23 +119,24 @@ function seed() {
     s = await state(page);
     assert(s.tasks.find((t) => t.id === 't1').done && !s.sessions.length, '‘시간 빼기’: 완료는 그대로 두고 시간만 뺌');
     // 끝낸 할 일의 예상 시간을 고치면 오늘 넣은 기록도 맞춘다
-    await page.tap('#tasklist .task[data-id="t3"] .task-check');
+    await chk('t3');
     await page.waitForTimeout(100);
-    await page.tap('#task-filters [data-filter="done"]');
-    await page.tap('#tasklist .task[data-id="t3"] .task-edit-btn');
-    await page.fill('.task-edit [name="est"]', '50');
-    await page.tap('.task-edit button[type="submit"]');
+    await page.tap('#pl-list [data-pl-id="t3"] .pl-more');
+    await page.tap('.ui-back.in [data-pl-mi="edit"]');
+    await page.selectOption('#pl-est', 'custom');
+    await page.fill('#pl-est-custom', '50');
+    await page.tap('#pl-save');
     await page.waitForTimeout(100);
     assert((await state(page)).sessions.find((x) => x.doneOf === 'task:t3').minutes === 50, '끝낸 할 일 예상 시간 30→50분이면 기록도 50분');
-    await page.tap('#task-filters [data-filter="open"]');
 
     // 스톱워치로 잰 할 일은 또 넣지 않는다
     await page.evaluate(() => App.store.update((st) => {
-      st.tasks.push({ id: 't4', title: '영어 독해', subjectId: 's3', estimateMin: 40, done: false, createdAt: 4 });
+      st.tasks.push({ id: 't4', title: '영어 독해', subjectId: 's3', due: Stats.dayKey(Date.now()), estimateMin: 40, done: false, createdAt: 4 });
       st.sessions.push({ id: 'sw-1', subjectId: 's3', minutes: 25, sec: 1500, endedAt: Date.now() - 60000, label: '영어 독해', topicId: null, taskId: 't4', kind: 'stopwatch' });
     }));
     await page.waitForTimeout(50);
-    await page.tap('#tasklist .task[data-id="t4"] .task-check');
+    assert(/공부 25분/.test(await page.textContent('#pl-list [data-pl-id="t4"]')), '잰 시간이 그 할 일 줄에 쌓여 보임');
+    await chk('t4');
     await page.waitForTimeout(100);
     assert(!(await state(page)).sessions.some((x) => x.doneOf === 'task:t4'), '스톱워치로 잰 할 일은 예상 시간을 또 넣지 않음');
     assert(/^잘했어요! 할 일 하나 완료/.test(await toastOf(page)), '그때는 예전 알림 그대로');

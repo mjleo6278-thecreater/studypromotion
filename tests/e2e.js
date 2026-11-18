@@ -14,25 +14,30 @@ const shotDir = process.argv[2];
   await page.goto(url);
   const assert = (c, msg) => { if (!c) throw new Error('실패: ' + msg); console.log('ok -', msg); };
 
-  // 계획: 할 일 추가
+  // 스터디 플래너: 오늘 할 일 하나, 날짜 안 정한 할 일 하나
   await page.click('[data-view=plan]');
   const today = await page.evaluate(() => Stats.dayKey(Date.now()));
-  await page.fill('#t-title', '수학 문제집 3단원');
-  await page.selectOption('#t-subject', { label: '수학' });
-  await page.fill('#t-due', today);
-  await page.fill('#t-est', '50');
-  await page.click('#task-form button[type=submit]');
-  await page.fill('#t-title', '영어 독해 지문 5개');
-  await page.fill('#t-due', '');
-  await page.click('#task-form button[type=submit]');
-  assert((await page.locator('#tasklist .task').count()) === 2, '할 일 2개 추가');
+  await page.click('#pl-todo [data-pl-add]');
+  await page.fill('#pl-title', '수학 문제집 3단원');
+  await page.click('#pl-subj .chip:has-text("수학")');
+  assert((await page.$eval('#pl-date', (i) => i.value)) === today, '오늘 칸에서 추가하면 날짜가 오늘');
+  await page.selectOption('#pl-est', 'custom');
+  await page.fill('#pl-est-custom', '50');
+  await page.click('#pl-save');
+  await page.click('#pl-todo [data-pl-add]');
+  await page.fill('#pl-title', '영어 독해 지문 5개');
+  await page.fill('#pl-date', '');
+  await page.click('#pl-save');
+  assert((await page.locator('#pl-list .pl-item').count()) === 1 && (await page.locator('#pl-undated .pl-item').count()) === 1, '할 일 2개 추가 (오늘 1, 날짜 안 정함 1)');
+  const t0 = await page.evaluate(() => window.__studypromotion.store.get().tasks[0]);
+  assert(t0.estimateMin === 50 && t0.due === today && t0.subjectId, '예상 시간 직접 적기 50분, 과목·날짜');
 
-  // 홈 반영
+  // 홈 반영 (홈의 오늘 할 일 = 플래너의 오늘 칸)
   await page.click('[data-view=home]');
-  assert((await page.textContent('#h-tasks')) === '2', '홈에 남은 할 일 2');
-  assert((await page.locator('#h-tasklist .task').count()) === 1, '홈 오늘 할 일 1개');
-  await page.click('#h-tasklist .task-check');
-  assert((await page.textContent('#h-tasks')) === '1', '완료 체크 후 1');
+  assert((await page.textContent('#h-tasks')) === '1', '홈에 오늘 남은 할 일 1');
+  assert((await page.locator('#h-tasklist .pl-item').count()) === 1, '홈 오늘 할 일 1개');
+  await page.click('#h-tasklist .pl-check');
+  assert((await page.textContent('#h-tasks')) === '0' && /오늘 할 일 끝/.test(await page.textContent('#h-tasks-sub')), '완료 체크 후 0');
 
   // 타이머: 1분 집중 설정 후 시간 경과 시뮬레이션
   await page.click('#account-btn');
@@ -88,12 +93,14 @@ const shotDir = process.argv[2];
 
   // 새로고침 후 유지
   await page.reload();
-  assert((await page.textContent('#h-tasks')) === '1', '새로고침 후 데이터 유지');
+  assert((await page.locator('#h-tasklist .pl-item.done').count()) === 1 && (await page.textContent('#h-tasks')) === '0', '새로고침 후 데이터 유지');
 
   // XSS 방지
   await page.click('[data-view=plan]');
-  await page.fill('#t-title', '<img src=x onerror="window.__x=1">');
-  await page.click('#task-form button[type=submit]');
+  await page.click('#pl-todo [data-pl-add]');
+  await page.fill('#pl-title', '<img src=x onerror="window.__x=1">');
+  await page.click('#pl-save');
+  assert((await page.textContent('#pl-list')).includes('<img src=x'), '할 일 이름은 글자 그대로');
   assert(!(await page.evaluate(() => window.__x)), 'HTML 이스케이프');
 
   // 앱 소개
@@ -111,6 +118,8 @@ const shotDir = process.argv[2];
 
   // 확인 창: 과목 삭제 취소 후 확인
   await page.click('[data-view=plan]');
+  await page.click('#pl-subjects-fold > summary');
+  assert(await page.isVisible('#subject-list'), '과목 관리를 누르면 펼쳐짐');
   await page.click('[data-del-subject]');
   assert(await page.isVisible('#ask'), '확인 창 표시');
   await page.click('#ask-cancel');

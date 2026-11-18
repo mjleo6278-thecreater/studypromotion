@@ -45,7 +45,7 @@ test('끈 기능: 딸린 기능도 꺼지고, 홈 칸은 필요한 탭이 꺼지
   assert.ok(!F.isOn(L, 'home-exams') && !F.isOn(L, 'home-next') && !F.isOn(L, 'home-tasks'));
   assert.ok(F.isOn(L, 'home-tt') && F.isOn(L, 'home-sum'));
   assert.match(F.lockReason(L, 'home-exams'), /범위 탭이 꺼져/);
-  assert.match(F.lockReason(L, 'home-tasks'), /계획 탭이 꺼져/);
+  assert.match(F.lockReason(L, 'home-tasks'), /플래너 탭이 꺼져/);
 });
 
 test('홈과 오늘 요약은 끌 수 없다', () => {

@@ -142,7 +142,7 @@ const SW = 'studypromotion.stopwatch';
   assert([await page.inputValue('#log-sh'), await page.inputValue('#log-sm'), await page.inputValue('#log-eh'), await page.inputValue('#log-em')].join(':') === '10:20:11:20', '누른 칸부터 한 시간으로 채워짐');
   assert(await page.textContent('#log-sum') === '10:20 ~ 11:20 · 1시간', '아래에 시각과 시간: ' + await page.textContent('#log-sum'));
   // 분 칸은 1분 단위도 받는다 (5분 단위로 막으면 13:01 같은 시각을 넣을 때 브라우저가 '유효한 값을 입력해 주세요'로 기록을 막았다, v3.1.1)
-  const strict = await page.evaluate(() => [['log-sm', '1'], ['log-em', '1'], ['log-m', '1'], ['ev-sm', '1'], ['ev-em', '1'], ['time-m', '1'], ['t-est', '12'], ['set-goal', '45']].filter(([id, v]) => {
+  const strict = await page.evaluate(() => [['log-sm', '1'], ['log-em', '1'], ['log-m', '1'], ['ev-sm', '1'], ['ev-em', '1'], ['time-m', '1'], ['pl-est-custom', '12'], ['set-goal', '45']].filter(([id, v]) => {
     const el = document.getElementById(id);
     if (!el) return true;
     const old = el.value; el.value = v; const ok = el.checkValidity(); el.value = old; return !ok;

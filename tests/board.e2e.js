@@ -88,7 +88,7 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.keyboard.press('Enter');
   assert(!!(await topic('3단원 도형의 방정식')), '더블클릭으로 이름 바꾸기');
 
-  // 메뉴: 중요 표시, 하위 항목 추가, 오늘 할 일로 보내기
+  // 메뉴: 중요 표시, 하위 항목 추가, 플래너에 넣기
   await row('복소수').locator(':scope > .brow [data-menu]').click();
   assert(!(await page.isVisible('#pop-menu [data-act="flag:star"]')), '표시는 첫 메뉴에 바로 안 나옴');
   await page.click('#pop-menu [data-act="page:flags"]');
@@ -104,9 +104,15 @@ const shot = async (page, name) => { if (shotDir) await page.screenshot({ path: 
   await page.keyboard.press('Escape');
   assert((await topic('복소수의 연산')).parentId === (await topic('복소수')).id, '하위 항목 추가');
   await row('복소수').locator(':scope > .brow [data-menu]').click();
+  assert((await page.textContent('#pop-menu [data-act="to-task"]')).includes('플래너에 넣기'), '메뉴 이름은 플래너에 넣기');
   await page.click('#pop-menu [data-act="to-task"]');
+  await page.waitForSelector('.ui-back.in .ch-opt');
+  assert((await page.$$eval('.ui-back.in .ch-opt b', (els) => els.map((e) => e.textContent))).join(',') === '오늘,내일,날짜 고르기…', '언제 할지 고르기: 오늘·내일·날짜 고르기');
+  await page.click('.ui-back.in .ch-opt >> nth=0');
   const tasks = (await state()).tasks;
-  assert(tasks.length === 1 && tasks[0].title === '수학 · 복소수', '오늘 할 일로 보내기');
+  const todayKey = await page.evaluate(() => Stats.dayKey(Date.now()));
+  assert(tasks.length === 1 && tasks[0].title === '2단원 · 복소수' && tasks[0].due === todayKey && tasks[0].topicId === (await topic('복소수')).id && !!tasks[0].subjectId, '플래너에 넣기: 오늘 할 일로 (과목 이름과 같은 카드 이름은 빼고 단원 이름을 앞에, 범위와 이어짐)');
+  await page.waitForTimeout(250);
 
   // 카드 끌어서 옮기기
   const before = await topic('국어');

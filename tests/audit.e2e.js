@@ -107,11 +107,13 @@ const server = http.createServer((req, res) => {
     s.cards.push(SRS.newCard({ id: 'c1', deckId: 'd1', front: 'apple', back: '사과', createdAt: Date.now() }, Date.now()));
   }));
   await page.goto(base + '#plan');
-  const taskBtns = await page.$$eval('#tasklist .task .icon-btn', (els) => els.map((e) => { const r = e.getBoundingClientRect(); const i = e.querySelector('svg.ic').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), iw: Math.round(i.width), text: e.textContent.trim() }; }));
-  assert(taskBtns.length === 3 && taskBtns.every((b) => b.w === taskBtns[0].w && b.h === taskBtns[0].h) && taskBtns[0].w >= 36, '할 일 시간 정하기·고치기·삭제 버튼 크기 같음 (' + taskBtns.map((b) => b.w + 'x' + b.h).join(', ') + ')');
-  assert(taskBtns.every((b) => b.iw === 18 && !b.text), '아이콘 18px, 글꼴 기호 없음');
-  await page.tap('#tasklist .task-del'); // 아이콘(svg) 위를 눌러도 삭제
-  assert((await state()).tasks.length === 0, '삭제 아이콘을 눌러 할 일 삭제');
+  const more = await page.$eval('#pl-list .pl-item .pl-more', (e) => { const r = e.getBoundingClientRect(); const i = e.querySelector('svg.ic').getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), iw: Math.round(i.width), text: e.textContent.trim() }; });
+  assert(more.h >= 32 && more.w >= 28 && more.iw === 20 && !more.text, '할 일 ⋯ 버튼: 선 아이콘, 글꼴 기호 없음 (' + more.w + 'x' + more.h + ')');
+  const play = await page.$eval('#pl-list .pl-item .pl-play', (e) => { const r = e.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), text: e.textContent.trim(), svg: !!e.querySelector('svg.ic use') }; });
+  assert(play.w === play.h && play.w >= 34 && play.svg && !play.text, '공부 시작 버튼: 둥근 아이콘 버튼');
+  await page.tap('#pl-list .pl-item .pl-more svg'); // 아이콘(svg) 위를 눌러도 메뉴
+  await page.tap('.ui-back.in [data-pl-mi="del"]');
+  assert((await state()).tasks.length === 0, '⋯ › 지우기로 할 일 삭제');
   await page.goto(base + '#review');
   await page.tap('#deck-list [data-deck="d1"]');
   const cardBtns = await page.$$eval('.card-row .icon-btn', (els) => els.map((e) => Math.round(e.getBoundingClientRect().width)));

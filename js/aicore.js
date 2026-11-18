@@ -13,6 +13,7 @@
   const SRS = need('SRS', './srs.js');
   const Schedule = need('Schedule', './schedule.js');
   const Features = need('Features', './features.js');
+  const Plan = need('Plan', './plan.js'); // 플래너: 할 일을 끝내면 이은 범위도 체크 (planner.js와 같은 규칙)
   // 기능과 탭 편집에서 꺼 둔 기능은 AI도 쓰지 않는다
   const featOn = (state, id) => !Features || Features.isOn(Features.read(state && state.settings), id);
   const OFF_TIP = ' (계정·설정 › 기능과 탭 편집에서 켤 수 있어요)';
@@ -25,7 +26,7 @@
 
   const DAY = 86400000;
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
-  const VIEWS = { home: '홈', board: '범위', plan: '계획', timer: '타이머', review: '복습', stats: '통계', timetable: '타임테이블' };
+  const VIEWS = { home: '홈', board: '범위', plan: '플래너', timer: '타이머', review: '복습', stats: '통계', timetable: '타임테이블' };
   const LIMIT = { title: 120, name: 40, subject: 20, card: 400, memo: 60, actions: 20, tasks: 40, exams: 12, decks: 12, subjects: 30, events: 30, eventDays: 21 };
   const COLORS = ['#e05a4f', '#3d96e0', '#45a865', '#e3ae24', '#9468d9', '#e36299', '#2aa893', '#ef7d3c'];
   const DEFAULT_DECK = '표현 모음';
@@ -154,7 +155,7 @@
   const sameEvent = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
   /* ---------- 1) AI에게 보낼 정보 ---------- */
-  // 보내는 것: 오늘 날짜, 과목 이름, 안 끝낸 할 일의 제목·마감일, 시험 이름·날짜, 덱 이름, 목표 설정.
+  // 보내는 것: 오늘 날짜, 과목 이름, 안 끝낸 할 일의 제목·날짜(플래너에서 하기로 한 날), 시험 이름·날짜, 덱 이름, 목표 설정.
   // 보내지 않는 것: 이메일, 카드 내용, 화이트보드, 공부 기록 전체. 할 일과 시험은 t1·e1 같은 짧은 번호로만 가리킨다 (진짜 id는 keys에 남겨 둔다).
   function buildContext(state, now) {
     const today = Stats.dayKey(now);
@@ -215,7 +216,7 @@
       `지금: ${ctx.today}(${WD[weekdayOf(ctx.today)]}) ${ctx.clock}`,
       calendarText(ctx.today),
       `과목: ${ctx.subjects.length ? ctx.subjects.join(', ') : '(없음)'}`,
-      'a) 안 끝낸 할 일' + (ctx.tasks.length ? ':\n' + ctx.tasks.map((t) => `${t.k} "${t.title}"${t.subject ? ' [' + t.subject + ']' : ''} ${t.due ? '마감 ' + t.due : '마감 없음'}`).join('\n') + (ctx.moreTasks ? `\n(이 밖에 ${ctx.moreTasks}개 더 있음)` : '') : ': 없음'),
+      'a) 안 끝낸 할 일' + (ctx.tasks.length ? ':\n' + ctx.tasks.map((t) => `${t.k} "${t.title}"${t.subject ? ' [' + t.subject + ']' : ''} ${t.due ? '날짜 ' + t.due : '날짜 없음'}`).join('\n') + (ctx.moreTasks ? `\n(이 밖에 ${ctx.moreTasks}개 더 있음)` : '') : ': 없음'),
       'b) 시험' + (ctx.exams.length ? ': ' + ctx.exams.map((e) => `${e.k} "${e.name}" ${e.date || '날짜 없음'}`).join('; ') : ': 없음'),
       'c) 일정(어제부터 3주 동안)' + (ctx.events.length ? ':\n' + ctx.events.map((e) => `${e.k} "${e.name}"${e.other ? ' [다른 일정]' : ''} ${e.repeat ? e.repeat + ' ' + e.time + ', 가장 가까운 날 ' + e.date : e.date + '(' + WD[weekdayOf(e.date)] + ') ' + e.time}`).join('\n') + (ctx.moreEvents ? `\n(이 밖에 ${ctx.moreEvents}개 더 있음)` : '') : ': 없음'),
       `복습 덱: ${ctx.decks.length ? ctx.decks.join(', ') : '(없음)'}`,
@@ -244,8 +245,8 @@
     '너는 기록을 직접 바꿀 수 없다. 동작은 사용자가 화면에서 확인한 뒤에 앱이 실행한다. 그러니 "했어요"가 아니라 "이렇게 할게요"라고 말한다.',
     '<actions>[{"type":"add_task","title":"수학 문제집 30쪽","subject":"수학","due":"2026-11-15","minutes":60}]</actions>',
     '쓸 수 있는 동작은 아래가 전부다. 지우는 동작은 없다.',
-    '- add_task {title, subject?, due?, minutes?}  할 일 추가. minutes는 예상 시간',
-    '- move_task {task, due}  할 일 마감일 바꾸기. task는 a) 목록의 번호(t1 등)',
+    '- add_task {title, subject?, due?, minutes?}  플래너에 할 일 추가. due는 그 일을 하기로 한 날, minutes는 예상 시간',
+    '- move_task {task, due}  할 일을 다른 날로 옮기기(플래너의 날짜 바꾸기). task는 a) 목록의 번호(t1 등)',
     '- complete_task {task}  할 일 완료 표시',
     '- add_session {subject?, date, start?, end?, minutes?, memo?}  이미 한 공부를 기록(앞으로 할 계획은 add_event). start와 end는 "19:00" 형식. 시각을 모르면 minutes만. 앞으로 할 공부는 기록할 수 없다',
     '- add_event {title?, subject?, kind?, date, start, end?, repeat?, days?, until?, task?}  일정(앞으로 할 계획) 추가. kind는 "study"(공부 일정, 기본) 또는 "other"(약속·운동 같은 다른 일정). start와 end는 "16:00" 형식. 반복이면 repeat에 "daily"나 "weekly"를 적고, weekly면 days에 ["월","수"]처럼 요일을 적는다. until은 반복이 끝나는 날. task는 a) 목록의 번호(그 할 일을 할 시간을 정할 때)',
@@ -468,18 +469,18 @@
       if (!title) return '할 일 이름이 없어요';
       const subj = findSubject(state, a.subject);
       let due = null;
-      if (a.due != null && a.due !== '') { due = goodDate(a.due, ctx.today, 30, 800); if (!due) return `'${title}'의 마감일을 읽지 못했어요`; }
+      if (a.due != null && a.due !== '') { due = goodDate(a.due, ctx.today, 30, 800); if (!due) return `'${title}'의 날짜를 읽지 못했어요`; }
       const m = int(a.minutes), est = m >= 5 && m <= 1440 ? m : null;
-      const meta = [subj.name, due ? dateLabel(due, ctx.today) + '까지' : '', est ? fm(est) : ''].filter(Boolean).join(' · ');
+      const meta = [subj.name, due ? dateLabel(due, ctx.today) : '날짜 안 정함', est ? fm(est) : ''].filter(Boolean).join(' · ');
       return { kind: 'change', line: `할 일 추가: ${title}`, sub: meta, warn: subjectNote(subj), choices: subj.choices, data: { title, subjectId: subj.id, due, est } };
     },
     move_task(a, state, ctx) {
       const t = state.tasks.find((x) => x.id === refId(ctx, 'tasks', 't', a.task));
       if (!t || t.done) return '옮길 할 일을 찾지 못했어요';
       const due = goodDate(a.due, ctx.today, 30, 800);
-      if (!due) return `'${t.title}'의 새 마감일을 읽지 못했어요`;
+      if (!due) return `'${t.title}'의 새 날짜를 읽지 못했어요`;
       if (due === t.due) return { skip: true };
-      return { kind: 'change', line: `마감일 옮기기: ${t.title}`, sub: `${t.due ? dateLabel(t.due, ctx.today) : '마감 없음'} → ${dateLabel(due, ctx.today)}`, data: { id: t.id, due, prev: t.due || null } };
+      return { kind: 'change', line: `날짜 옮기기: ${t.title}`, sub: `${t.due ? dateLabel(t.due, ctx.today) : '날짜 없음'} → ${dateLabel(due, ctx.today)}`, data: { id: t.id, due, prev: t.due || null } };
     },
     complete_task(a, state, ctx) {
       const t = state.tasks.find((x) => x.id === refId(ctx, 'tasks', 't', a.task));
@@ -658,7 +659,7 @@
     },
     open_view(a, state, ctx) {
       const vw = str(a.view, 12).toLowerCase().replace(/\s+/g, '');
-      const ALIAS = { 시간표: 'timetable', 스케줄: 'timetable', 일정: 'timetable', 보드: 'board', 화이트보드: 'board', 할일: 'plan', 공부시간: 'stats' };
+      const ALIAS = { 시간표: 'timetable', 스케줄: 'timetable', 일정: 'timetable', 보드: 'board', 화이트보드: 'board', 할일: 'plan', 계획: 'plan', 스터디플래너: 'plan', 공부시간: 'stats' };
       const view = VIEWS[vw] ? vw : Object.keys(VIEWS).find((k) => VIEWS[k] === vw) || ALIAS[vw] || '';
       if (!VIEWS[view]) return '열 화면을 찾지 못했어요';
       if (!featOn(state, view)) return `${VIEWS[view]} 탭을 꺼 두어서 열지 않았어요` + OFF_TIP;
@@ -715,9 +716,18 @@
       } else if (op.type === 'complete_task') {
         const t = state.tasks.find((x) => x.id === d.id);
         if (t && !t.done) {
-          inv.push({ t: 'undone', id: t.id, had: 'doneAt' in t, prev: t.doneAt }); t.done = true; t.doneAt = now;
-          const rec = Stats.creditTask(state, t, now, uid()); // 예상 시간을 적어 둔 할 일이면 그 시간을 공부 기록에
-          if (rec) del('sessions', rec.id);
+          const back = { t: 'undone', id: t.id, had: 'doneAt' in t, prev: t.doneAt };
+          if (Plan && Plan.setDone) {
+            // 플래너에서 체크한 것과 같게: 예상 시간을 공부 기록에, 범위와 이은 할 일이면 범위도 체크, 날짜가 없던 할 일은 오늘 할 일로
+            Object.assign(back, { plan: true, hadDue: 'due' in t, due: t.due });
+            inv.push(back);
+            const r = Plan.setDone(state, t.id, true, now, uid);
+            ((r && r.ids) || []).forEach((id) => del('sessions', id));
+          } else {
+            inv.push(back); t.done = true; t.doneAt = now;
+            const rec = Stats.creditTask(state, t, now, uid()); // 예상 시간을 적어 둔 할 일이면 그 시간을 공부 기록에
+            if (rec) del('sessions', rec.id);
+          }
         }
       } else if (op.type === 'add_session') {
         const label = d.memo || '직접 기록';
@@ -793,7 +803,13 @@
         if (x && (x[v.key] || null) === v.now) { x[v.key] = v.prev; n++; }
       } else if (v.t === 'undone') {
         const x = state.tasks.find((y) => y.id === v.id);
-        if (x && x.done) { x.done = false; if (v.had) x.doneAt = v.prev; else delete x.doneAt; n++; }
+        if (x && x.done) {
+          if (v.plan && Plan && Plan.setDone) {
+            Plan.setDone(state, x.id, false, Date.now(), () => ''); // 범위 체크와 오늘 넣은 공부 시간도 함께 푼다
+            if (v.hadDue) x.due = v.due; else delete x.due;
+          }
+          x.done = false; if (v.had) x.doneAt = v.prev; else delete x.doneAt; n++;
+        }
       } else if (v.t === 'event') {
         const i = state.events.findIndex((y) => y.id === v.id);
         if (i >= 0 && sameEvent(state.events[i], v.now)) { state.events[i] = v.prev; n++; }

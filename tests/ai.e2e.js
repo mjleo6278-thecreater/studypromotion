@@ -175,7 +175,7 @@ const server = http.createServer((req, res) => {
   await last(page, '[data-plan-undo]').tap();
   await page.waitForTimeout(250);
   st = await state(page);
-  assert(st.events.length === 0 && st.tasks[0].due !== tomorrow && /되돌렸어요/.test(await last(page, '.ai-state').textContent()), '되돌리기: 일정이 사라지고 마감일이 원래대로');
+  assert(st.events.length === 0 && st.tasks[0].due !== tomorrow && /되돌렸어요/.test(await last(page, '.ai-state').textContent()), '되돌리기: 일정이 사라지고 할 일 날짜가 원래대로');
 
   // 취소
   await say(page, '수학 문제집 끝냈어', '완료로 표시할게요.' + tag([{ type: 'complete_task', task: 't2' }]));

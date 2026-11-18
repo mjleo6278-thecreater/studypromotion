@@ -92,7 +92,7 @@
     const tasks = [], exams = [], events = [];
     sys.split('\n').forEach((line) => {
       let x;
-      if ((x = /^(t\d+) "(.*)"(?: \[(.*?)\])? (?:마감 (\d{4}-\d{2}-\d{2})|마감 없음)/.exec(line))) tasks.push({ k: x[1], title: x[2], subject: x[3] || '', due: x[4] || '' });
+      if ((x = /^(t\d+) "(.*)"(?: \[(.*?)\])? (?:날짜 (\d{4}-\d{2}-\d{2})|날짜 없음)/.exec(line))) tasks.push({ k: x[1], title: x[2], subject: x[3] || '', due: x[4] || '' });
       else if ((x = /^(p\d+) "(.*)"( \[다른 일정\])? (.*)$/.exec(line))) {
         const rest = x[4], rep = /^(매일|매주 [^\s]+)/.exec(rest), day = /(\d{4}-\d{2}-\d{2})/.exec(rest), t = /(\d+:\d+)~(\d+:\d+)/.exec(rest);
         events.push({ k: x[1], name: x[2], other: !!x[3], repeat: rep ? rep[1] : '', date: day ? day[1] : today, start: t ? t[1] : '', end: t ? t[2] : '' });
@@ -177,7 +177,7 @@
     ['goal', /목표.*\d+\s*(시간|분)/],
     ['subject', /과목.*(추가|만들어)/],
     ['addtask', /(할 ?일|숙제|과제).*(추가|넣어|등록)|추가해/],
-    ['open', /(타임테이블|일정표|통계|계획|복습|타이머|홈|범위).*(열어|보여|가 ?줘|이동)/],
+    ['open', /(타임테이블|일정표|통계|플래너|계획|복습|타이머|홈|범위).*(열어|보여|가 ?줘|이동)/],
     ['list', /(일정|스케줄|약속).*(뭐|있어|알려|보여)|뭐 ?해야/],
   ];
   const classify = (q) => (KIND.find(([, re]) => re.test(q)) || [])[0] || null;
@@ -222,8 +222,8 @@
       let list = info.tasks.filter((t) => (late ? t.due && t.due <= today : t.due === today) && t.due !== to);
       const named = info.tasks.filter((t) => t.title.split(/\s+/).some((w) => w.length > 1 && q.includes(w)));
       if (named.length && !late) list = named.filter((t) => t.due !== to);
-      if (!list.length) return late ? '마감이 지났거나 오늘까지인 할 일이 없어요.' : '옮길 할 일을 찾지 못했어요. 할 일 이름을 같이 말해 주세요.';
-      return `할 일 ${list.length}개의 마감일을 ${daySay(to, today)}로 옮길게요.` + tag(list.map((t) => ({ type: 'move_task', task: t.k, due: to })));
+      if (!list.length) return late ? '지난 날이나 오늘 하기로 하고 못 끝낸 할 일이 없어요.' : '옮길 할 일을 찾지 못했어요. 할 일 이름을 같이 말해 주세요.';
+      return `할 일 ${list.length}개를 ${daySay(to, today)}로 옮길게요.` + tag(list.map((t) => ({ type: 'move_task', task: t.k, due: to })));
     }
 
     if (kind === 'done') {
@@ -305,7 +305,7 @@
     }
 
     if (kind === 'open') {
-      const map = [['타임테이블', 'timetable'], ['일정표', 'timetable'], ['통계', 'stats'], ['계획', 'plan'], ['복습', 'review'], ['타이머', 'timer'], ['범위', 'board'], ['홈', 'home']];
+      const map = [['타임테이블', 'timetable'], ['일정표', 'timetable'], ['통계', 'stats'], ['플래너', 'plan'], ['계획', 'plan'], ['복습', 'review'], ['타이머', 'timer'], ['범위', 'board'], ['홈', 'home']];
       const hit = map.find(([w]) => q.includes(w));
       const a = { type: 'open_view', view: hit[1] };
       if (hit[1] === 'timetable' && d0) a.date = d0;
@@ -316,9 +316,9 @@
       const key = d0 || today;
       const evs = info.events.filter((e) => happens(e, key)).sort((a, b) => (a.start < b.start ? -1 : 1));
       const due = info.tasks.filter((t) => t.due === key);
-      if (!evs.length && !due.length) return `${daySay(key, today)}은 적어 둔 일정과 마감인 할 일이 없어요.`;
+      if (!evs.length && !due.length) return `${daySay(key, today)}은 적어 둔 일정과 할 일이 없어요.`;
       return [`**${daySay(key, today)} 일정**`].concat(evs.length ? evs.map((e) => `- ${e.start}~${e.end} ${e.name}`) : ['- 일정 없음'])
-        .concat(due.length ? ['', '**마감인 할 일**'].concat(due.map((t) => `- ${t.title}`)) : []).join('\n') +
+        .concat(due.length ? ['', '**할 일**'].concat(due.map((t) => `- ${t.title}`)) : []).join('\n') +
         tag([{ type: 'open_view', view: 'timetable', date: key }]);
     }
     return FALLBACK;

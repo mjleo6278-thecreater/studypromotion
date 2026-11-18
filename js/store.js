@@ -28,6 +28,7 @@
       topics: [], // 시험 범위 트리 노드 (scope.js 참고)
       strokes: [], // 화이트보드 펜 자국 { id, examId, d, color, width }
       boardView: {}, // examId → { x, y, z }
+      planner: {}, // 스터디 플래너의 날짜별 목표·메모 { 'YYYY-MM-DD': { goal, memo } } (plan.js 참고)
       activeExamId: null,
       settings: { dailyGoalMin: 120, focusMin: 25, breakMin: 5, monthlyGoalMin: 0, keepAwake: true },
     };
@@ -52,6 +53,7 @@
       topics: Array.isArray(data.topics) ? data.topics : [],
       strokes: Array.isArray(data.strokes) ? data.strokes : [],
       boardView: data.boardView && typeof data.boardView === 'object' ? data.boardView : {},
+      planner: data.planner && typeof data.planner === 'object' && !Array.isArray(data.planner) ? data.planner : {},
       activeExamId: data.activeExamId || null,
       settings: Object.assign({}, base.settings, data.settings && typeof data.settings === 'object' ? data.settings : {}),
     });

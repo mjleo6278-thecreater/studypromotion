@@ -213,192 +213,38 @@
     if (min) toast(`공부 시간에서 ${Stats.formatMinutes(min)}을 뺐어요`);
   }
 
-  // 할 일 완료 표시를 바꾼다 (할 일 목록의 체크, 다른 화면에서도 이것을 부른다: App.setTaskDone).
-  // 예상 시간을 적어 둔 할 일은 끝내면 그 시간을 오늘 공부 기록에 넣고, 완료를 풀면 오늘 넣은 것을 뺀다 (stats.js creditTask).
+  // 할 일 끝냄 표시를 바꾼다 (플래너·홈의 체크, 다른 화면에서도 이것을 부른다: App.setTaskDone).
+  // 예상 시간을 적어 둔 할 일은 끝내면 그 시간을 오늘 공부 기록에 넣고, 끝냄을 풀면 오늘 넣은 것을 뺀다 (stats.js creditTask).
+  // 범위와 이은 할 일이면 범위도 같이 체크하거나 풀고, 공부 시간은 한 번만 넣는다 (plan.js setDone).
   // opts.quiet: 알림 없이. 반환 { added: 넣은 분, removed: 뺀 분 } (할 일이 없으면 null)
   function setTaskDone(id, done, opts) {
     done = !!done;
-    let added = null, removed = 0, found = false;
-    store.update((st) => {
-      const t = st.tasks.find((x) => x.id === id);
-      if (!t) return;
-      found = true;
-      if (!!t.done === done) return;
-      t.done = done; t.doneAt = done ? now() : null;
-      if (done) added = Stats.creditTask(st, t, now(), uid());
-      else removed = Stats.uncreditDone(st, 'task:' + id, now());
-    });
-    if (!found) return null;
-    if (!(opts && opts.quiet)) {
-      if (added) toast(`잘했어요! 할 일 완료 · 공부 시간 +${Stats.formatMinutes(added.minutes)}`, { action: '시간 빼기', onAction: () => dropCredit([added.id]) });
-      else if (done) toast('잘했어요! 할 일 하나 완료');
-      else if (removed) toast(`완료를 풀어서 공부 시간에서 ${Stats.formatMinutes(removed)}을 뺐어요`);
+    const t0 = store.get().tasks.find((x) => x.id === id);
+    if (!t0) return null;
+    const linked = !!(t0.topicId && store.get().topics.some((n) => n.id === t0.topicId));
+    let got = null;
+    // 범위 체크도 바뀌면 범위 탭의 되돌리기로도 되돌릴 수 있게
+    store.update((st) => { got = Plan.setDone(st, id, done, now(), uid); }, { undoable: linked && !!t0.done !== done });
+    if (!got) return null;
+    if (got.changed && !(opts && opts.quiet)) {
+      let pawn = '';
+      if (got.topic && done) {
+        const st = store.get();
+        const n = st.topics.find((x) => x.id === got.topic);
+        const ep = n ? Scope.examProgress(st.topics, n.examId) : null;
+        const ex = n ? st.exams.find((x) => x.id === n.examId) : null;
+        pawn = ep && ep.total && ep.done === ep.total ? ` · 체크메이트! ${ex ? ex.name + ' ' : ''}범위 끝 ♛` : ' · 범위도 체크 ♟';
+      }
+      if (done && got.added) toast(`잘했어요! 할 일 완료${pawn} · 공부 시간 +${Stats.formatMinutes(got.added)}`, { action: '시간 빼기', onAction: () => dropCredit(got.ids) });
+      else if (done) toast(`잘했어요! 할 일 하나 완료${pawn}`);
+      else if (got.removed) toast(`완료를 풀어서 공부 시간에서 ${Stats.formatMinutes(got.removed)}을 뺐어요`);
+      else if (got.topic) toast('완료를 풀고 범위 체크도 풀었어요');
     }
-    return { added: added ? added.minutes : 0, removed };
+    return { added: got.added, removed: got.removed };
   }
 
-  /* ---------- 할 일 ---------- */
-  let taskFilter = 'open';
-
-  function dueLabel(due) {
-    if (!due) return '';
-    const t = todayKey();
-    if (due < t) return `<span class="overdue">기한 지남 (${esc(due.slice(5).replace('-', '/'))})</span>`;
-    if (due === t) return '<span>오늘까지</span>';
-    const diff = Math.round((new Date(due + 'T00:00') - new Date(t + 'T00:00')) / SRS.DAY);
-    return `<span>D-${diff} (${esc(due.slice(5).replace('-', '/'))})</span>`;
-  }
-
-  // 이 할 일을 하기로 정한 다음 일정: ‘🗓 11/16 (월) 16:00’
-  function planLabel(t) {
-    if (!window.Schedule) return '';
-    const o = Schedule.next(store.get().events, now(), 60, (ev) => ev.taskId === t.id);
-    if (!o) return '';
-    const d = Schedule.keyDate(o.date);
-    const when = o.date === todayKey() ? '오늘' : `${d.getMonth() + 1}/${d.getDate()} (${'일월화수목금토'[d.getDay()]})`;
-    return `<span class="task-plan" data-tt-open="${esc(o.date)}">${ic('cal')}${when} ${esc(Schedule.fmtHM(Schedule.parseHM(o.ev.start)))}</span>`;
-  }
-
-  let editingTaskId = null;
-  let taskDraft = null; // 고치는 중 다시 그려질 때 입력값 유지
-  function taskItem(t) {
-    if (t.id === editingTaskId) {
-      const d = taskDraft || { title: t.title, subjectId: t.subjectId || '', due: t.due || '', est: t.estimateMin || '' };
-      return `<li class="task editing" data-id="${esc(t.id)}"><form class="task-edit" data-task-edit="${esc(t.id)}">
-        <input name="title" value="${esc(d.title)}" required maxlength="120" aria-label="할 일" autocomplete="off">
-        <select name="subject" aria-label="과목">${subjectOptions(d.subjectId, true)}</select>
-        <input name="due" type="date" value="${esc(d.due)}" aria-label="마감일">
-        <input name="est" type="number" min="1" step="1" value="${esc(d.est)}" placeholder="예상(분)" aria-label="예상 시간(분)">
-        <span class="card-edit-actions"><button class="btn sm" type="button" data-task-cancel>취소</button><button class="btn primary sm" type="submit">저장</button></span>
-      </form></li>`;
-    }
-    const s = subjectById(t.subjectId);
-    return `<li class="task${t.done ? ' done' : ''}" data-id="${esc(t.id)}">
-      <input type="checkbox" class="task-check" ${t.done ? 'checked' : ''} aria-label="완료">
-      <div class="task-body">
-        <div class="task-title">${esc(t.title)}</div>
-        <div class="task-meta">
-          ${s ? `<span><i class="dot" style="background:${esc(s.color)}"></i>${esc(s.name)}</span>` : ''}
-          ${t.estimateMin ? `<span>${Stats.formatMinutes(t.estimateMin)}</span>` : ''}
-          ${t.done ? '' : dueLabel(t.due)}
-          ${t.done ? '' : planLabel(t)}
-        </div>
-      </div>
-      ${t.done ? '' : `<button class="icon-btn task-plan-btn" aria-label="시간 정하기" title="시간 정하기">${ic('cal')}</button>`}
-      <button class="icon-btn task-edit-btn" aria-label="고치기" title="고치기">${ic('edit')}</button>
-      <button class="icon-btn task-del" aria-label="삭제" title="삭제">${ic('x')}</button>
-    </li>`;
-  }
-
-  function sortTasks(list) {
-    return list.slice().sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1;
-      const ad = a.due || '9999', bd = b.due || '9999';
-      if (ad !== bd) return ad < bd ? -1 : 1;
-      return a.createdAt - b.createdAt;
-    });
-  }
-
-  function filteredTasks() {
-    const t = todayKey();
-    const tasks = store.get().tasks;
-    switch (taskFilter) {
-      case 'today': return tasks.filter((x) => !x.done && x.due && x.due <= t);
-      case 'done': return tasks.filter((x) => x.done).sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
-      case 'all': return sortTasks(tasks);
-      default: return sortTasks(tasks.filter((x) => !x.done));
-    }
-  }
-
-  function renderTaskList(el, list, emptyText) {
-    const form = el.querySelector('.task-edit');
-    const focus = form && document.activeElement && form.contains(document.activeElement) ? document.activeElement.name : null;
-    if (form && form.dataset.taskEdit === editingTaskId) taskDraft = { title: form.title.value, subjectId: form.subject.value, due: form.due.value, est: form.est.value };
-    if (editingTaskId && !store.get().tasks.some((t) => t.id === editingTaskId)) { editingTaskId = null; taskDraft = null; }
-    el.innerHTML = list.length ? list.map(taskItem).join('') : `<li class="empty">${emptyText}</li>`;
-    if (focus) { const f = el.querySelector(`.task-edit [name="${focus}"]`); if (f) f.focus(); }
-  }
-
-  function onTaskListClick(e) {
-    const li = e.target.closest('.task');
-    if (!li) return;
-    const id = li.dataset.id;
-    if (e.target.closest('.task-edit-btn')) {
-      editingTaskId = id;
-      taskDraft = null;
-      render();
-      const input = e.currentTarget.querySelector('.task-edit [name="title"]');
-      if (input) { input.focus(); input.select(); }
-      return;
-    }
-    if (e.target.closest('[data-task-cancel]')) { editingTaskId = null; taskDraft = null; render(); return; }
-    if (e.target.closest('.task-plan-btn')) {
-      const t = store.get().tasks.find((x) => x.id === id);
-      if (t && window.Events) window.Events.open({ taskId: t.id, subjectId: t.subjectId });
-      return;
-    }
-    if (e.target.classList.contains('task-check')) {
-      setTaskDone(id, e.target.checked);
-    } else if (e.target.closest('.task-del')) {
-      const list = store.get().tasks;
-      const i = list.findIndex((x) => x.id === id);
-      if (i < 0) return;
-      const removed = list[i];
-      store.update((st) => { st.tasks = st.tasks.filter((x) => x.id !== id); });
-      toast(`'${removed.title}' 지웠어요`, { action: '되돌리기', onAction: () => store.update((st) => { if (!st.tasks.some((x) => x.id === id)) st.tasks.splice(Math.min(i, st.tasks.length), 0, removed); }) });
-    }
-  }
-  $('#tasklist').addEventListener('click', onTaskListClick);
-  $('#h-tasklist').addEventListener('click', onTaskListClick);
-  function onTaskEditSubmit(e) {
-    const f = e.target.closest('.task-edit');
-    if (!f) return;
-    e.preventDefault();
-    const title = f.title.value.trim();
-    if (!title) return toast('할 일을 적어 주세요');
-    const id = f.dataset.taskEdit;
-    const est = parseInt(f.est.value, 10);
-    editingTaskId = null;
-    taskDraft = null;
-    store.update((st) => {
-      const t = st.tasks.find((x) => x.id === id);
-      if (!t) return;
-      t.title = title; t.subjectId = f.subject.value || null; t.due = f.due.value || null; t.estimateMin = est > 0 ? est : null;
-      // 끝낸 할 일의 예상 시간을 고치면, 오늘 넣은 공부 기록도 새 시간·과목으로 맞춘다
-      const c = t.done ? st.sessions.find((x) => x.doneOf === 'task:' + id && Stats.dayKey(x.endedAt) === todayKey()) : null;
-      if (c && est > 0) Object.assign(c, { minutes: Math.min(24 * 60, est), subjectId: t.subjectId, label: t.title });
-      else if (c) Stats.uncreditDone(st, 'task:' + id, now());
-    });
-    toast('할 일을 고쳤어요');
-  }
-  function onTaskEditKey(e) {
-    if (e.key === 'Escape' && e.target.closest('.task-edit')) { editingTaskId = null; taskDraft = null; render(); }
-  }
-  ['#tasklist', '#h-tasklist'].forEach((sel) => { $(sel).addEventListener('submit', onTaskEditSubmit); $(sel).addEventListener('keydown', onTaskEditKey); });
-
-  $('#task-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const title = $('#t-title').value.trim();
-    if (!title) return;
-    const est = parseInt($('#t-est').value, 10);
-    store.update((st) => st.tasks.push({
-      id: uid(), title, subjectId: $('#t-subject').value || null,
-      due: $('#t-due').value || null, estimateMin: est > 0 ? est : null,
-      done: false, createdAt: now(),
-    }));
-    $('#t-title').value = '';
-    $('#t-est').value = '';
-    $('#t-title').focus();
-  });
-
-  $('#task-filters').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-filter]');
-    if (!b) return;
-    taskFilter = b.dataset.filter;
-    $$('#task-filters .chip').forEach((c) => c.classList.toggle('active', c === b));
-    renderPlan();
-  });
-
+  /* ---------- 과목 (스터디 플래너 맨 아래 '과목 관리') ----------
+     할 일 목록·추가 창·주간 보기는 스터디 플래너(js/planner.js, 계산은 js/plan.js)가 그린다. */
   $('#subject-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const name = $('#s-name').value.trim();
@@ -422,13 +268,10 @@
   });
 
   function renderPlan() {
-    const sel = $('#t-subject').value;
-    $('#t-subject').innerHTML = subjectOptions(sel, true);
-    const emptyText = { open: '남은 할 일이 없어요. 위에서 추가해 보세요.', today: '오늘까지 할 일이 없어요.', done: '아직 완료한 일이 없어요.', all: '할 일이 없어요.' }[taskFilter];
-    renderTaskList($('#tasklist'), filteredTasks(), emptyText);
     $('#subject-list').innerHTML = store.get().subjects.map((s) =>
       `<span class="subject-pill"><i class="dot" style="background:${esc(s.color)}"></i>${esc(s.name)}<button class="icon-btn" data-del-subject="${esc(s.id)}" aria-label="${esc(s.name)} 삭제">${ic('x')}</button></span>`
     ).join('') || '<span class="muted">과목이 없어요.</span>';
+    if (window.Planner) window.Planner.render();
   }
 
   /* ---------- 홈 ---------- */
@@ -526,14 +369,7 @@
   }
 
   function renderHome() {
-    const st = store.get();
     renderHomeToday();
-    const open = st.tasks.filter((t) => !t.done);
-    const tk = todayKey();
-    const todayList = sortTasks(st.tasks.filter((t) => (!t.done && t.due && t.due <= tk) || (t.done && t.doneAt && Stats.dayKey(t.doneAt) === tk)));
-    $('#h-tasks').textContent = open.length;
-    const overdue = open.filter((t) => t.due && t.due < tk).length;
-    $('#h-tasks-sub').innerHTML = overdue ? `<span class="overdue">기한 지난 일 ${overdue}개</span>` : '기한 지난 일 없음';
     $('#h-due').textContent = dueCards().length;
     const sk = Stats.streak(activeDays(), now());
     $('#h-streak').textContent = sk + '일';
@@ -543,7 +379,7 @@
     renderHomeExams();
     renderHomeNext();
     renderWelcome();
-    renderTaskList($('#h-tasklist'), todayList, '오늘까지 할 일이 없어요. <a href="#plan" data-go="plan">계획 추가하기</a>');
+    if (window.Planner) window.Planner.renderHome(); // '오늘 할 일' 칸과 요약 카드: 스터디 플래너의 오늘 칸 (js/planner.js)
   }
 
   // 시험마다 오늘 아침 남은 양을 기록해 둔다 (그래야 오늘 한 양·오늘 남은 양이 맞다)
@@ -624,15 +460,18 @@
       if (!n) return;
       const prev = { done: n.done, pct: n.pct, doneAt: n.doneAt };
       let got = null; // 소요시간을 적어 둔 항목이면 그 시간을 공부 기록에 넣는다
-      store.update((s) => { const before = Stats.doneTopicIds(s); Scope.setDone(s.topics, id, true); got = Stats.syncTopicCredits(s, before, now(), uid); }, { undoable: true });
+      // 이 범위와 이은 플래너 할 일도 끝냄으로 (plan.js syncLinked)
+      store.update((s) => { const before = Stats.doneTopicIds(s), links = Plan.linkState(s); Scope.setDone(s.topics, id, true); got = Stats.syncTopicCredits(s, before, now(), uid); Plan.syncLinked(s, links, now()); }, { undoable: true });
       const ep = Scope.examProgress(store.get().topics, n.examId);
       const ex = store.get().exams.find((x) => x.id === n.examId);
       const plus = got && got.added ? ` · 공부 시간 +${Stats.formatMinutes(got.added)}` : '';
       toast((ep.total && ep.done === ep.total ? `체크메이트! ${ex ? ex.name + ' ' : ''}범위를 모두 끝냈어요 ♛` : `'${n.title}' 끝! 폰이 한 칸 전진 ♟`) + plus,
         { action: '되돌리기', onAction: () => store.update((s) => {
+          const links = Plan.linkState(s);
           const x = s.topics.find((t) => t.id === id);
           if (x) Object.assign(x, prev);
           if (got && got.ids.length) s.sessions = s.sessions.filter((q) => !got.ids.includes(q.id));
+          Plan.syncLinked(s, links, now());
         }) });
       return;
     }
@@ -900,7 +739,7 @@
     if (!$('#ask').hidden) return;
     const yes = await ask(`'${label || n.title}' 공부를 끝냈나요?\n끝냈다면 범위에서 체크해 둘게요.`, { ok: '끝냈어요 ✓', cancel: '아직이에요' });
     if (!yes) return;
-    store.update((s) => { Scope.setDone(s.topics, topicId, true); }, { undoable: true });
+    store.update((s) => { const links = Plan.linkState(s); Scope.setDone(s.topics, topicId, true); Plan.syncLinked(s, links, now()); }, { undoable: true });
     const ex = store.get().exams.find((e) => e.id === n.examId);
     const ep = Scope.examProgress(store.get().topics, n.examId);
     toast(ep.total && ep.done === ep.total ? `체크메이트! ${ex ? ex.name + ' ' : ''}범위를 모두 끝냈어요 ♛` : '범위에서 체크했어요. 폰이 한 칸 전진! ♟');
@@ -1849,7 +1688,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '3.6';
+  const APP_VERSION = '3.7';
   const APP_DATE = '2026년 11월 18일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
@@ -2157,7 +1996,7 @@
 
   window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone, openDeck,
     // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
-    timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null } : null),
+    timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), subjectId: timer.subjectId || null, label: timer.label || null, taskId: timer.taskId || null } : null),
     openLog, dropCredit, setTaskDone, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');

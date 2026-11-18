@@ -78,6 +78,12 @@
     <symbol id="i-grip" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></g></symbol>
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h8.6M17.4 7H20M4 12h2.6M11.4 12H20M4 17h10.6M19.4 17H20"/><circle cx="15" cy="7" r="2.4"/><circle cx="9" cy="12" r="2.4"/><circle cx="17" cy="17" r="2.4"/></symbol>
     <symbol id="i-stats" viewBox="0 0 24 24"><rect x="4.4" y="12.4" width="3.8" height="7.6" rx="1.2"/><rect x="10.1" y="4.2" width="3.8" height="15.8" rx="1.2"/><rect x="15.8" y="8.6" width="3.8" height="11.4" rx="1.2"/></symbol>
+    <symbol id="i-planner" viewBox="0 0 24 24"><rect x="6.2" y="3.6" width="13.4" height="16.8" rx="2.6"/><path d="M3.8 7.8h4.6M3.8 12h4.6M3.8 16.2h4.6"/><path d="m10.6 12.3 2.2 2.2 3.8-4.4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 7.6V12l3 2"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M5 12a7 7 0 0 1 12-4.9L19 9"/><path d="M19 4.6V9h-4.4"/><path d="M19 12a7 7 0 0 1-12 4.9L5 15"/><path d="M5 19.4V15h4.4"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><g fill="currentColor" stroke="none"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></g></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M4.6 12h12.6"/><path d="m12.6 6.8 5.2 5.2-5.2 5.2"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9.5 6 6 6-6 6"/></symbol>
   </svg>
   <header class="topbar">
     <a class="brand" href="#home" data-view="home" title="홈으로" aria-label="스터디 프로모션, 홈으로 가기"><img class="brand-mark" src="icons/favicon-64.png" alt="" width="28" height="28">스터디 프로모션</a>
@@ -90,7 +96,7 @@
     <nav class="tabs" role="tablist">
       <button class="tab" data-view="home" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-home"/></svg></span><span>홈</span></button>
       <button class="tab" data-view="board" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-board"/></svg></span><span>범위</span></button>
-      <button class="tab" data-view="plan" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-plan"/></svg></span><span>계획</span></button>
+      <button class="tab" data-view="plan" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-planner"/></svg></span><span>플래너</span></button>
       <button class="tab" data-view="timer" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-timer"/></svg></span><span>타이머</span></button>
       <button class="tab" data-view="review" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-review"/></svg></span><span>복습</span></button>
       <button class="tab" data-view="stats" role="tab"><span class="ico"><svg aria-hidden="true"><use href="#i-stats"/></svg></span><span>통계</span></button>
@@ -130,7 +136,7 @@
           <div class="bar"><div class="bar-fill" id="h-goalbar"></div></div><div class="stat-sub" id="h-goal"></div><div class="stat-sub" id="h-month-pace" hidden></div>
           <button class="stat-live" id="h-sw-live" type="button" hidden></button>
           <button class="btn primary sm stat-start" id="h-start" type="button" data-feature="timer"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>공부 시작하기</button></div>
-        <div class="stat" data-feature="plan"><div class="stat-label">남은 할 일</div><div class="stat-value" id="h-tasks">0</div><div class="stat-sub" id="h-tasks-sub"></div></div>
+        <div class="stat" data-feature="plan"><div class="stat-label">오늘 남은 할 일</div><div class="stat-value" id="h-tasks">0</div><div class="stat-sub" id="h-tasks-sub"></div></div>
         <div class="stat" data-feature="review"><div class="stat-label">복습 대기 카드</div><div class="stat-value" id="h-due">0</div><div class="stat-sub"><a href="#review" data-go="review">복습하러 가기</a></div></div>
         <div class="stat"><div class="stat-label">연속 학습일</div><div class="stat-value" id="h-streak">0일</div><div class="stat-sub">하루에 조금이라도</div></div>
       </div>
@@ -148,9 +154,11 @@
         <ul class="next-list" id="h-next"></ul>
         <p class="muted small next-foot" id="h-next-foot"></p>
       </div>
-      <div class="panel" id="h-tasks-panel" data-home="home-tasks" data-feature="home-tasks">
-        <div class="panel-head"><h2>오늘 할 일</h2><a href="#plan" data-go="plan">전체 보기</a></div>
-        <ul class="task-list" id="h-tasklist"></ul>
+      <div class="panel pl-home" id="h-tasks-panel" data-home="home-tasks" data-feature="home-tasks">
+        <div class="panel-head"><h2>오늘 할 일</h2><a href="#plan" data-go="plan">플래너 열기</a></div>
+        <div id="h-pl-top"></div>
+        <ul class="pl-list" id="h-tasklist"></ul>
+        <button class="pl-add" type="button" data-pl-add="today"><span aria-hidden="true">＋</span>할 일 추가</button>
       </div>
       <p class="home-about"><a href="#about" data-go="about"><svg class="ic" aria-hidden="true"><use href="#i-pawn"/></svg>스터디 프로모션 이야기 · 사용설명서</a></p>
     </section>
@@ -232,32 +240,38 @@
       </div>
     </section>
 
-    <!-- 계획 -->
+    <!-- 스터디 플래너 (js/planner.js가 그린다. 계산은 js/plan.js) -->
     <section id="view-plan" class="view">
-      <h1>학습 계획</h1>
-      <form class="panel form-grid" id="task-form">
-        <input id="t-title" placeholder="무엇을 공부할까요? 예: 수학 문제집 3단원" required maxlength="120">
-        <select id="t-subject" aria-label="과목"></select>
-        <input id="t-due" type="date" aria-label="마감일">
-        <input id="t-est" type="number" min="1" step="1" placeholder="예상(분)" aria-label="예상 시간(분)">
-        <button class="btn primary" type="submit">추가</button>
-      </form>
-      <div class="filters" id="task-filters">
-        <button class="chip active" data-filter="open">남은 일</button>
-        <button class="chip" data-filter="today">오늘까지</button>
-        <button class="chip" data-filter="done">완료</button>
-        <button class="chip" data-filter="all">전체</button>
+      <div class="timer-head pl-head">
+        <h1>스터디 플래너</h1>
+        <div class="seg pl-mode" role="group" aria-label="보기 방식">
+          <button class="seg-btn active" type="button" data-pl-mode="day" aria-pressed="true">하루</button>
+          <button class="seg-btn" type="button" data-pl-mode="week" aria-pressed="false">주간</button>
+        </div>
       </div>
-      <ul class="task-list panel" id="tasklist"></ul>
-
-      <div class="panel">
-        <div class="panel-head"><h2>과목</h2></div>
-        <div class="subjects" id="subject-list"></div>
-        <form class="inline-form" id="subject-form">
-          <input id="s-name" placeholder="새 과목 이름" required maxlength="20">
-          <input id="s-color" type="color" value="#9468d9" aria-label="과목 색">
-          <button class="btn" type="submit">과목 추가</button>
-        </form>
+      <div id="pl-day">
+        <div class="panel pl-week" id="pl-strip"></div>
+        <div class="panel pl-sum" id="pl-sum"></div>
+        <div class="panel pl-todo" id="pl-todo"></div>
+        <div class="panel pl-time" id="pl-time"></div>
+        <div class="panel pl-memo" id="pl-memo"></div>
+      </div>
+      <div class="panel pl-wk" id="pl-week" hidden></div>
+      <div class="panel pl-more-panel">
+        <details class="pl-fold" id="pl-undated-fold">
+          <summary class="pl-row"><span>날짜 안 정한 할 일</span><b id="pl-undated-n"></b><svg class="ic pl-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+          <ul class="pl-list" id="pl-undated"></ul>
+          <button class="pl-add" type="button" data-pl-add=""><span aria-hidden="true">＋</span>날짜 없이 적어 두기</button>
+        </details>
+        <details class="pl-fold" id="pl-subjects-fold">
+          <summary class="pl-row"><span>과목 관리</span><b id="pl-subj-n"></b><svg class="ic pl-chev" aria-hidden="true"><use href="#i-chev"/></svg></summary>
+          <div class="subjects" id="subject-list"></div>
+          <form class="inline-form" id="subject-form">
+            <input id="s-name" placeholder="새 과목 이름" required maxlength="20">
+            <input id="s-color" type="color" value="#9468d9" aria-label="과목 색">
+            <button class="btn" type="submit">과목 추가</button>
+          </form>
+        </details>
       </div>
     </section>
 
@@ -317,7 +331,7 @@
         <p class="muted small timer-key">PC에서는 스페이스 키로 시작·멈춤을 할 수 있어요.</p>
         <div class="sw-list-head"><h3>과목별 오늘</h3><span class="muted small">눌러서 시작·멈춤</span></div>
         <ul class="sw-list" id="sw-list"></ul>
-        <p class="muted small sw-empty" id="sw-empty" hidden>과목을 만들면 과목별로 시간이 따로 쌓여요. <button class="btn link inline" type="button" data-view="plan">과목 만들기</button></p>
+        <p class="muted small sw-empty" id="sw-empty" hidden>과목을 만들면 과목별로 시간이 따로 쌓여요. <button class="btn link inline" type="button" data-pl-subjects>과목 만들기</button></p>
         <p class="muted small sw-hint">공부하는 중에 다른 과목을 누르면 지금까지를 기록하고 바로 그 과목으로 바꿔요. 멈추면 공부 기록과 통계에 들어가요.</p>
         <button class="btn link log-link" type="button" data-log-open>＋ 스톱워치 없이 공부한 시간 기록하기</button>
       </div>
@@ -635,9 +649,10 @@
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-home"/></svg>홈</summary>
-          <p>오늘 공부한 시간과 하루 목표, 남은 할 일, 오늘 복습할 카드, 연속 학습일을 한눈에 보여 줘요. <b>시험 준비</b>에는 시험마다 D-day, 진행률(폰이 걷는 체스 칸), 남은 시간과 오늘 더 해야 할 양이 나와요.</p>
+          <p>오늘 공부한 시간과 하루 목표, 오늘 남은 할 일, 오늘 복습할 카드, 연속 학습일을 한눈에 보여 줘요. <b>시험 준비</b>에는 시험마다 D-day, 진행률(폰이 걷는 체스 칸), 남은 시간과 오늘 더 해야 할 양이 나와요.</p>
           <p>‘오늘 공부’의 <b>공부 시작하기</b>를 누르면 과목을 고르고, 그 과목의 할 일이나 시험 범위 항목을 고르면 바로 스톱워치가 켜져요. 범위를 골랐다면 멈출 때 그 범위를 끝냈는지 물어봐요. 할 일이나 범위에 없는 공부라면 맨 아래에서 과목만 골라요. <b>오늘 타임테이블</b>은 오늘 하루 중 언제 공부했는지를 한 줄로 보여 주고, 누르면 타임테이블이 열려요.</p>
           <p><b>오늘 할 범위</b>는 가장 가까운 시험에서 아직 안 끝낸 내용을 과목을 번갈아 가며 오늘 할 양만큼 골라 줘요. 바로 체크할 수 있고, <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼을 누르면 그 범위로 타이머가 준비돼요.</p>
+          <p><b>오늘 할 일</b>은 스터디 플래너의 오늘 칸이에요. 여기서 바로 체크하고 새 할 일을 적을 수 있어요.</p>
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-board"/></svg>범위 — 목록과 보드</summary>
@@ -648,7 +663,7 @@
             <li><b>체크</b>: 끝낸 항목을 체크해요. 단원을 체크하면 안에 든 항목이 모두 체크돼요. 과목을 다 끝내면 ‘♛ 승급’ 도장이 찍혀요. 소요시간을 적어 둔 항목은 체크하면 그 시간이 오늘 공부 시간에 들어가요(타이머로 잰 항목은 두 번 넣지 않아요).</li>
             <li><b>순서 바꾸기</b>: 항목 줄을 꾹 누르면 줄이 살짝 들려요. 그대로 위아래로 끌어 놓으면 그 자리로 옮겨져요. 목록 보기에서는 과목 이름 줄도 같은 방법으로 옮겨요.</li>
             <li><b>단계 나누기</b>: 항목 옆 <b>＋</b>를 누르면 그 항목 바로 아래에 넣을 수 있어요. 국어 › 비문학 › 수특 주제통합 1강 › 분석처럼 몇 단계든 나눌 수 있어요.</li>
-            <li><b>⋯ 메뉴</b>: 하위 항목 추가, 이름 바꾸기, 소요시간·진행률, 이 범위로 타이머 시작, 오늘 할 일로 보내기, 삭제. <b>표시 ›</b> 안에서 ★ 중요·! 어려움·↻ 다시 보기를 켜고 끄고, <b>옮기기 ›</b> 안에서 위로·아래로, 한 단계 안으로·밖으로, 다른 곳으로 옮길 수 있어요.</li>
+            <li><b>⋯ 메뉴</b>: 하위 항목 추가, 이름 바꾸기, 소요시간·진행률, 이 범위로 타이머 시작, 플래너에 넣기(오늘·내일·고른 날), 삭제. <b>표시 ›</b> 안에서 ★ 중요·! 어려움·↻ 다시 보기를 켜고 끄고, <b>옮기기 ›</b> 안에서 위로·아래로, 한 단계 안으로·밖으로, 다른 곳으로 옮길 수 있어요.</li>
             <li><b><svg class="ic" aria-hidden="true"><use href="#i-timer"/></svg> 소요시간·진행률</b>: 걸리는 시간과 얼마나 했는지(%)를 적어요. 반쯤 했다면 50%로 두면 돼요.</li>
             <li><b>페이스 띠</b>: 오늘 할 양, 밀린 양, 지금 필요한 하루 페이스를 알려 줘요. ‘자세히’를 누르면 전체 소요시간과 한 만큼이 나와요.</li>
             <li><b>목록 붙여넣기</b>: 이미 정리해 둔 범위가 있으면 한 번에 붙여넣을 수 있어요. ‘# 과목’, ‘- 단원’, 들여쓰기로 단계를 나눠요.</li>
@@ -656,8 +671,17 @@
           </ul>
         </details>
         <details>
-          <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-plan"/></svg>계획</summary>
-          <p>할 일을 적고 과목, 마감일, 예상 시간을 정해요. 끝내면 체크하고(예상 시간을 적어 두면 그 시간이 오늘 공부 시간에 들어가요), ‘오늘까지’를 누르면 오늘 할 일만 모아 봐요. <svg class="ic" aria-hidden="true"><use href="#i-edit"/></svg> 버튼으로 고칠 수 있고, 실수로 지웠다면 아래 알림의 <b>되돌리기</b>를 눌러요. 과목 목록도 여기서 관리해요.</p>
+          <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-planner"/></svg>스터디 플래너</summary>
+          <ul>
+            <li><b>하루 보기</b>: 위쪽 주간 띠에서 날짜를 누르면 그날 계획이 나와요. 날짜 아래 점은 그날 할 일이에요(칠한 점은 끝낸 일). ‹ ›로 지난주·다음 주로 가고, <svg class="ic" aria-hidden="true"><use href="#i-cal"/></svg> 달력으로 아무 날이나 열어요.</li>
+            <li><b>할 일</b>: <b>＋ 할 일 추가</b>에서 과목, 날짜, 예상 시간을 정해요. 날짜는 그 일을 하기로 한 날이에요. 매일이나 요일마다 반복할 수도 있어요. 끝내면 체크하고(예상 시간을 적어 두면 그 시간이 오늘 공부 시간에 들어가요), <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼을 누르면 그 할 일로 스톱워치가 켜져서 잰 시간이 그 줄에 쌓여요.</li>
+            <li><b>⋯ 메뉴</b>: 내일로 미루기, 다른 날로 옮기기, 공부할 시각 정하기(타임테이블 일정), 고치기, 지우기. 실수로 지웠다면 아래 알림의 <b>되돌리기</b>를 눌러요.</li>
+            <li><b>지난 날 못 한 할 일</b>: 어제까지 끝내지 못한 일은 오늘 칸 위에 모여요. <b>오늘로 가져오기</b>를 누르면 한 번에 오늘 할 일로 옮겨요.</li>
+            <li><b>범위에서 고르기</b>: 시험 범위에서 남은 항목을 골라 그날 할 일로 넣어요. 범위 탭의 ⋯ › <b>플래너에 넣기</b>로 오늘·내일·아무 날에나 넣을 수도 있어요. 이렇게 넣은 할 일을 끝내면 범위에도 체크되고, 범위에서 체크해도 할 일이 끝나요(공부 시간은 한 번만 들어가요).</li>
+            <li><b>목표와 돌아보기</b>: 그날의 목표를 한 줄 적어 두면 플래너와 홈에 늘 보여요. 하루가 끝나면 <b>하루 돌아보기</b>에 잘한 점과 고칠 점을 적고, 앞날에는 준비물 같은 메모를 남겨요.</li>
+            <li><b>주간 보기</b>: ‘주간’을 누르면 월~일 할 일과 일정이 한 번에 나와요. 날짜를 누르면 그날 하루 보기로 가요.</li>
+            <li>언제 할지 모르는 일은 맨 아래 <b>날짜 안 정한 할 일</b>에 적어 두고, 과목은 <b>과목 관리</b>에서 만들고 지워요.</li>
+          </ul>
         </details>
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-timer"/></svg>타이머·스톱워치와 폰 잠금 모드</summary>
@@ -681,7 +705,7 @@
           <p>이번 달 공부 시간과 지난달 비교, 최근 6개월과 7일 그래프, 과목별 공부 시간(최근 7일·이번 달·전체), 최근 기록을 보여 줘요. <b>월 목표</b>를 정하면 달마다 다른 날 수에 맞춰 하루 기본 페이스와 오늘 남은 양을 계산해 줘요.</p>
           <p><b>공부 달력</b>은 날마다 공부한 만큼 진하게 칠해져요(1시간 미만 · 1~2시간 · 2~4시간 · 4시간 이상). 날짜를 누르면 그날 과목별로 얼마나 했는지와 함께, 스터디 플래너처럼 한 줄이 한 시간·한 칸이 10분인 <b>시간표</b>가 과목 색으로 칠해져 나와요. <b>인증 이미지</b>를 누르면 그날 공부를 인스타 스토리 크기 그림으로 만들어 공유하거나 저장할 수 있어요. 잘못 남긴 기록은 ✕로 지우고, 빠진 시간은 <b>＋ 직접 기록</b>으로 채워요. ‘몇 시부터 몇 시까지’로 적으면 시간표에도 칠해지고, 시각을 모르면 ‘공부한 시간만’ 적어요.</p>
           <p><b>타임테이블</b>은 하루 전체를 한 줄이 한 시간, 한 칸이 10분인 표로 보여 줘요. 스톱워치나 타이머로 공부하는 동안에는 지금 재는 시간도 바로 칠해지고, 그날의 기록을 시간 순서로 보고 지울 수 있어요. 홈의 ‘오늘 타임테이블’이나 공부 달력에서 날짜를 누른 뒤 ‘타임테이블’을 눌러 열어요. 기록하지 못한 공부는 <b>＋ 공부 시간 추가</b>나 그 시각의 칸을 눌러 몇 시부터 몇 시까지 했는지 적으면 칸에 칠해져요. 시각 없이 공부한 시간만 적은 직접 기록은 칸에는 칠해지지 않아요.</p>
-          <p><b>일정</b>은 공부할 시간을 미리 정해 두는 기능이에요. 타임테이블의 <b>＋ 일정 추가</b>나 앞으로의 칸을 눌러 과목과 시각을 적고, 학원처럼 되풀이되는 일정은 ‘매주’와 요일을 골라요. 약속·운동처럼 공부가 아닌 일은 ‘다른 일정’으로 넣어요. 하루 보기에서는 일정이 점선으로, 공부한 시간은 칠한 칸으로 겹쳐 보이고, <b>주간</b>을 누르면 월~일 스케줄 표가 나와요. 끝난 일정을 타이머 없이 했다면 ‘계획대로 했어요’를 눌러 바로 기록하고, 일정을 누르면 고치거나 지울 수 있어요(반복 일정은 이 날만·앞으로·전체 중에서 골라요). 할 일 옆 달력 단추를 누르면 그 할 일을 할 시간을 정해요.</p>
+          <p><b>일정</b>은 공부할 시간을 미리 정해 두는 기능이에요. 타임테이블의 <b>＋ 일정 추가</b>나 앞으로의 칸을 눌러 과목과 시각을 적고, 학원처럼 되풀이되는 일정은 ‘매주’와 요일을 골라요. 약속·운동처럼 공부가 아닌 일은 ‘다른 일정’으로 넣어요. 하루 보기에서는 일정이 점선으로, 공부한 시간은 칠한 칸으로 겹쳐 보이고, <b>주간</b>을 누르면 월~일 스케줄 표가 나와요. 끝난 일정을 타이머 없이 했다면 ‘계획대로 했어요’를 눌러 바로 기록하고, 일정을 누르면 고치거나 지울 수 있어요(반복 일정은 이 날만·앞으로·전체 중에서 골라요). 스터디 플래너에서 할 일의 ⋯ › <b>공부할 시각 정하기</b>를 누르면 그 할 일을 할 시간을 정해요.</p>
           <p>새벽까지 공부한다면 <a href="#account" data-go="account">계정·설정</a>의 <b>하루 시작 시각</b>을 새벽으로 옮겨 보세요. 그 전의 새벽 공부는 전날 공부로 세요.</p>
         </details>
         <details>
@@ -744,6 +768,15 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="3.7" data-date="2026년 11월 18일">
+            <ul class="news">
+              <li><b>스터디 플래너</b>: ‘계획’ 탭이 스터디 플래너가 됐어요. 오늘뿐 아니라 앞날의 할 일도 날짜마다 적어 두고, 주간 띠·주간 보기·달력으로 언제든 넘겨 봐요</li>
+              <li><b>하루 한 장</b>: 그날의 목표 한 줄, 할 일과 진행률, 시험 D-day, 시간 계획(타임테이블 띠와 일정), 하루 돌아보기 메모가 한 화면에 모였어요</li>
+              <li><b>할 일 넣기가 쉬워졌어요</b>: 과목을 눌러 고르고 날짜·예상 시간을 정해요. 매일이나 요일마다 반복할 수 있어요. ⋯ 메뉴로 내일로 미루거나 다른 날로 옮기고, ▶ 버튼으로 바로 스톱워치를 켜요</li>
+              <li><b>범위와 한 몸</b>: 시험 범위의 남은 항목을 아무 날에나 넣을 수 있어요. 넣은 할 일을 끝내면 범위에도 체크되고 폰이 전진해요. 범위에서 체크해도 할 일이 끝나요</li>
+              <li><b>못 한 일은 오늘로</b>: 지난 날 못 한 할 일이 오늘 칸 위에 모이고, 한 번에 오늘로 가져올 수 있어요. 홈의 ‘오늘 할 일’도 플래너의 오늘 칸과 같아요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="3.6" data-date="2026년 11월 18일">
             <ul class="news">
               <li><b>기능과 탭 편집</b>: 계정·설정 맨 위의 ‘기능과 탭 편집’에서 쓰지 않는 기능을 끄고 탭 순서를 바꿀 수 있어요. 줄을 꾹 누르거나 왼쪽 손잡이를 잡고 끌어 놓으면 돼요. 목록 맨 위에 둔 탭이 탭 막대 맨 왼쪽에 와요</li>
@@ -1030,6 +1063,44 @@
     </form>
   </div>
 
+  <!-- 스터디 플래너: 할 일 추가·고치기 (js/planner.js) -->
+  <div class="ask-backdrop" id="pl-dlg" hidden>
+    <form class="ask-box pl-box" id="pl-form" role="dialog" aria-modal="true" aria-labelledby="pl-dlg-h" novalidate>
+      <h2 id="pl-dlg-h">할 일 추가</h2>
+      <input class="pl-in" id="pl-title" maxlength="120" placeholder="무엇을 공부할까요? 예: 수학 문제집 3단원" autocomplete="off" enterkeyhint="done" aria-label="할 일">
+      <div class="pl-f"><span class="pl-lab" id="pl-subj-lab">과목</span>
+        <div class="pl-chips" id="pl-subj" role="radiogroup" aria-labelledby="pl-subj-lab"></div>
+        <div class="pl-newsub" id="pl-newsub" hidden><input id="pl-newsub-name" maxlength="20" placeholder="새 과목 이름" autocomplete="off" aria-label="새 과목 이름"><button class="btn sm" type="button" id="pl-newsub-ok">만들기</button></div>
+      </div>
+      <div class="pl-f2">
+        <label class="pl-f"><span class="pl-lab">날짜</span><input type="date" id="pl-date" placeholder="날짜 안 정함" aria-label="날짜"></label>
+        <label class="pl-f"><span class="pl-lab">예상 시간</span><select id="pl-est" aria-label="예상 시간">
+          <option value="">정하지 않음</option><option value="10">10분</option><option value="15">15분</option><option value="20">20분</option><option value="30">30분</option><option value="40">40분</option><option value="45">45분</option><option value="60">1시간</option><option value="90">1시간 30분</option><option value="120">2시간</option><option value="180">3시간</option><option value="custom">직접 적기…</option>
+        </select></label>
+      </div>
+      <label class="pl-f" id="pl-est-custom-f" hidden><span class="pl-lab">예상 시간 (분)</span><input type="number" id="pl-est-custom" min="1" max="1440" step="1" inputmode="numeric" placeholder="예: 50"></label>
+      <div class="pl-f" id="pl-rep-f"><span class="pl-lab">반복</span>
+        <div class="seg pl-rep-seg" role="group" aria-label="반복">
+          <button class="seg-btn active" type="button" data-pl-rep="" aria-pressed="true">한 번만</button><button class="seg-btn" type="button" data-pl-rep="daily" aria-pressed="false">매일</button><button class="seg-btn" type="button" data-pl-rep="weekly" aria-pressed="false">요일마다</button>
+        </div>
+        <div class="ev-days pl-days-pick" id="pl-days" role="group" aria-label="반복할 요일" hidden>
+          <button type="button" data-pl-wd="1" aria-pressed="false">월</button><button type="button" data-pl-wd="2" aria-pressed="false">화</button><button type="button" data-pl-wd="3" aria-pressed="false">수</button><button type="button" data-pl-wd="4" aria-pressed="false">목</button><button type="button" data-pl-wd="5" aria-pressed="false">금</button><button type="button" data-pl-wd="6" aria-pressed="false">토</button><button type="button" data-pl-wd="0" aria-pressed="false">일</button>
+        </div>
+        <label class="field pl-until" id="pl-until-f" hidden>언제까지<input type="date" id="pl-until"></label>
+        <p class="muted small pl-rep-sum" id="pl-rep-sum" aria-live="polite" hidden></p>
+      </div>
+      <p class="muted small pl-info" id="pl-rep-info" hidden></p>
+      <p class="muted small pl-info" id="pl-link-info" hidden>범위와 이어진 할 일이에요. 끝내면 범위에도 체크되고, 범위에서 체크해도 끝나요.</p>
+      <div class="ask-actions pl-actions">
+        <button class="btn link pl-scope" type="button" id="pl-scope-btn" data-feature="board"><svg class="ic" aria-hidden="true"><use href="#i-board"/></svg>범위에서 고르기</button>
+        <button class="btn danger" type="button" id="pl-del" hidden>지우기</button>
+        <span class="sp"></span>
+        <button class="btn" type="button" id="pl-cancel">취소</button>
+        <button class="btn primary" type="submit" id="pl-save">추가</button>
+      </div>
+    </form>
+  </div>
+
   <!-- 공부 시간 직접 기록 -->
   <div class="ask-backdrop" id="log-dlg" hidden>
     <form class="ask-box" id="log-form" role="dialog" aria-modal="true" aria-labelledby="log-title">
@@ -1117,6 +1188,7 @@
   <script src="js/store.js"></script>
   <script src="js/features.js"></script>
   <script src="js/scope.js"></script>
+  <script src="js/plan.js"></script>
   <script src="js/share.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/cardlink.js"></script>
@@ -1129,6 +1201,7 @@
   <script src="js/stopwatch.js"></script>
   <script src="js/timetable.js"></script>
   <script src="js/events.js"></script>
+  <script src="js/planner.js"></script>
   <script src="js/aicore.js"></script>
   <script src="js/ai.js"></script>
   <script src="js/cloud.js"></script>
