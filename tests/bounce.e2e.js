@@ -39,7 +39,7 @@ const PHOTO = { name: 'test.png', mimeType: 'image/png', buffer: fs.readFileSync
   let g = await game();
   assert(g.open && g.state === 'ready' && !g.face, '이강인 → 게임 창 (기본 공, 시작 전)');
   assert(await page.evaluate(() => document.body.classList.contains('bounce-open') && document.activeElement !== document.querySelector('#egg-input')), '뒤 화면은 안 움직이고, 비밀 단어 칸 키보드는 닫힘');
-  assert(/벽 튕기기/.test(await cardText()) && /얼굴 사진 고르기/.test(await cardText()) && /이 기기에만/.test(await cardText()), '시작 안내: 하는 법, 사진 고르기, 기기에만 저장');
+  assert(/벽 튕기기/.test(await cardText()) && /치면 1점/.test(await cardText()) && /1점 더/.test(await cardText()) && /5점마다/.test(await cardText()) && /얼굴 사진 고르기/.test(await cardText()) && /이 기기에만/.test(await cardText()), '시작 안내: 점수 규칙(치면 1점, 골 1점 더, 5점마다 빨라짐), 사진 고르기, 기기에만 저장');
   assert(await page.$eval('#egg-out', (o) => o.classList.contains('hit') && !!o.querySelector('[data-egg-game]')), '비밀 칸에는 ‘게임 열기’ 단추가 남음');
   const box = await page.$eval('#bounce-stage', (s) => { const r = s.getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; });
   assert(box.w === 390 && box.h > 600, '게임 판이 화면을 거의 채움 (' + box.w + 'x' + Math.round(box.h) + ')');
@@ -67,11 +67,17 @@ const PHOTO = { name: 'test.png', mimeType: 'image/png', buffer: fs.readFileSync
   await page.evaluate(() => { const G = Bounce.game, b = G.ball; b.x = G.px; b.y = G.py - G.r - 20; b.vx = 0; b.vy = 400; });
   await page.waitForFunction(() => Bounce.game.score === 1);
   assert(await page.textContent('#bounce-score') === '1', '받아 넘기면 1점, 위 점수판에도');
+  // 4점에서 골(+1) → 5점: 공이 빨라짐
+  const sp0 = await page.evaluate(() => Bounce.game.base);
+  await page.evaluate(() => { const G = Bounce.game, b = G.ball; G.score = 4; b.x = G.gx; b.y = G.r + 4; b.vx = 0; b.vy = -G.base; });
+  await page.waitForFunction(() => Bounce.game.score === 5);
+  const lv = await page.evaluate(() => ({ level: Bounce.game.level, sp: Math.hypot(Bounce.game.ball.vx, Bounce.game.ball.vy), score: document.querySelector('#bounce-score').textContent }));
+  assert(lv.level === 1 && lv.sp > sp0 * 1.1 && lv.score === '5', '골은 1점 더, 5점이 되면 공이 빨라짐 (' + (lv.sp / sp0).toFixed(2) + '배)');
   await page.evaluate(() => { const G = Bounce.game, b = G.ball; b.x = G.W * 0.1; b.y = G.py + 5; b.vx = 0; b.vy = 900; });
   await page.waitForFunction(() => Bounce.game.state === 'over');
   await page.waitForSelector('#bounce-card:not([hidden])');
-  assert(/1점/.test(await cardText()) && /새 최고 기록/.test(await cardText()) && /다시 하기/.test(await cardText()), '놓치면 끝: 점수와 새 최고 기록 ' + await cardText());
-  assert(await page.evaluate(() => localStorage.getItem('studypromotion.eggBest')) === '1' && await page.textContent('#bounce-best') === '1', '최고 기록은 이 기기에 저장');
+  assert(/5점/.test(await cardText()) && /새 최고 기록/.test(await cardText()) && /골 1번/.test(await cardText()) && /빠르기 2단계/.test(await cardText()) && /다시 하기/.test(await cardText()), '놓치면 끝: 점수와 새 최고 기록 ' + await cardText());
+  assert(await page.evaluate(() => localStorage.getItem('studypromotion.eggBest')) === '5' && await page.textContent('#bounce-best') === '5', '최고 기록은 이 기기에 저장');
   await page.tap('[data-b="again"]');
   g = await game();
   assert(g.state === 'play' && g.score === 0 && await page.textContent('#bounce-score') === '0', '다시 하기 → 0점부터');

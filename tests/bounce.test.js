@@ -51,7 +51,7 @@ test('공: 처음엔 막대 위에서 기다리고, 차 올리면 위로 간다'
   assert.ok(!B.launch(g, 0.5), '이미 차 올렸으면 다시 안 됨');
 });
 
-test('공: 양옆 벽과 천장에 튕긴다. 골대 안이면 3점, 밖이면 점수 없음', () => {
+test('공: 양옆 벽과 천장에 튕긴다. 골대 안이면 1점 더, 밖이면 점수 없음', () => {
   const g = fresh();
   B.launch(g, 0.5);
   Object.assign(g.ball, { x: g.r + 2, y: 300, vx: -400, vy: 0 });
@@ -62,31 +62,50 @@ test('공: 양옆 벽과 천장에 튕긴다. 골대 안이면 3점, 밖이면 �
   assert.ok(ev.some((e) => e.type === 'wall' && e.side === 'right') && g.ball.vx < 0, '오른쪽 벽');
   Object.assign(g.ball, { x: g.gx, y: g.r + 3, vx: 0, vy: -500 });
   ev = B.step(g, 0.02);
-  assert.ok(ev.some((e) => e.type === 'goal') && g.score === 3 && g.goals === 1 && g.ball.vy > 0, '골 +3 ' + JSON.stringify(ev));
+  assert.ok(ev.some((e) => e.type === 'goal') && g.score === 1 && g.goals === 1 && g.ball.vy > 0, '골 +1 ' + JSON.stringify(ev));
   Object.assign(g.ball, { x: g.r + 5, y: g.r + 3, vx: 0, vy: -500 });
   ev = B.step(g, 0.02);
-  assert.ok(ev.some((e) => e.type === 'top') && !ev.some((e) => e.type === 'goal') && g.score === 3, '골대 밖 천장은 튕기기만');
+  assert.ok(ev.some((e) => e.type === 'top') && !ev.some((e) => e.type === 'goal') && g.score === 1, '골대 밖 천장은 튕기기만');
 });
 
-test('막대: 받으면 1점, 가운데는 곧게 끝은 비스듬히, 조금씩 빨라진다', () => {
+const speed = (g) => Math.hypot(g.ball.vx, g.ball.vy);
+// 공을 막대 가운데로 떨어뜨려 한 번 받게 한다
+const hit = (g, x) => { Object.assign(g.ball, { x: x == null ? g.px : x, y: g.py - g.r - 5, vx: 0, vy: Math.max(100, speed(g)) }); return B.step(g, 0.02); };
+
+test('막대: 치면 1점, 가운데는 곧게 끝은 비스듬히, 빨라도 뚫고 지나가지 않는다', () => {
   const g = fresh();
   B.launch(g, 0.5);
-  const sp0 = g.base;
-  Object.assign(g.ball, { x: g.px, y: g.py - g.r - 5, vx: 0, vy: sp0 });
-  let ev = B.step(g, 0.02);
+  let ev = hit(g);
   assert.ok(ev.some((e) => e.type === 'paddle') && g.score === 1 && g.hits === 1 && g.ball.vy < 0, '가운데로 받음');
   assert.ok(Math.abs(g.ball.vx) < 1e-6, '가운데는 곧게 위로');
-  assert.ok(Math.hypot(g.ball.vx, g.ball.vy) > sp0, '빨라짐');
-  Object.assign(g.ball, { x: g.px + g.pw / 2, y: g.py - g.r - 5, vx: 0, vy: sp0 });
-  B.step(g, 0.02);
+  hit(g, g.px + g.pw / 2);
   assert.ok(g.ball.vx > 0 && g.ball.vy < 0 && g.score === 2, '오른쪽 끝으로 받으면 오른쪽 위로');
-  // 아주 빨라도 막대를 뚫고 지나가지 않는다
   Object.assign(g.ball, { x: g.px, y: g.py - g.r - 30, vx: 0, vy: g.base * 1.9 });
   B.step(g, 0.034);
-  assert.ok(g.ball.vy < 0 && g.ball.y + g.r <= g.py + 1 && g.score === 3, '빠른 공도 받음');
-  // 빠르기에는 끝이 있다
-  for (let i = 0; i < 80; i++) { Object.assign(g.ball, { x: g.px, y: g.py - g.r - 5, vx: 0, vy: Math.abs(g.ball.vy) }); B.step(g, 0.01); }
-  assert.ok(Math.hypot(g.ball.vx, g.ball.vy) <= g.base * 1.9 + 1e-6, '최고 빠르기 ' + Math.hypot(g.ball.vx, g.ball.vy));
+  assert.ok(g.ball.vy < 0 && g.ball.y + g.r <= g.py + 1 && g.score === 3, '아주 빠른 공도 받음');
+});
+
+test('빠르기: 5점마다 한 단계씩 빨라지고, 그 사이에는 그대로다 (골 점수도 함께 센다)', () => {
+  const g = fresh();
+  B.launch(g, 0.5);
+  const s0 = g.base;
+  for (let i = 1; i <= 4; i++) { const ev = hit(g); assert.ok(Math.abs(speed(g) - s0) < 1e-6 && !ev.some((e) => e.type === 'faster'), i + '점: 처음 빠르기 그대로'); }
+  let ev = hit(g);
+  assert.ok(g.score === 5 && g.level === 1 && ev.some((e) => e.type === 'faster' && e.level === 1), '5점 → 1단계 빨라짐 ' + JSON.stringify(ev.map((e) => e.type)));
+  assert.ok(Math.abs(speed(g) - s0 * (1 + B.SPEED_STEP)) < 1e-6, '5점부터 12% 빠름');
+  for (let i = 6; i <= 9; i++) { hit(g); assert.ok(Math.abs(speed(g) - s0 * (1 + B.SPEED_STEP)) < 1e-6, i + '점: 같은 단계에서는 그대로'); }
+  // 9점에서 골(+1) → 10점: 날고 있는 공이 바로 빨라진다
+  Object.assign(g.ball, { x: g.gx, y: g.r + 3, vx: 0, vy: -speed(g) });
+  ev = B.step(g, 0.02);
+  assert.ok(g.score === 10 && g.level === 2 && ev.some((e) => e.type === 'goal') && ev.some((e) => e.type === 'faster'), '골로 10점 → 2단계');
+  assert.ok(Math.abs(speed(g) - s0 * (1 + 2 * B.SPEED_STEP)) < 1e-6 && g.ball.vy > 0, '골 뒤 내려오는 공이 바로 빨라짐');
+  // 끝없이 빨라지지는 않는다
+  for (let i = 0; i < 80; i++) hit(g);
+  assert.ok(Math.abs(speed(g) - s0 * B.SPEED_MAX) < 1e-6, '최고 빠르기 ' + (speed(g) / s0).toFixed(2) + '배');
+  B.serve(g);
+  assert.ok(g.level === 0 && g.score === 0, '새 판은 다시 처음 빠르기');
+  B.launch(g, 0.5);
+  assert.ok(Math.abs(speed(g) - s0) < 1e-6);
 });
 
 test('놓치면 끝: 막대 옆으로 떨어진 공은 아래로 나가고 판이 끝난다', () => {

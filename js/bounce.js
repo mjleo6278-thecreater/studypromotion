@@ -1,5 +1,6 @@
 /* 이스터에그 '벽 튕기기' (v3.8): 앱 소개의 비밀 입력칸에 비밀 단어를 넣으면 열리는 작은 공 게임 (js/egg.js가 연다).
- * - 화면을 좌우로 끌어 아래 막대를 움직이고, 공을 받아 넘긴다. 공은 양옆 벽과 천장에 튕기고, 천장의 골대에 들어가면 3점.
+ * - 화면을 좌우로 끌어 아래 막대를 움직이고, 공을 받아 넘긴다(1점). 공은 양옆 벽과 천장에 튕기고, 천장의 골대에 들어가면 1점 더.
+ *   점수가 5점 오를 때마다 공이 한 단계 빨라진다 (사용자 규칙, 2026-11-18).
  * - 공 얼굴: '얼굴 사진'으로 기기 안의 사진을 고르면 얼굴 부분을 동그랗게 잘라 공으로 쓴다.
  *   잘린 사진은 이 기기의 localStorage(studypromotion.eggBall)에만 둔다. 공부 기록(studypromotion.v1)과 따로라
  *   계정 동기화·자동 백업·내보내기에 들어가지 않고, 앱 파일과 저장소에도 사진을 담지 않는다.
@@ -35,9 +36,22 @@
 
   /* ---------- 공 움직임 (게임 판 W×H, 왼쪽 위가 0,0) ----------
      막대 윗면 py, 가운데 px, 폭 pw. 골대는 천장의 gx를 가운데로 폭 gw. 아래쪽은 열려 있어 공을 놓치면 끝 */
+  const SPEED_EVERY = 5;   // 이 점수마다 한 단계 빨라진다
+  const SPEED_STEP = 0.12; // 한 단계에 처음 빠르기의 12%씩
+  const SPEED_MAX = 1.9;   // 처음 빠르기의 1.9배까지 (40점쯤)
+  const speedOf = (g) => g.base * Math.min(SPEED_MAX, 1 + SPEED_STEP * g.level);
+  // 점수가 오른 뒤: 5점 단위를 넘었으면 단계를 올리고 날고 있는 공도 바로 빨라진다
+  function levelUp(g, ev) {
+    const lv = Math.floor(g.score / SPEED_EVERY);
+    if (lv <= g.level) return;
+    g.level = lv;
+    const b = g.ball, k = speedOf(g) / Math.max(1e-6, Math.hypot(b.vx, b.vy));
+    b.vx *= k; b.vy *= k;
+    ev.push({ type: 'faster', level: lv, x: b.x, y: b.y });
+  }
   function createGame(W, H) {
     const g = { W: 0, H: 0, r: 20, pw: 100, ph: 14, py: 0, px: W / 2, pv: 0, gw: 120, gx: W / 2, ga: 0, base: 400, t: 0,
-      state: 'ready', score: 0, hits: 0, goals: 0, ball: { x: W / 2, y: H / 2, vx: 0, vy: 0 } };
+      state: 'ready', score: 0, level: 0, hits: 0, goals: 0, ball: { x: W / 2, y: H / 2, vx: 0, vy: 0 } };
     layoutGame(g, W, H);
     serve(g);
     return g;
@@ -59,7 +73,7 @@
   function stick(g) { g.ball.x = g.px; g.ball.y = g.py - g.r - 1; g.ball.vx = 0; g.ball.vy = 0; }
   // 새 판: 공은 막대 위에서 기다린다
   function serve(g) {
-    g.state = 'ready'; g.score = 0; g.hits = 0; g.goals = 0; g.t = 0; g.ga = 0; g.gx = g.W / 2;
+    g.state = 'ready'; g.score = 0; g.level = 0; g.hits = 0; g.goals = 0; g.t = 0; g.ga = 0; g.gx = g.W / 2;
     stick(g);
   }
   // 위로 차 올리기 (rnd 0~1: 기울기, 테스트에서 정해 줄 수 있음)
@@ -96,25 +110,26 @@
       else if (b.x > g.W - r) { b.x = g.W - r; b.vx = -Math.abs(b.vx); ev.push({ type: 'wall', side: 'right', x: g.W, y: b.y }); }
       if (b.y < r) {
         b.y = r; b.vy = Math.abs(b.vy);
-        if (Math.abs(b.x - g.gx) < g.gw / 2 - r * 0.25) { g.score += 3; g.goals++; ev.push({ type: 'goal', x: b.x, y: 0 }); }
+        if (Math.abs(b.x - g.gx) < g.gw / 2 - r * 0.25) { g.score += 1; g.goals++; ev.push({ type: 'goal', x: b.x, y: 0 }); levelUp(g, ev); }
         else ev.push({ type: 'top', x: b.x, y: 0 });
       }
       const reach = g.pw / 2 + r * 0.6;
       if (b.vy > 0 && prevBottom <= g.py + 1 && b.y + r >= g.py && Math.abs(b.x - g.px) <= reach) {
         b.y = g.py - r;
         const off = clamp((b.x - g.px) / reach, -1, 1);
-        const sp = Math.min(Math.hypot(b.vx, b.vy) * 1.03, g.base * 1.9);
-        const a = clamp(off + clamp(g.pv / 3000, -0.25, 0.25), -1.1, 1.1); // 막대 끝으로 받을수록 비스듬히 (최대 약 63°)
-        b.vx = Math.sin(a) * sp; b.vy = -Math.cos(a) * sp;
         g.score += 1; g.hits++;
         ev.push({ type: 'paddle', x: b.x, y: g.py, off });
+        levelUp(g, ev);
+        const sp = speedOf(g); // 같은 단계 안에서는 빠르기가 그대로
+        const a = clamp(off + clamp(g.pv / 3000, -0.25, 0.25), -1.1, 1.1); // 막대 끝으로 받을수록 비스듬히 (최대 약 63°)
+        b.vx = Math.sin(a) * sp; b.vy = -Math.cos(a) * sp;
       }
       if (b.y - r > g.H) { g.state = 'over'; ev.push({ type: 'miss', x: b.x, y: g.H }); break; }
     }
     return ev;
   }
 
-  const lib = { BALL_KEY, BEST_KEY, cropLimits, clampCrop, initialCrop, cropFromFace, zoomToD, dToZoom, createGame, layoutGame, serve, launch, movePaddle, step };
+  const lib = { BALL_KEY, BEST_KEY, SPEED_EVERY, SPEED_STEP, SPEED_MAX, cropLimits, clampCrop, initialCrop, cropFromFace, zoomToD, dToZoom, createGame, layoutGame, serve, launch, movePaddle, step };
   if (typeof module !== 'undefined' && module.exports) { module.exports = lib; return; }
 
   /* ================= 화면 ================= */
@@ -134,7 +149,7 @@
   let face = null; // 고른 얼굴 사진 (Image). 없으면 기본 공
   let sprite = null, spriteKey = '';
   let col = {};
-  const fx = { floats: [], flashes: [], squash: null, net: 0, angle: 0 };
+  const fx = { floats: [], flashes: [], squash: null, net: 0, fast: 0, angle: 0 };
   let best = Number(lsGet(BEST_KEY)) || 0;
   let crop = null; // 자르는 중인 사진 { src, w, h, c, touched }
 
@@ -339,11 +354,11 @@
       : '<button class="btn" type="button" data-b="photo">얼굴 사진 고르기</button>';
     const prev = '<canvas class="bounce-prev" aria-hidden="true"></canvas>';
     if (cardKind === 'ready') {
-      c.innerHTML = `${prev}<h3>벽 튕기기</h3><p class="muted small">화면을 좌우로 끌어 막대를 움직여요. 공을 받아 넘기면 1점, 위쪽 골대에 넣으면 3점! 놓치면 끝나요.</p>` +
+      c.innerHTML = `${prev}<h3>벽 튕기기</h3><p class="muted small">화면을 좌우로 끌어 막대를 움직여요. 공을 치면 1점, 위쪽 골대에 넣으면 1점 더! 5점마다 공이 빨라지고, 놓치면 끝나요.</p>` +
         `<div class="bounce-acts"><button class="btn primary" type="button" data-b="start">시작하기</button>${photo}</div>` +
         (face ? '' : '<p class="muted small bounce-note">사진을 고르면 얼굴만 동그랗게 잘라 공으로 써요. 사진은 이 기기에만 저장돼요.</p>');
     } else if (cardKind === 'over') {
-      c.innerHTML = `${prev}<h3>${lastScore}점</h3><p class="muted small">${newBest && lastScore > 0 ? '새 최고 기록이에요!' : '최고 기록 ' + best + '점'} · 받아 넘기기 ${g.hits}번 · 골 ${g.goals}번</p>` +
+      c.innerHTML = `${prev}<h3>${lastScore}점</h3><p class="muted small">${newBest && lastScore > 0 ? '새 최고 기록이에요!' : '최고 기록 ' + best + '점'} · 받아 넘기기 ${g.hits}번 · 골 ${g.goals}번 · 빠르기 ${g.level + 1}단계</p>` +
         `<div class="bounce-acts"><button class="btn primary" type="button" data-b="again">다시 하기</button>${photo}</div>`;
     } else if (cardKind === 'pause') {
       c.innerHTML = `${prev}<h3>잠깐 멈췄어요</h3><p class="muted small">지금 ${g.score}점이에요.</p>` +
@@ -394,7 +409,8 @@
       if (e.type === 'paddle') { float('+1', e.x, g.py - g.r * 2.4); squash('y'); }
       else if (e.type === 'wall') { fx.flashes.push({ side: e.side, at: e.y, t: 0 }); squash('x'); }
       else if (e.type === 'top') { fx.flashes.push({ side: 'top', at: e.x, t: 0 }); squash('y'); }
-      else if (e.type === 'goal') { float('골! +3', clamp(e.x, 50, g.W - 50), g.r * 3.2, true); fx.net = 0.7; squash('y'); buzz(25); }
+      else if (e.type === 'goal') { float('골! +1', clamp(e.x, 50, g.W - 50), g.r * 3.2, true); fx.net = 0.7; squash('y'); buzz(25); }
+      else if (e.type === 'faster') { float('빨라져요!', g.W / 2, g.H * 0.45, true); fx.fast = 0.6; }
       else if (e.type === 'miss') over();
     }
     if (evs.length) scoreUI();
@@ -411,6 +427,7 @@
     fx.angle += (g.ball.vx / g.r) * dt * 0.35;
     if (fx.squash && (fx.squash.t -= dt) <= 0) fx.squash = null;
     fx.net = Math.max(0, fx.net - dt);
+    fx.fast = Math.max(0, fx.fast - dt);
     fx.floats = fx.floats.filter((f) => (f.t += dt) < 0.9);
     fx.flashes = fx.flashes.filter((f) => (f.t += dt) < 0.3);
     draw();
@@ -466,6 +483,13 @@
       else x.fillRect(f.at - 34, 0, 68, 5);
     }
     x.globalAlpha = 1;
+
+    // 빨라질 때 양옆 벽이 잠깐 포인트 색으로
+    if (fx.fast > 0) {
+      x.globalAlpha = Math.min(1, fx.fast / 0.3); x.fillStyle = col.accent;
+      x.fillRect(0, 0, 5, H); x.fillRect(W - 5, 0, 5, H);
+      x.globalAlpha = 1;
+    }
 
     // 막대
     x.fillStyle = col.ink;
