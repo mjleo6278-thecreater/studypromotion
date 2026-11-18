@@ -22,6 +22,12 @@
  *   못 할 때:     { error: "login" | "name"(처음이라 별명이 필요) | "badname" | "bad" | "owner" | "server" }
  *   한 사람에 한 줄(그 사람의 최고 기록)만 남긴다. 사람을 가리키는 번호는 Firebase 사용자 번호를 SHA-256으로 바꾼 것이고, 이메일·이름은 받지 않는다
  *
+ * 그룹 스터디 (v3.11, 앱 쪽은 js/group.js, 서버 쪽 처리는 worker/src/group.js). AI 도우미 설정(OPEN_TO, 하루 횟수)과 상관없다
+ *   GET  /group   Authorization: Bearer <확인표>   내 별명과 내가 든 그룹들 (그룹마다 사람들의 별명·날별 공부 시간·공부 중 표시·목표·응원)
+ *   POST /group   Authorization: Bearer <확인표>   { op: 'sync' | 'name' | 'create' | 'peek' | 'join' | 'leave' | 'cheer' | 'room' | ... , ... }
+ *   못 할 때:     { error: "login" | "name"(별명이 필요) | "badname" | "gname" | "code"(없는 초대 코드) | "full" | "many" | "banned" | "lead"(리더만) | "nogroup" | "wait" | "slow" | "bad" | "server" }
+ *   사람은 Firebase 사용자 번호를 SHA-256으로 바꾼 값('group:' + 번호, 벽 튕기기와 다른 값)으로만 가리킨다. 이메일·이름은 받지 않는다
+ *
  * 설정 (wrangler.toml의 [vars]. OWNER_EMAILS만 Cloudflare 화면에서 비밀 값으로)
  *   FIREBASE_PROJECT_ID  로그인 확인에 쓰는 Firebase 프로젝트
  *   DAILY_LIMIT          한 사람이 하루에 쓸 수 있는 횟수. 0시 UTC(한국 오전 9시)에 다시 채운다
@@ -32,6 +38,8 @@
  *   OPEN_TO              "all"이면 로그인한 모든 사람, 그 밖의 값이면 주인 계정만 쓸 수 있다 (먼저 써 보기)
  *   OWNER_EMAILS         횟수 제한이 없는 구글 계정 이메일 (쉼표로 여러 개). 공개 저장소에 적지 않는다
  */
+import { groupOp, GROUP_STORE, OPS as GROUP_OPS } from './group.js';
+
 const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 const MAX_MESSAGES = 16;   // 지시문 1 + 지난 대화 + 이번 질문
@@ -125,6 +133,7 @@ export class Counter {
   async fetch(request) {
     const msg = await request.json();
     if (String(msg.op).startsWith('board')) return Response.json(await boardOp(this.state.storage, msg)); // 벽 튕기기 순위 저장소 (아래)
+    if (String(msg.op).startsWith('group-')) return Response.json(await groupOp(this.state.storage, msg)); // 그룹 스터디 저장소 (group.js)
     const { op, day, limit, q, at, again } = msg;
     const st = this.state.storage, key = 'n:' + day;
     const n = (await st.get(key)) || 0;
@@ -256,6 +265,35 @@ async function bounce(request, env, deps, now, json) {
   return json(Object.assign({ signedIn: true }, r));
 }
 
+/* ---------- 그룹 스터디 요청 ---------- */
+const GROUP_BODY_MAX = 16000; // 앱이 보내는 본문은 많아야 1KB쯤
+async function group(request, env, deps, now, json) {
+  const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.get('Authorization') || '');
+  let user = null;
+  if (bearer) {
+    try { user = await verifyToken(bearer[1], env.FIREBASE_PROJECT_ID, { now, fetch: deps.fetch }); }
+    catch (e) { return json({ error: 'server' }, 503); } // 구글의 열쇠를 받아 오지 못함
+  }
+  if (!user) return json({ error: 'login' }, 401);
+  let body = {};
+  if (request.method === 'POST') {
+    let raw = '';
+    try { raw = await request.text(); } catch (e) { /* 아래에서 거절 */ }
+    if (!raw || raw.length > GROUP_BODY_MAX) return json({ error: 'bad' }, 400);
+    try { body = JSON.parse(raw); } catch (e) { body = null; }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'bad' }, 400);
+  }
+  const op = request.method === 'GET' ? 'get' : String(body.op || '');
+  if (!GROUP_OPS.includes(op)) return json({ error: 'bad' }, 400);
+  const id = await fingerprint('group:' + user.sub); // 사람 번호: 이메일·이름 대신
+  const store = env.COUNTER.get(env.COUNTER.idFromName(GROUP_STORE));
+  let r;
+  try { r = await (await store.fetch('https://group/', { method: 'POST', body: JSON.stringify({ op: 'group-' + op, id, at: now, b: body }) })).json(); }
+  catch (e) { console.error(JSON.stringify({ at: 'group', op, error: String((e && e.message) || e).slice(0, 200) })); return json({ error: 'server' }, 503); }
+  if (r && r.error) return json(r, r.error === 'server' ? 503 : 400);
+  return json(r);
+}
+
 /* ---------- 요청 처리 ---------- */
 // deps: 테스트에서 시계(now)와 열쇠 받아 오기(fetch)를 바꿔 끼운다
 export async function handle(request, env, deps, ctx) {
@@ -279,6 +317,10 @@ export async function handle(request, env, deps, ctx) {
   if (url.pathname === '/bounce' && (request.method === 'GET' || request.method === 'POST')) {
     if (origin && allowed.length && !allowed.includes(origin)) return json({ error: 'origin' }, 403);
     return bounce(request, env, deps, now, json);
+  }
+  if (url.pathname === '/group' && (request.method === 'GET' || request.method === 'POST')) {
+    if (origin && allowed.length && !allowed.includes(origin)) return json({ error: 'origin' }, 403);
+    return group(request, env, deps, now, json);
   }
   const isMe = request.method === 'GET' && url.pathname === '/me';
   if (!isMe && (request.method !== 'POST' || url.pathname !== '/chat')) return json({ error: 'not_found' }, 404);
