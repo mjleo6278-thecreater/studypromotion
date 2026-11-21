@@ -90,6 +90,9 @@
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M12 19.2V5.4"/><path d="m5.8 11.6 6.2-6.2 6.2 6.2"/></symbol>
     <symbol id="i-back" viewBox="0 0 24 24"><path d="m14.6 5.6-6.4 6.4 6.4 6.4"/></symbol>
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.4 13.6a3.9 3.9 0 0 0 5.5 0l2.9-2.9a3.9 3.9 0 0 0-5.5-5.5l-1.2 1.2"/><path d="M13.6 10.4a3.9 3.9 0 0 0-5.5 0l-2.9 2.9a3.9 3.9 0 0 0 5.5 5.5l1.2-1.2"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.2v13.6M5.2 12h13.6"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 15.5-4.8-4.8-8.2 8.8"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.2h3.2l1.9-2.7h5.8l1.9 2.7H20v11H4z"/><circle cx="12" cy="13.4" r="3.4"/></symbol>
   </svg>
   <header class="topbar">
     <a class="brand" href="#home" data-view="home" title="홈으로" aria-label="스터디 프로모션, 홈으로 가기"><img class="brand-mark" src="icons/favicon-64.png" alt="" width="28" height="28">스터디 프로모션</a>
@@ -1300,11 +1303,26 @@
       <div class="gc-foot">
         <div class="gc-quick" id="gc-quick" role="group" aria-label="빠른 말"></div>
         <form class="gc-form" id="gc-form" autocomplete="off">
+          <button class="gc-add" type="button" id="gc-add" aria-label="사진·공부 기록·단어장 보내기" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg></button>
           <textarea id="gc-text" rows="1" placeholder="메시지 보내기" aria-label="보낼 메시지"></textarea>
           <button class="gc-send" type="submit" aria-label="보내기" disabled><svg class="ic" aria-hidden="true"><use href="#i-send"/></svg></button>
         </form>
         <p class="gc-meta"><span class="gc-err" id="gc-err" role="alert" hidden></span><span class="gc-count" id="gc-count"></span></p>
       </div>
+    </section>
+  </div>
+
+  <!-- 채팅 사진 크게 보기 (js/chatattach.js). 두 손가락·휠로 확대, 두 번 누르면 확대·되돌리기, 아래로 끌면 닫기 -->
+  <div class="ask-backdrop gx-view" id="gx-view" hidden>
+    <section class="gx-view-box" role="dialog" aria-modal="true" aria-label="사진 크게 보기" tabindex="-1">
+      <div class="gx-view-stage" id="gx-view-stage"><img id="gx-view-img" alt="" draggable="false"></div>
+      <header class="gx-view-bar">
+        <button class="icon-btn" type="button" id="gx-view-close" aria-label="닫기"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+        <div class="gx-view-who"><b id="gx-view-name"></b><small id="gx-view-time"></small></div>
+        <button class="icon-btn" type="button" id="gx-view-save" aria-label="사진 저장" title="사진 저장"><svg class="ic" aria-hidden="true"><use href="#i-install"/></svg></button>
+      </header>
+      <p class="gx-view-cap" id="gx-view-cap" hidden></p>
+      <p class="gx-view-wait" id="gx-view-wait" role="status" hidden></p>
     </section>
   </div>
 
@@ -1353,5 +1371,6 @@
   <script src="js/cloud.js"></script>
   <script src="js/group.js"></script>
   <script src="js/groupchat.js"></script>
+  <script src="js/chatattach.js"></script>
 </body>
 </html>

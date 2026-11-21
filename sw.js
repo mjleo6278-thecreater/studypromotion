@@ -37,6 +37,7 @@ const ASSETS = [
   './js/cloud.js',
   './js/group.js',
   './js/groupchat.js',
+  './js/chatattach.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',
