@@ -306,9 +306,12 @@ const SW = 'studypromotion.stopwatch';
   await page.waitForFunction(() => window.App);
   const tabs = await page.$$eval('#ver-tabs [data-ver-tab]', (els) => els.map((e) => ({ v: e.dataset.verTab, on: e.classList.contains('active'), sel: e.getAttribute('aria-selected') })));
   assert(tabs.length >= 9 && tabs[0].v === await page.evaluate(() => App.version) && tabs[0].on && tabs[0].sel === 'true' && tabs.filter((t) => t.on).length === 1, '버전마다 탭 하나, 맨 앞이 지금 버전(' + tabs[0].v + ')이고 처음에 골라져 있음: ' + tabs.map((t) => t.v).join(' '));
-  assert(/버전 4\.2/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
+  assert(/버전 4\.4/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
   const shown = () => page.$$eval('#about-news .ver', (els) => els.filter((e) => !e.hidden && e.offsetParent !== null).map((e) => ({ v: e.dataset.ver, when: e.querySelector('.ver-when').textContent, n: e.querySelectorAll('.news li').length })));
   let sh = await shown();
+  assert(sh.length === 1 && sh[0].v === '4.4' && /버전 4\.4 · 2026년 11월 22일 업데이트/.test(sh[0].when) && /세컨드에게 사진 보내기/.test(await page.textContent('#about-news .ver:not([hidden])')) && /하루 횟수 50번/.test(await page.textContent('#about-news .ver:not([hidden])')), '4.4 소식: 세컨드에게 사진 보내기, 하루 횟수 50번 ' + sh[0].when);
+  await page.tap('#ver-tabs [data-ver-tab="4.2"]');
+  sh = await shown();
   assert(sh.length === 1 && sh[0].v === '4.2' && /버전 4\.2 · 2026년 11월 22일 업데이트/.test(sh[0].when) && /초록 테마/.test(await page.textContent('#about-news .ver:not([hidden])')) && /전체 초록 테마/.test(await page.textContent('#about-news .ver:not([hidden])')), '4.2 소식: 초록 테마, 전체 초록 테마 ' + sh[0].when);
   await page.tap('#ver-tabs [data-ver-tab="4.1"]');
   sh = await shown();
@@ -386,7 +389,7 @@ const SW = 'studypromotion.stopwatch';
   await page.tap('#toast .toast-act');
   await page.waitForTimeout(300);
   sh = await shown();
-  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '4.2' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
+  assert(await page.evaluate(() => App.view) === 'about' && sh.length === 1 && sh[0].v === '4.4' && await page.evaluate(() => { const r = document.querySelector('#news-panel').getBoundingClientRect(); return r.top < innerHeight && r.bottom > 0; }), '누르면 앱 소개의 업데이트 소식(이번 버전)으로 감');
   await page.context().close();
 
   /* ===== 8) PC 화면, 어두운 화면 ===== */

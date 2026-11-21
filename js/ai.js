@@ -7,7 +7,12 @@
  *   - 미리 보기: window.AIMock (preview.js가 넣는 가짜 AI)
  * 주소도 가짜 AI도 없으면 단추를 만들지 않는다 (앱은 예전 그대로다).
  *
- * 대화는 이 기기에만 저장한다 (localStorage 'studypromotion.ai'). 계정 동기화에는 들어가지 않는다. */
+ * 대화는 이 기기에만 저장한다 (localStorage 'studypromotion.ai'). 계정 동기화에는 들어가지 않는다.
+ *
+ * 사진 보내기(v4.4): 입력 칸 왼쪽 카메라 단추 → 앨범·사진 찍기 → 사진 한 장을 질문과 함께 보낸다.
+ *   앱이 긴 변 1280픽셀 JPEG로 다시 그려 보낸다(찍은 장소 같은 사진 속 정보가 지워진다). 서버는 모델에 넘기기만 한다.
+ *   기기에는 대화에 보이는 작은 그림만 남는다. 세컨드가 사진에서 읽은 글(<read>)을 답에 접어 두고, 이어지는 질문에는
+ *   사진 대신 그 글을 보낸다. 서버가 사진을 열어 준 계정(GET /me의 photo)에만 단추가 보인다. */
 (function () {
   'use strict';
   const App = window.App, Core = window.AICore;
@@ -20,6 +25,9 @@
   const NAME = '세컨드';
   const KEY = 'studypromotion.ai';
   const KEEP = 60; // 남겨 두는 말의 수
+  const PHOTO = { max: 1280, small: 1024, chars: 1400000, thumb: 240, keepThumbs: 12, file: 40 * 1024 * 1024 }; // 보내는 사진의 긴 변·글자 수 상한, 대화에 남기는 작은 그림, 고를 수 있는 파일 크기
+  const PHOTO_CHIPS = ['해석해 줘', '단어 뜻 알려 줘', '카드로 만들어 줘', '풀이 힌트만 줘'];
+  const PHOTO_ASK = '이 사진을 풀이해 줘'; // 사진만 보내고 글을 안 쓰면
 
   const { store, esc, toast } = App;
   const Stats = window.Stats;
@@ -33,6 +41,10 @@
     fresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5V7.6A2.6 2.6 0 0 1 7.6 5h8.8A2.6 2.6 0 0 1 19 7.6v5.8a2.6 2.6 0 0 1-2.6 2.6H10l-4 3.2V16"/><path d="M12 8.2v4.6M9.7 10.5h4.6"/></svg>',
     check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5.6 12.6 4.2 4.2 8.6-9.4"/></svg>',
     plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5.6v12.8M5.6 12h12.8"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.6A2.1 2.1 0 0 1 6.1 6.5h1.7l1.3-2h5.8l1.3 2h1.7A2.1 2.1 0 0 1 20 8.6v8.3a2.1 2.1 0 0 1-2.1 2.1H6.1A2.1 2.1 0 0 1 4 16.9z"/><circle cx="12" cy="12.6" r="3.4"/></svg>',
+    album: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4.5" width="16" height="15" rx="2.6"/><circle cx="9.2" cy="9.6" r="1.6"/><path d="m4.6 17.4 4.6-4.4 3.4 3.1 2.6-2.4 4.2 3.9"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5.5" y="10.5" width="13" height="9" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
+    x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>',
   };
 
   /* ---------- AI를 부르는 쪽 ---------- */
@@ -117,7 +129,8 @@
   if (!provider()) return; // 서버 주소가 없으면 여기서 끝: 단추도 창도 만들지 않는다
 
   /* ---------- 저장 ---------- */
-  // 말 하나: { id, role: 'user'|'ai', text, cards?, plan?, stats?, nav?, note?, error? }
+  // 말 하나: { id, role: 'user'|'ai', text, cards?, plan?, stats?, nav?, note?, error?, photo?, img?, read? }
+  //  photo·img: 사진을 붙인 질문과 그 작은 그림(최근 PHOTO.keepThumbs장만 남긴다), read: 세컨드가 그 사진에서 읽은 글
   //  plan: { lines: [{ line, sub, warn }], rejected: [], state: 'ready'|'applied'|'undone'|'cancelled'|'expired', off: [빼 둔 줄 번호], go } — 적용에 필요한 실제 동작은 live에만 있다
   let S = { v: 1, msgs: [], deck: '', left: null, leftAt: 0 };
   const live = {}; // 이번에 연 동안만: { [말 id]: { ops, inv } }
@@ -128,7 +141,13 @@
   S.msgs = S.msgs.filter((m) => m && m.id && (m.role === 'user' || m.role === 'ai'));
   S.msgs.forEach((m) => { if (m.plan && m.plan.state === 'ready') m.plan.state = 'expired'; }); // 다시 열면 지난 제안은 적용할 수 없다
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify({ v: 1, msgs: S.msgs.filter((m) => !m.pending).slice(-KEEP), deck: S.deck, left: S.left, leftAt: S.leftAt })); } catch (e) { /* 저장이 막힌 환경: 이번 동안만 보인다 */ }
+    let n = 0;
+    const thin = (m) => { const c = Object.assign({}, m); delete c.img; return c; };
+    const msgs = S.msgs.filter((m) => !m.pending).slice(-KEEP).reverse().map((m) => (m.img && ++n > PHOTO.keepThumbs ? thin(m) : m)).reverse();
+    const put = (list) => localStorage.setItem(KEY, JSON.stringify({ v: 1, msgs: list, deck: S.deck, left: S.left, leftAt: S.leftAt }));
+    try { put(msgs); } catch (e) {
+      try { put(msgs.map((m) => (m.img ? thin(m) : m))); } catch (err) { /* 저장이 막힌 환경: 이번 동안만 보인다 */ } // 저장 공간이 꽉 차면 작은 그림 없이
+    }
   }
   let seq = 0;
   const newId = () => 'm' + Date.now().toString(36) + (seq++).toString(36);
@@ -157,16 +176,27 @@
         `<button type="button" class="icon-btn" id="ai-close" aria-label="닫기" title="닫기">${ic('x')}</button>` +
       '</header>' +
       '<div class="ai-log" id="ai-log" role="log" aria-live="polite" aria-label="대화"></div>' +
+      '<div class="ai-pmenu" id="ai-pmenu" hidden>' +
+        `<button type="button" class="ai-pm" data-pick="album">${ICON.album}<span>앨범에서 고르기</span></button>` +
+        `<button type="button" class="ai-pm" data-pick="camera">${ICON.camera}<span>사진 찍기</span></button>` +
+        `<p class="ai-note">${ICON.lock}<span>사진은 답을 만드는 데만 쓰고, 서버에는 남기지 않아요.</span></p>` +
+      '</div>' +
+      '<div class="ai-att" id="ai-att" hidden></div>' +
       '<form class="ai-form" id="ai-form" novalidate>' +
+        `<button type="button" class="ai-photo" id="ai-photo" aria-label="사진 보내기" aria-expanded="false" aria-controls="ai-pmenu" hidden>${ICON.camera}</button>` +
         `<textarea id="ai-input" rows="1" maxlength="2000" placeholder="모르는 표현을 묻거나 할 일을 말해 보세요" aria-label="${esc(NAME)}에게 보낼 말"></textarea>` +
         `<button type="submit" class="ai-send" id="ai-send" aria-label="보내기">${ICON.send}</button>` +
       '</form>' +
       `<p class="ai-foot">${esc(provider().note || 'AI의 답은 틀릴 수 있어요. 기록은 확인한 뒤에만 바뀌어요.')}</p>` +
+      '<input type="file" id="ai-file" accept="image/*" hidden tabindex="-1" aria-hidden="true">' +
+      '<input type="file" id="ai-cam" accept="image/*" capture="environment" hidden tabindex="-1" aria-hidden="true">' +
     '</section>';
   document.body.appendChild(fab);
   document.body.appendChild(back);
   $('.ai-sheet', back).tabIndex = -1;
   const sheet = $('.ai-sheet', back), log = $('#ai-log', back), form = $('#ai-form', back), input = $('#ai-input', back), sendBtn = $('#ai-send', back);
+  const photoBtn = $('#ai-photo', back), pmenu = $('#ai-pmenu', back), attBox = $('#ai-att', back);
+  const PLACEHOLDER = input.placeholder;
 
   // 가로로 눕힌 폰(높이가 낮은 터치 화면)도 폰처럼 아래 시트 + 자판 높이 맞추기
   const isPhone = () => matchMedia('(max-width: 720px), (max-height: 520px) and (pointer: coarse)').matches;
@@ -184,6 +214,9 @@
   function emptyHTML() {
     return '<div class="ai-empty">' +
       `<p class="ai-hello"><b>${esc(NAME)}</b>예요. 체스 선수 곁에서 수를 같이 연구하는 조력자를 세컨드라고 해요.<br>모르는 표현을 물어보거나, 앱에서 할 일을 말로 시켜 보세요.</p>` +
+      (photoOn() ? '<p class="ai-eg-h">사진으로 묻기</p>' +
+        [['교과서 사진을 찍고 “해석해 줘”', '해석해 줘'], ['단어장 사진을 보내고 “카드로 만들어 줘”', '카드로 만들어 줘']]
+          .map(([t, q]) => `<button type="button" class="ai-eg" data-photo-eg="${esc(q)}">${esc(t)}</button>`).join('') : '') +
       examples().map(([head, list]) => `<p class="ai-eg-h">${head}</p>` + list.map((t) => `<button type="button" class="ai-eg" data-eg="${esc(t)}">${esc(t)}</button>`).join('')).join('') +
       '</div>';
   }
@@ -256,6 +289,7 @@
     server: 'AI가 지금 답하지 못했어요. 잠시 뒤에 다시 해 주세요.',
     empty: 'AI가 빈 답을 보냈어요. 다시 보내 주세요.',
     bad: '보낸 글이 너무 길어서 AI가 받지 못했어요. 질문을 줄이거나 새 대화를 시작해 주세요.',
+    photo: '사진 보내기는 지금 먼저 써 보는 중이라 곧 열려요. 글로 물어봐 주세요.',
   };
   // 문제가 생겼을 때 '자세히'에 보여 줄 글: 서버와 모델이 어떻게 답했는지 (고칠 때 이 글을 보고 까닭을 찾는다)
   function diagText(d, raw) {
@@ -282,8 +316,13 @@
   }
 
   function msgHTML(m) {
-    if (m.role === 'user') return `<div class="ai-msg me" data-id="${esc(m.id)}"><div class="ai-bubble">${lines(m.text)}</div></div>`;
+    if (m.role === 'user') {
+      const shot = !m.photo ? '' : /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(m.img || '')
+        ? `<img class="ai-shot" src="${m.img}" alt="보낸 사진">` : `<span class="ai-shot gone">${ICON.album}사진</span>`; // 오래된 사진은 작은 그림을 지웠다
+      return `<div class="ai-msg me" data-id="${esc(m.id)}">${shot}<div class="ai-bubble">${lines(m.text)}</div></div>`;
+    }
     let h = `<div class="ai-msg ai" data-id="${esc(m.id)}">`;
+    if (m.read) h += `<details class="ai-read"><summary>사진에서 읽은 글</summary><p>${lines(m.read)}</p></details>`;
     if (m.pending) h += `<div class="ai-text">${m.text ? Core.md(m.text) : ''}</div><p class="ai-typing" aria-label="답을 쓰는 중"><i></i><i></i><i></i></p>`;
     else if (m.text) h += `<div class="ai-text">${Core.md(m.text)}</div>`;
     if (m.stopped) h += '<p class="ai-state">여기서 멈췄어요.</p>';
@@ -346,6 +385,7 @@
   }
   function close() {
     if (back.hidden) return;
+    showMenu(false);
     back.classList.remove('in');
     document.body.classList.remove('ai-open');
     fab.setAttribute('aria-expanded', 'false');
@@ -359,7 +399,7 @@
   // 서버에 GET /me로 묻는다(횟수를 쓰지 않는다). 답은 이 기기에 기억해 두어 다음에 열 때 바로 쓰고, 로그인이 바뀌면 다시 묻는다.
   // 가짜 AI(미리 보기·테스트)는 서버가 없으니 묻지 않고 언제나 보인다
   const gated = () => !window.AIMock;
-  let gate = { open: false, uid: '', at: 0 };
+  let gate = { open: false, uid: '', at: 0, photo: false };
   let gateSeq = 0;
   let asking = null; // 지금 서버에 묻고 있는 계정 ('' = 로그인 안 함). 같은 계정으로 겹쳐 묻지 않는다
   function showFab() {
@@ -386,7 +426,7 @@
     if (my !== gateSeq) return; // 그사이 로그인이 바뀌어 새로 물었다
     asking = null;
     if (!j) return; // 답을 못 받음
-    gate = { open: j.open === true, uid, at: Date.now() };
+    gate = { open: j.open === true, uid, at: Date.now(), photo: j.photo === true };
     try { localStorage.setItem(GATE_KEY, JSON.stringify(gate)); } catch (e) { /* 저장이 막힌 환경 */ }
     if (j.unlimited === true) { S.left = 'unlimited'; S.leftAt = Date.now(); }
     else if (typeof j.left === 'number') { S.left = j.left; S.leftAt = Date.now(); }
@@ -394,11 +434,12 @@
     save();
     showFab();
     renderLeft();
+    renderPhoto();
   }
   if (gated()) {
     try {
       const saved = JSON.parse(localStorage.getItem(GATE_KEY) || 'null');
-      if (saved && typeof saved.open === 'boolean') gate = { open: saved.open, uid: String(saved.uid || ''), at: Number(saved.at) || 0 };
+      if (saved && typeof saved.open === 'boolean') gate = { open: saved.open, uid: String(saved.uid || ''), at: Number(saved.at) || 0, photo: saved.photo === true };
     } catch (e) { /* 읽지 못하면 닫힌 것으로 */ }
     window.addEventListener('cloud-user', () => checkGate(false)); // 로그인·로그아웃 (js/cloud.js가 알린다). 계정이 그대로이고 방금 물었으면 다시 묻지 않는다
     window.addEventListener('online', () => checkGate(false));
@@ -422,6 +463,7 @@
     if (!(await App.ask('지금 대화를 지우고 새로 시작할까요?\n적용한 기록은 그대로 남아요.', { ok: '새 대화', cancel: '그대로 두기' }))) return;
     S.msgs = [];
     Object.keys(live).forEach((k) => delete live[k]);
+    Object.keys(photos).forEach((k) => delete photos[k]);
     save();
     renderAll();
     sheet.focus({ preventScroll: true }); // 단추가 숨으니 초점은 창으로
@@ -446,17 +488,118 @@
     e.preventDefault();
     if (busy) return stop();
     const text = input.value.trim();
-    if (!text) return;
+    if (!text && !att) return;
     input.value = '';
     grow();
-    send(text);
+    sendWithPhoto(text);
   });
+  // 붙여 둔 사진이 있으면 같이 보내고 사진 줄을 비운다
+  function sendWithPhoto(text) {
+    const photo = att;
+    att = null;
+    renderAtt();
+    showMenu(false);
+    send(text || (photo ? PHOTO_ASK : ''), photo);
+  }
+
+  /* ---------- 사진 ---------- */
+  // 사진 보내기를 쓸 수 있는지: 서버가 열어 준 계정(GET /me의 photo). 가짜 AI는 photo: false라고 하지 않으면 쓸 수 있다
+  const photoOn = () => (gated() ? gate.photo === true : !!window.AIMock && window.AIMock.photo !== false);
+  let att = null; // 보내려고 붙여 둔 사진 { full, thumb } (data: 주소)
+  const photos = {}; // 이번에 연 동안만: { [질문 id]: 보낸 사진 } — 다시 보내기에 쓴다. 기기에 저장하지 않는다
+  function renderPhoto() {
+    const on = photoOn();
+    photoBtn.hidden = !on;
+    form.classList.toggle('with-photo', on);
+    input.placeholder = on ? (att ? '사진에 대해 물어보세요' : '물어보거나 시켜 보세요') : PLACEHOLDER;
+    if (!on) { att = null; showMenu(false); renderAtt(); }
+    // 빈 화면 예시에 '사진으로 묻기'가 생기거나 사라진다
+    if (!S.msgs.length && !back.hidden) log.innerHTML = emptyHTML();
+  }
+  function showMenu(on) {
+    pmenu.hidden = !on;
+    photoBtn.classList.toggle('on', on);
+    photoBtn.setAttribute('aria-expanded', String(on));
+    if (on) {
+      // 넓은 화면(마우스)은 찍기가 없으니 '사진 고르기' 하나만
+      const cam = $('[data-pick="camera"]', pmenu);
+      cam.hidden = fine() && !matchMedia('(pointer: coarse)').matches;
+      $('[data-pick="album"] span', pmenu).textContent = cam.hidden ? '사진 고르기' : '앨범에서 고르기';
+    }
+  }
+  function renderAtt() {
+    attBox.hidden = !att;
+    attBox.innerHTML = att
+      ? `<div class="ai-att-th"><img src="${att.thumb}" alt="보낼 사진"><button type="button" class="ai-att-x" data-att-x aria-label="사진 빼기">${ICON.x}</button></div>` +
+        '<div class="ai-chips">' + PHOTO_CHIPS.map((t) => `<button type="button" class="chip" data-chip="${esc(t)}">${esc(t)}</button>`).join('') + '</div>'
+      : '';
+    if (photoOn()) input.placeholder = att ? '사진에 대해 물어보세요' : '물어보거나 시켜 보세요';
+  }
+  // 사진을 다시 그려서 줄인다: 캔버스로 다시 그리면 찍은 장소·기기 같은 사진 속 정보(EXIF)가 남지 않는다.
+  // 폰 사진의 돌림 정보는 브라우저가 그림을 읽을 때 반영한다. 투명한 곳은 흰색으로
+  function draw(img, max, q) {
+    const w0 = img.naturalWidth || img.width, h0 = img.naturalHeight || img.height;
+    const k = Math.min(1, max / Math.max(w0, h0));
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w0 * k));
+    c.height = Math.max(1, Math.round(h0 * k));
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, c.width, c.height);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', q);
+  }
+  async function shrink(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      img.src = url;
+      await img.decode();
+      if (!(img.naturalWidth > 0)) throw new Error('empty');
+      let full = draw(img, PHOTO.max, 0.85);
+      if (full.length > PHOTO.chars) full = draw(img, PHOTO.small, 0.72); // 아주 복잡한 사진
+      if (full.length > PHOTO.chars) throw new Error('big');
+      return { full, thumb: draw(img, PHOTO.thumb, 0.7) };
+    } finally { URL.revokeObjectURL(url); }
+  }
+  async function takeFile(file) {
+    if (!file || !photoOn()) return;
+    if (!/^image\//.test(file.type || '')) return toast('사진 파일만 보낼 수 있어요');
+    if (file.size > PHOTO.file) return toast('사진이 너무 커요. 다른 사진을 골라 주세요');
+    showMenu(false);
+    try { att = await shrink(file); }
+    catch (e) { att = null; toast('사진을 열지 못했어요. 다른 사진을 골라 주세요'); }
+    renderAtt();
+    if (att && fine()) input.focus({ preventScroll: true });
+  }
+  photoBtn.addEventListener('click', () => showMenu(pmenu.hidden));
+  pmenu.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-pick]');
+    if (b) $(b.dataset.pick === 'camera' ? '#ai-cam' : '#ai-file', back).click();
+  });
+  ['#ai-file', '#ai-cam'].forEach((sel) => {
+    const f = $(sel, back);
+    f.addEventListener('change', () => { const file = f.files && f.files[0]; f.value = ''; takeFile(file); });
+  });
+  attBox.addEventListener('click', (e) => {
+    if (e.target.closest('[data-att-x]')) { att = null; renderAtt(); return; }
+    const chip = e.target.closest('[data-chip]');
+    if (chip && !busy) { const typed = input.value.trim(); input.value = ''; grow(); sendWithPhoto(typed ? typed + ' ' + chip.dataset.chip : chip.dataset.chip); }
+  });
+  // 넓은 화면: 복사한 사진을 입력 칸에 붙여 넣어도 된다
+  input.addEventListener('paste', (e) => {
+    const items = (e.clipboardData && e.clipboardData.files) || [];
+    const file = [...items].find((f) => /^image\//.test(f.type));
+    if (file && photoOn()) { e.preventDefault(); takeFile(file); }
+  });
+  renderPhoto();
 
   // 지난 대화: AI의 답에는 그때 낸 제안과 그 뒤에 어떻게 됐는지를 붙인다 ("그거 7시로 바꿔 줘"를 알아듣게)
   const PLAN_WORD = { ready: '아직 적용 안 함', expired: '적용 안 함', cancelled: '취소함', applied: '적용함', undone: '적용했다가 되돌림' };
   function historyFor() {
     return S.msgs.filter((m) => !m.pending && !m.error).map((m) => {
-      if (m.role !== 'ai') return { role: 'user', text: m.text };
+      if (m.role !== 'ai') return { role: 'user', text: m.text, photo: !!m.photo };
       const bits = [m.text];
       if (m.plan && m.plan.lines) {
         const off = m.plan.state === 'applied' ? m.plan.off || [] : [];
@@ -464,15 +607,18 @@
         if (ls.length) bits.push(`[앱 기록: 이때 낸 제안 ${PLAN_WORD[m.plan.state] || ''} — ${ls.join(' / ')}]`);
       }
       if (m.cards && m.cards.length) bits.push('[앱 기록: 카드 후보 ' + m.cards.map((c) => c.front).join(', ') + ']');
-      return { role: 'assistant', text: bits.filter(Boolean).join('\n') };
+      return { role: 'assistant', text: bits.filter(Boolean).join('\n'), read: m.read || '' };
     }).filter((m) => m.text);
   }
 
-  async function send(text) {
+  // photo: { full, thumb } 이번 질문에 붙이는 사진 (없으면 글만)
+  async function send(text, photo) {
     const p = provider();
     if (!p || busy) return;
+    if (photo && !photoOn()) photo = null;
     const hist = historyFor();
     const mine = { id: newId(), role: 'user', text };
+    if (photo) { mine.photo = true; mine.img = photo.thumb; photos[mine.id] = photo; }
     const m = { id: newId(), role: 'ai', text: '', pending: true };
     if (!S.msgs.length) log.innerHTML = '';
     S.msgs.push(mine, m);
@@ -492,18 +638,26 @@
         const el = log.querySelector(`[data-id="${m.id}"] .ai-text`);
         if (!el || !m.pending) return;
         const follow = nearEnd();
-        el.innerHTML = Core.md(Core.visibleText(raw));
+        const vis = Core.visibleText(raw);
+        el.innerHTML = vis ? Core.md(vis) : photo && /<read\b/i.test(raw) ? '<p class="ai-state">사진을 읽고 있어요…</p>' : '';
         if (follow) toEnd();
       });
     };
     try {
       // 앱 정보가 필요 없어 보이는 말은 짧게 보낸다. AI가 '앱 정보가 필요하다'고 답하면 그때 붙여서 다시 보낸다
-      let withApp = Core.needsApp(text);
-      let out = await p.ask(Core.messages(text, ctx, hist, withApp), { signal: ctrl.signal, onText });
+      // 사진은 이번 질문(마지막 말)에만 붙인다: [사진, 글]
+      const build = (app) => {
+        const list = Core.messages(text, ctx, hist, app, { photo: !!photo });
+        if (photo) { const q = list[list.length - 1]; q.content = [{ type: 'image_url', image_url: { url: photo.full } }, { type: 'text', text: q.content }]; }
+        return list;
+      };
+      // 바로 앞 답이 사진을 읽은 것이면 '카드로 만들어 줘'도 그 사진 이야기다 (앱 정보 없이 카드 후보로)
+      let withApp = Core.needsApp(text, !!photo || hist.slice(-1).some((h) => h.read));
+      let out = await p.ask(build(withApp), { signal: ctrl.signal, onText });
       let r = Core.parseReply(out.text);
       if (r.needApp && !withApp) {
         raw = '';
-        out = await p.ask(Core.messages(text, ctx, hist, true), { signal: ctrl.signal, onText, again: true });
+        out = await p.ask(build(true), { signal: ctrl.signal, onText, again: true });
         r = Core.parseReply(out.text);
       }
       if (out.unlimited) { S.left = 'unlimited'; S.leftAt = Date.now(); }
@@ -521,6 +675,7 @@
         if (e && e.diag) m.diag = diagText(e.diag, raw);
         else if (e && !e.aiCode) m.diag = String(e.message || e).slice(0, 200); // 앱 안에서 난 오류
         m.q = text;
+        if (m.error === 'photo') { gate.at = 0; checkGate(true); } // 서버가 사진을 닫았다: 단추를 다시 맞춘다
       }
     } finally {
       if (frame) { cancelAnimationFrame(frame); frame = 0; }
@@ -538,6 +693,7 @@
     out = out || {};
     const d = out.diag;
     m.text = r.text;
+    if (r.read) m.read = r.read;
     if (r.cards.length) m.cards = r.cards.map((c) => ({ front: c.front, back: c.back, saved: false }));
     if (r.actions.length) {
       const res = Core.validate(r.actions, store.get(), ctx, App.now());
@@ -674,6 +830,8 @@
     const t = e.target;
     const eg = t.closest('[data-eg]');
     if (eg) return send(eg.dataset.eg);
+    const peg = t.closest('[data-photo-eg]');
+    if (peg) { input.value = peg.dataset.photoEg; grow(); showMenu(true); return; }
     const box = t.closest('.ai-msg');
     const m = box ? find(box.dataset.id) : null;
     const go = t.closest('[data-ai-go]');
@@ -694,9 +852,18 @@
     if (t.closest('[data-retry]')) {
       // 답을 못 받은 질문과 그 알림을 지우고 같은 질문을 다시 보낸다
       const q = m.q || '', i = S.msgs.indexOf(m), withQ = i > 0 && S.msgs[i - 1].role === 'user';
+      const asked = withQ ? S.msgs[i - 1] : null, photo = asked && asked.photo ? photos[asked.id] : null;
       S.msgs.splice(withQ ? i - 1 : i, withQ ? 2 : 1);
       renderAll();
-      if (q) send(q);
+      if (asked && asked.photo && !photo) {
+        // 앱을 다시 열어서 보낸 사진이 없다: 질문을 입력 칸에 되돌리고 사진을 다시 고르게 한다
+        input.value = q === PHOTO_ASK ? '' : q;
+        grow();
+        save();
+        showMenu(true);
+        return toast('사진을 다시 골라 주세요');
+      }
+      if (q) send(q, photo);
       return;
     }
     if (t.closest('[data-copy-q]')) {
@@ -719,6 +886,7 @@
 
   window.AI = { open, close, send, get busy() { return busy; }, get messages() { return S.msgs; },
     // 대화를 모두 지운다 ('모든 데이터 초기화'에서도 부른다)
-    clear() { if (busy) stop(); S.msgs = []; S.deck = ''; Object.keys(live).forEach((k) => delete live[k]); save(); if (!back.hidden) renderAll(); },
+    clear() { if (busy) stop(); S.msgs = []; S.deck = ''; att = null; renderAtt(); Object.keys(live).forEach((k) => delete live[k]); Object.keys(photos).forEach((k) => delete photos[k]); save(); if (!back.hidden) renderAll(); },
+    get photoOn() { return photoOn(); },
   };
 })();
