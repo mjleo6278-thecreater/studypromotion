@@ -8,7 +8,11 @@
  *                ms [{ id, at 들어온 시각 }] 들어온 차례, ban [내보낸 사람], ch [{ f 보낸 사람, t 받은 사람, e 응원 종류, at }],
  *                room 함께 집중 { by 시작한 사람, at, end 끝나는 시각, ms [같이 하는 사람] } | null }
  *   'c:<초대 코드>'  그룹 번호
+ *   'm:<그룹>'  채팅 (v4.1) { s 마지막 메시지 번호, v 마지막으로 바뀐 번호, ms [줄] } 최근 150줄·7일만
+ *              줄: { s 번호, v 바뀐 번호, at, f 보낸 사람, n 그때 별명, t 글 } · 지운 메시지 { …, x: 1 본인 | 2 리더 } (글은 지운다)
+ *                  자동 소식 { …, k: 'in' 들어옴 | 'out' 나감 | 'room' 함께 집중 시작 (min, end) }
  *   'n'  지금 있는 그룹 수 (무료 저장 공간을 지키는 상한에 쓴다)
+ *   그룹의 chatOff: 리더가 채팅을 꺼 두었으면 true. 사람의 sy { day, n, w }: 오늘 보낸 메시지 수와 최근 1분 동안 보낸 시각들
  *
  * 개인정보: 사람은 Firebase 사용자 번호를 SHA-256으로 바꾼 값의 앞 16자로만 가리킨다(index.js가 만든다).
  *   이메일·구글 이름은 받지도 남기지도 않는다. 다른 사람에게 보이는 것은 별명, 날마다 공부한 분, 공부 중 표시(과목 이름은 본인이 고르면)뿐이다.
@@ -24,15 +28,23 @@
  *   leave  { g }                            나가기 (리더가 나가면 가장 먼저 들어온 사람이 이어받고, 마지막 사람이 나가면 그룹이 없어진다)
  *   cheer  { g, m, e }                      응원 보내기 (같은 사람에게는 10분에 한 번)
  *   room   { g, min }  room-join { g }  room-leave { g }   함께 집중 시작·같이 하기·그만하기
- *   리더만: edit { g, name?, goal? }  code { g } 새 초대 코드  kick { g, m } 내보내기  lead { g, m } 리더 넘기기  unban { g }  drop { g } 그룹 없애기
+ *   chat   { g, since }                     채팅에서 since 번호 뒤에 새로 생기거나 바뀐 줄 (since 0이면 전부). 그룹 보기 전체는 돌려주지 않는다(자주 묻는 요청이라 가볍게)
+ *   say    { g, t, c?, since }              메시지 보내기 (c: 앱이 만든 번호. 답을 못 받아 다시 보내도 한 번만 들어간다)
+ *   unsay  { g, s, since }                  메시지 지우기 (내 메시지, 리더는 모든 메시지)
+ *   리더만: edit { g, name?, goal?, chat? }  code { g } 새 초대 코드  kick { g, m } 내보내기  lead { g, m } 리더 넘기기  unban { g }  drop { g } 그룹 없애기
  * 답: { ok, me: { id, n }, groups: [그룹 보기], lim, ...(made | joined | left | dropped | sent) }  못 할 때: { error }
+ *   chat·say·unsay의 답: { ok, chat: { on, v, full, ms: [줄] } }
+ *   그룹 보기의 chat: { on, v, nu [[번호, 보낸 사람] 다른 사람이 보낸 메시지, 최근 50개], tail [마지막 메시지 2개] } (앱이 '새 메시지 N'과 미리 보기를 그린다)
+ *   새로 들어온 사람에게는 들어온 뒤의 줄만 보인다. 나간 사람은 그룹 사람이 아니므로 채팅도 못 본다.
  */
 export const GROUP_STORE = 'group:hub';
 export const LIMITS = Object.freeze({ members: 20, groups: 5, all: 3000, cheers: 40, tries: 30, ban: 50 });
 export const CHEER_KINDS = 4;              // 응원 종류 수 (앱의 js/group.js CHEERS와 같다)
 export const CHEER_GAP = 10 * 60 * 1000;   // 같은 사람에게 다시 응원하려면 기다리는 시간
 export const ROOM_MIN = Object.freeze([10, 180]); // 함께 집중 길이(분)
-export const OPS = ['get', 'sync', 'name', 'create', 'peek', 'join', 'leave', 'cheer', 'room', 'room-join', 'room-leave', 'edit', 'code', 'kick', 'lead', 'unban', 'drop'];
+export const OPS = ['get', 'sync', 'name', 'create', 'peek', 'join', 'leave', 'cheer', 'room', 'room-join', 'room-leave', 'chat', 'say', 'unsay', 'edit', 'code', 'kick', 'lead', 'unban', 'drop'];
+// 그룹 채팅 (v4.1): 그룹마다 최근 150줄·7일, 한 메시지 200자·8줄, 한 사람이 1초에 1개·1분에 20개·하루 300개 (모든 그룹 합해서)
+export const CHAT = Object.freeze({ keep: 150, days: 7, len: 200, lines: 8, gap: 1000, perMin: 20, perDay: 300, unread: 50, tail: 2 });
 
 const MIN = 60000, HOUR = 3600000, DAY = 86400000;
 const CODE_CHARS = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'; // 헷갈리는 0·O·1·I·L은 뺀다
@@ -71,6 +83,17 @@ export function cleanSubject(v) {
   if (typeof v !== 'string') return null;
   const s = v.normalize('NFC').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu, '').replace(/\s+/g, ' ').trim();
   return s ? [...s].slice(0, 20).join('') : null;
+}
+// 채팅 글: 줄바꿈은 남기고(빈 줄은 하나까지) 보이지 않는 글자·방향 바꾸는 글자는 뺀다 (이모지를 잇는 ZWJ는 남긴다). 1~200자, 8줄까지. 아니면 null
+export function cleanMsg(v) {
+  if (typeof v !== 'string') return null;
+  const s = v.normalize('NFC').replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0009\u000B-\u001F\u007F-\u009F\u00AD\u200B\u200C\u200E\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/g, '')
+    .replace(/[^\S\n]+/g, ' ')
+    .split('\n').map((l) => l.trim()).join('\n')
+    .replace(/\n{3,}/g, '\n\n').trim();
+  if (!s || [...s].length > CHAT.len || s.split('\n').length > CHAT.lines) return null;
+  return s;
 }
 const utcKey = (t) => new Date(t).toISOString().slice(0, 10);
 // 날별 공부 시간 { 'YYYY-MM-DD': 0~1440 정수 }. 모양이 틀리면 null, 너무 오래되었거나 먼 날은 버린다(기기 시계가 틀린 경우)
@@ -142,6 +165,44 @@ export async function groupOp(st, msg) {
   const getU = async (x) => { if (!users.has(x)) users.set(x, (await st.get('u:' + x)) || null); return users.get(x); };
   const putU = async (x, u) => { users.set(x, u); await st.put('u:' + x, u); };
 
+  /* 채팅 */
+  const joinedAt = (g, who) => { const m = g.ms.find((x) => x.id === who); return m ? m.at : Infinity; };
+  const chatOf = async (gid) => (await st.get('m:' + gid)) || { s: 0, v: 0, ms: [] };
+  const fresh = (x) => now - x.at < CHAT.days * DAY;
+  // 앱에 보내는 한 줄 (앱이 만든 번호 c는 보낸 사람에게만)
+  function line(x) {
+    const o = { s: x.s, v: x.v, at: x.at, f: x.f, n: x.n };
+    if (x.k) { o.k = x.k; if (x.k === 'room') { o.min = x.min; o.end = x.end; } }
+    else if (x.x) o.x = x.x;
+    else o.t = x.t;
+    if (x.c && x.f === id) o.c = x.c;
+    return o;
+  }
+  // 나에게 보이는 줄: 7일 안, 내가 들어온 뒤
+  const seen = (g, c) => { const from = joinedAt(g, id); return c.ms.filter((x) => fresh(x) && x.at >= from); };
+  // since 번호 뒤에 생기거나 바뀐 줄 (since가 없거나 이상하면 전부, full: true)
+  function chatView(g, c, since) {
+    const all = !Number.isInteger(since) || since <= 0 || since > c.v;
+    const on = !g.chatOff;
+    return { on, v: c.v, full: all, ms: on ? seen(g, c).filter((x) => all || x.v > since).map(line) : [] };
+  }
+  // 줄 하나 더하기 (오래된 줄·150줄 넘는 것은 버린다)
+  async function addLine(g, x) {
+    const c = await chatOf(g.id);
+    c.s += 1; c.v += 1;
+    c.ms.push(Object.assign({ s: c.s, v: c.v, at: now }, x));
+    c.ms = c.ms.filter(fresh).slice(-CHAT.keep);
+    await st.put('m:' + g.id, c);
+    return c;
+  }
+  async function chatSummary(g) {
+    if (g.chatOff) return { on: false, v: 0, nu: [], tail: [] };
+    const c = await st.get('m:' + g.id);
+    if (!c) return { on: true, v: 0, nu: [], tail: [] };
+    const talk = seen(g, c).filter((x) => !x.k && !x.x);
+    return { on: true, v: c.v, nu: talk.filter((x) => x.f !== id).slice(-CHAT.unread).map((x) => [x.s, x.f]), tail: talk.slice(-CHAT.tail).map(line) };
+  }
+
   async function view(g) {
     const ms = [];
     for (const m of g.ms) {
@@ -149,7 +210,7 @@ export async function groupOp(st, msg) {
       ms.push({ id: m.id, n: (u && u.n) || '?', at: m.at, d: recentDays(u && u.d, now), lv: u && liveOn(u.lv, now) ? publicLive(u.lv) : null, up: (u && u.up) || 0 });
     }
     const room = g.room && g.room.end > now ? { by: g.room.by, at: g.room.at, end: g.room.end, ms: g.room.ms.slice() } : null;
-    const out = { id: g.id, name: g.name, code: g.code, lead: g.lead, at: g.at, goal: g.goal, ms, ch: (g.ch || []).filter((c) => now - c.at < 7 * DAY), room };
+    const out = { id: g.id, name: g.name, code: g.code, lead: g.lead, at: g.at, goal: g.goal, ms, ch: (g.ch || []).filter((c) => now - c.at < 7 * DAY), room, chat: await chatSummary(g) };
     if (g.lead === id) out.ban = (g.ban || []).length; // 리더에게만: 내보낸 사람 수 (다시 받기 단추)
     return out;
   }
@@ -207,6 +268,7 @@ export async function groupOp(st, msg) {
       if (u) { u.gs = u.gs.filter((x) => x !== g.id); forget(u); await putU(m.id, u); }
     }
     await st.delete('g:' + g.id);
+    await st.delete('m:' + g.id);
     if ((await st.get('c:' + g.code)) === g.id) await st.delete('c:' + g.code);
     await st.put('n', Math.max(0, ((await st.get('n')) || 1) - 1));
   }
@@ -303,13 +365,16 @@ export async function groupOp(st, msg) {
       u.gs.push(g.id);
       await st.put('g:' + g.id, g);
       await putU(id, u);
+      await addLine(g, { k: 'in', f: id, n: u.n });
       return state({ joined: g.id });
     }
 
     case 'leave': {
       const g = await mine();
       if (!g) return { error: 'nogroup' };
+      const u = await getU(id);
       await removeMember(g, id);
+      if (g.ms.length) await addLine(g, { k: 'out', f: id, n: (u && u.n) || '?' });
       return state({ left: g.id });
     }
 
@@ -332,6 +397,8 @@ export async function groupOp(st, msg) {
       if (g.room && g.room.end > now) return { error: 'room' }; // 이미 하는 중: 앱은 '같이 하기'를 보여 준다
       g.room = { by: id, at: now, end: now + b.min * MIN, ms: [id] };
       await st.put('g:' + g.id, g);
+      const u = await getU(id);
+      await addLine(g, { k: 'room', f: id, n: (u && u.n) || '?', min: b.min, end: g.room.end });
       return state();
     }
     case 'room-join': {
@@ -352,14 +419,62 @@ export async function groupOp(st, msg) {
       return state();
     }
 
+    /* 채팅 */
+    case 'chat': {
+      const g = await mine();
+      if (!g) return { error: 'nogroup' };
+      return { ok: true, chat: chatView(g, await chatOf(g.id), b.since) };
+    }
+    case 'say': {
+      const g = await mine();
+      if (!g) return { error: 'nogroup' };
+      if (g.chatOff) return { error: 'chatoff' };
+      const t = cleanMsg(b.t);
+      if (!t) return { error: 'bad' };
+      const cid = typeof b.c === 'string' && /^[0-9a-z]{6,16}$/.test(b.c) ? b.c : '';
+      const had = await chatOf(g.id);
+      // 같은 메시지를 다시 보냄 (보냈는데 답을 못 받은 경우): 또 넣지 않는다
+      if (cid && had.ms.some((x) => x.f === id && x.c === cid)) return { ok: true, chat: chatView(g, had, b.since) };
+      const u = await getU(id);
+      if (!u || !u.n) return { error: 'name' };
+      const w = ((u.sy && u.sy.w) || []).filter((x) => now - x < MIN && x <= now);
+      const n = u.sy && u.sy.day === today ? u.sy.n : 0;
+      if (n >= CHAT.perDay) return { error: 'daymax' };
+      if (w.length >= CHAT.perMin || (w.length && now - w[w.length - 1] < CHAT.gap)) return { error: 'fast' };
+      u.sy = { day: today, n: n + 1, w: w.concat(now) };
+      await putU(id, u);
+      const x = { f: id, n: u.n, t };
+      if (cid) x.c = cid;
+      return { ok: true, chat: chatView(g, await addLine(g, x), b.since) };
+    }
+    case 'unsay': {
+      const g = await mine();
+      if (!g) return { error: 'nogroup' };
+      if (!Number.isInteger(b.s)) return { error: 'bad' };
+      const c = await chatOf(g.id);
+      const x = c.ms.find((m) => m.s === b.s && fresh(m));
+      if (!x || x.k) return { error: 'gone' }; // 자동 소식은 지우지 않는다
+      if (x.f !== id && g.lead !== id) return { error: 'lead' };
+      if (!x.x) {
+        delete x.t; delete x.c;
+        x.x = x.f === id ? 1 : 2;
+        c.v += 1; x.v = c.v;
+        await st.put('m:' + g.id, c);
+      }
+      return { ok: true, chat: chatView(g, c, b.since) };
+    }
+
     /* 리더만 */
     case 'edit': {
       const r = await led();
       if (r.error) return r;
       const g = r.g;
-      if (b.name == null && b.goal == null) return { error: 'bad' };
+      if (b.name == null && b.goal == null && b.chat == null) return { error: 'bad' };
+      if (b.chat != null && typeof b.chat !== 'boolean') return { error: 'bad' };
       if (b.name != null) { const name = cleanGroupName(b.name); if (!name) return { error: 'gname' }; g.name = name; }
       if (b.goal != null) { const goal = cleanGoal(b.goal); if (!goal) return { error: 'bad' }; g.goal = goal; }
+      if (b.chat === false) g.chatOff = true; // 끄면 아무도 보내지 못하고 지난 메시지도 숨는다 (7일이 지나면 저절로 지워진다)
+      else if (b.chat === true) delete g.chatOff;
       await st.put('g:' + g.id, g);
       return state();
     }
