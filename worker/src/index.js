@@ -5,14 +5,18 @@
  *
  * 앱과 주고받는 약속 (앱 쪽은 js/ai.js)
  *   POST /chat   Authorization: Bearer <Firebase 로그인 확인표>   { "messages": [{ role, content }], "v": 2 }
+ *                사진(v4.4): 마지막 사용자 말의 content를 배열로 보낼 수 있다
+ *                  [{ "type": "image_url", "image_url": { "url": "data:image/jpeg;base64,…" } }, { "type": "text", "text": "질문" }]
+ *                사진은 한 장, 앱이 줄여서 보낸다. 서버는 모델에 넘기기만 하고 어디에도 저장하지 않는다. 사진 질문도 한 번으로 센다
  *   답 (v 2):    Workers AI가 보내는 줄을 손대지 않고 그대로 넘긴다(data: {"response":"글 조각"} ... data: [DONE]).
  *                남은 횟수는 머리말로: X-AI-Left: 19 또는 X-AI-Unlimited: 1
  *                (서버가 조각마다 읽고 다시 쓰면 무료 요금제의 요청당 계산 시간 10ms를 넘겨 답이 중간에 끊길 수 있다)
  *   답 (v 없음): 예전 앱용. data: {"t":"글 조각"} ... data: {"left":19} 또는 data: {"unlimited":true} ... data: [DONE]
- *   못 할 때:    { "error": "login" | "limit" | "closed" | "bad" | "server", "scope": "all", "detail": "주인 계정에만: 모델이 낸 오류 글" }
- *                limit + scope "all" = 앱 전체의 하루 무료 양을 다 씀. closed = 아직 이 사람에게 열지 않음
+ *   못 할 때:    { "error": "login" | "limit" | "closed" | "photo" | "bad" | "server", "scope": "all", "detail": "주인 계정에만: 모델이 낸 오류 글" }
+ *                limit + scope "all" = 앱 전체의 하루 무료 양을 다 씀. closed = 아직 이 사람에게 열지 않음. photo = 사진 보내기를 아직 이 사람에게 열지 않음
  *   GET /me      (로그인 확인표는 있어도 되고 없어도 된다) AI 버튼을 보여 줄지 앱이 묻는 곳
- *   답:          { "open": true|false, "signedIn": true|false, "unlimited": true|false, "left": 19, "limit": 20 }
+ *   답:          { "open": true|false, "signedIn": true|false, "unlimited": true|false, "left": 49, "limit": 50, "photo": true|false }
+ *                photo = 사진 단추를 보여 줄지 (로그인한 사람에게만 알려 준다)
  *
  * 이스터에그 게임 '벽 튕기기'의 전체 순위 (앱 쪽은 js/bounce.js). AI 도우미 설정(OPEN_TO, 하루 횟수)과 상관없다
  *   GET  /bounce  (로그인 확인표는 있어도 되고 없어도 된다)
@@ -36,6 +40,7 @@
  *                        답 길이(MAX_TOKENS)를 다 써서 한참 기다린 뒤 답이 잘리거나 빈 채로 온다
  *   ALLOWED_ORIGINS      앱 주소 (쉼표로 여러 개)
  *   OPEN_TO              "all"이면 로그인한 모든 사람, 그 밖의 값이면 주인 계정만 쓸 수 있다 (먼저 써 보기)
+ *   PHOTO_TO             사진 보내기. "all"이면 AI를 쓸 수 있는 모든 사람, 그 밖의 값이면 주인 계정만 (먼저 써 보기)
  *   OWNER_EMAILS         횟수 제한이 없는 구글 계정 이메일 (쉼표로 여러 개). 공개 저장소에 적지 않는다
  */
 import { groupOp, GROUP_STORE, OPS as GROUP_OPS } from './group.js';
@@ -43,7 +48,9 @@ import { groupOp, GROUP_STORE, OPS as GROUP_OPS } from './group.js';
 const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 const MAX_MESSAGES = 16;   // 지시문 1 + 지난 대화 + 이번 질문
-const MAX_CHARS = 24000;   // 한 번에 받는 글의 길이 (지시문 포함)
+const MAX_CHARS = 24000;   // 한 번에 받는 글의 길이 (지시문 포함, 사진은 빼고 센다)
+const MAX_IMAGE = 1500000; // 사진 한 장의 길이 (base64 글자 수, 약 1.1MB). 앱은 긴 변 1280픽셀 JPEG로 줄여 보내서 보통 0.2~0.5MB
+const IMAGE_HEAD = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]/;
 const ROLES = ['system', 'user', 'assistant'];
 
 /* ---------- 로그인 확인 (Firebase 로그인 확인표 = RS256 JWT) ---------- */
@@ -103,6 +110,26 @@ export function isOwner(user, env) {
 }
 
 /* ---------- 받은 말 검사 ---------- */
+// 사진이 붙은 말(마지막 사용자 말만): [{ type: 'image_url', image_url: { url } }, { type: 'text', text }]. 사진 한 장 + 글. 맞으면 깨끗한 사본, 아니면 null
+function cleanParts(parts) {
+  if (!Array.isArray(parts) || !parts.length || parts.length > 2) return null;
+  let text = '', image = null;
+  for (const p of parts) {
+    if (!p || typeof p !== 'object') return null;
+    if (p.type === 'text' && typeof p.text === 'string' && !text) text = p.text;
+    else if (p.type === 'image_url' && p.image_url && typeof p.image_url.url === 'string' && !image) image = p.image_url.url;
+    else return null;
+  }
+  // 글자 하나하나를 보지 않고 앞머리와 길이만 본다: 무료 요금제는 요청마다 계산 시간이 짧다. 틀린 사진은 모델이 거절한다
+  if (!image || image.length > MAX_IMAGE || !IMAGE_HEAD.test(image.slice(0, 40))) return null;
+  const out = [{ type: 'image_url', image_url: { url: image } }];
+  if (text.trim()) out.push({ type: 'text', text });
+  return out;
+}
+// 말 하나의 글 (사진이 붙은 말이면 글 부분만)
+export const textOf = (content) => (typeof content === 'string' ? content : ((content || []).find((p) => p.type === 'text') || {}).text || '');
+// 사진이 붙은 말이 있는지
+export const hasImage = (list) => (list || []).some((m) => Array.isArray(m.content) && m.content.some((p) => p.type === 'image_url'));
 // 모양이 맞으면 깨끗한 사본을, 아니면 null
 export function cleanMessages(list) {
   if (!Array.isArray(list) || !list.length || list.length > MAX_MESSAGES) return null;
@@ -110,10 +137,16 @@ export function cleanMessages(list) {
   const out = [];
   for (let i = 0; i < list.length; i++) {
     const m = list[i];
-    if (!m || !ROLES.includes(m.role) || typeof m.content !== 'string' || !m.content.trim()) return null;
+    if (!m || !ROLES.includes(m.role)) return null;
+    let content = m.content;
+    if (Array.isArray(content)) {
+      if (m.role !== 'user' || i !== list.length - 1) return null; // 사진은 이번 질문에만
+      content = cleanParts(content);
+      if (!content) return null;
+    } else if (typeof content !== 'string' || !content.trim()) return null;
     if (m.role === 'system' && i !== 0) return null;
-    total += m.content.length;
-    out.push({ role: m.role, content: m.content });
+    total += textOf(content).length;
+    out.push({ role: m.role, content });
   }
   if (total > MAX_CHARS || out[out.length - 1].role !== 'user') return null;
   return out;
@@ -326,6 +359,7 @@ export async function handle(request, env, deps, ctx) {
   if (!isMe && (request.method !== 'POST' || url.pathname !== '/chat')) return json({ error: 'not_found' }, 404);
   if (origin && allowed.length && !allowed.includes(origin)) return json({ error: 'origin' }, 403);
   const everyone = String(env.OPEN_TO || '').trim().toLowerCase() === 'all'; // 아니면 주인 계정만
+  const photoAll = String(env.PHOTO_TO || '').trim().toLowerCase() === 'all'; // 사진 보내기. 아니면 주인 계정만
   const auth = request.headers.get('Authorization') || '';
   if (isMe && !auth) return json({ open: everyone, signedIn: false }); // 로그인 전: 버튼을 보여 줄지만 알려 준다
 
@@ -339,14 +373,14 @@ export async function handle(request, env, deps, ctx) {
   // 2) 쓸 수 있는 사람인지: 주인 계정은 언제나, 다른 사람은 OPEN_TO가 "all"일 때만
   const owner = isOwner(user, env);
   const parsed = parseInt(env.DAILY_LIMIT, 10);
-  const limit = Number.isFinite(parsed) && parsed >= 0 ? parsed : 20;
+  const limit = Number.isFinite(parsed) && parsed >= 0 ? parsed : 50;
   const day = new Date(now).toISOString().slice(0, 10);
   const counter = owner ? null : env.COUNTER.get(env.COUNTER.idFromName(user.sub));
   const count = async (op, more) => (await counter.fetch('https://counter/', { method: 'POST', body: JSON.stringify(Object.assign({ op, day, limit }, more)) })).json();
   if (isMe) {
-    if (owner) return json({ open: true, signedIn: true, unlimited: true });
+    if (owner) return json({ open: true, signedIn: true, unlimited: true, photo: true });
     if (!everyone) return json({ open: false, signedIn: true });
-    return json({ open: true, signedIn: true, unlimited: false, left: (await count('peek')).left, limit });
+    return json({ open: true, signedIn: true, unlimited: false, left: (await count('peek')).left, limit, photo: photoAll });
   }
   if (!owner && !everyone) return json({ error: 'closed' }, 403);
 
@@ -355,11 +389,16 @@ export async function handle(request, env, deps, ctx) {
   try { body = await request.json(); } catch (e) { /* 아래에서 거절 */ }
   const messages = cleanMessages(body && body.messages);
   if (!messages) return json({ error: 'bad' }, 400);
+  const photo = hasImage(messages);
+  if (photo && !owner && !photoAll) return json({ error: 'photo' }, 403);
 
   // 4) 하루 횟수: 주인 계정은 세지 않는다
   let left = null, free = false;
   if (counter) {
-    const r = await count('take', { q: await fingerprint(messages[messages.length - 1].content), at: now, again: body.again === true });
+    const lastMsg = messages[messages.length - 1].content;
+    const img = Array.isArray(lastMsg) ? lastMsg.find((p) => p.type === 'image_url') : null;
+    const q = await fingerprint(textOf(lastMsg) + (img ? '\n[사진 ' + img.image_url.url.length + ']' : '')); // 사진은 길이만 지문에 섞는다
+    const r = await count('take', { q, at: now, again: body.again === true });
     if (!r.ok) return json({ error: 'limit' }, 429);
     left = r.left;
     free = r.free === true;
@@ -384,7 +423,7 @@ export async function handle(request, env, deps, ctx) {
     try { answer = await env.AI.run(model, input); fail = null; break; }
     catch (e) {
       fail = e;
-      console.error(JSON.stringify({ at: 'ai.run', mode, error: note(e) })); // Cloudflare 화면의 기록(Logs)에서 볼 수 있다. 사용자의 말은 적지 않는다
+      console.error(JSON.stringify({ at: 'ai.run', mode, photo, error: note(e) })); // Cloudflare 화면의 기록(Logs)에서 볼 수 있다. 사용자의 말과 사진은 적지 않는다
       if (usedUp(e)) break;
     }
   }

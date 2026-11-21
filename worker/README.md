@@ -6,7 +6,7 @@ v3.9부터 이스터에그 게임 '벽 튕기기'(js/bounce.js)의 전체 순위
 
 ## Cloudflare 설정 (Workers Builds)
 - Root directory: `/worker`, Build command: 비움, Deploy command: `npx wrangler deploy`
-- 값(`wrangler.toml`의 `[vars]`): `DAILY_LIMIT`(하루 횟수), `OPEN_TO`(`owner` = 주인 계정만, `all` = 모두), `MODEL`, `MAX_TOKENS`(답의 최대 길이), `THINKING`(`off` = 모델이 답하기 전에 속으로 생각하지 않게. 켜 두면 생각에 답 길이를 다 써서 답이 잘리거나 빈 채로 온다), `ALLOWED_ORIGINS`
+- 값(`wrangler.toml`의 `[vars]`): `DAILY_LIMIT`(하루 횟수), `OPEN_TO`(`owner` = 주인 계정만, `all` = 모두), `PHOTO_TO`(사진 보내기. `owner` = 주인 계정만, `all` = AI를 쓸 수 있는 모두), `MODEL`, `MAX_TOKENS`(답의 최대 길이), `THINKING`(`off` = 모델이 답하기 전에 속으로 생각하지 않게. 켜 두면 생각에 답 길이를 다 써서 답이 잘리거나 빈 채로 온다), `ALLOWED_ORIGINS`
 - 기록: 모델이 오류를 내면 서버가 까닭을 남깁니다(사용자의 말은 남기지 않음). Cloudflare 화면의 Worker > Logs에서 볼 수 있습니다 (`[observability]`)
 - 비밀 값: `OWNER_EMAILS`는 저장소에 적지 않고 Worker의 Settings > Variables and Secrets에 Secret으로 넣습니다 (Builds 안의 빌드용 변수가 아님)
 
