@@ -1,7 +1,8 @@
 /* 이스터에그: 앱 소개의 비밀 입력칸
- * 베타테스트에 피드백을 보내 준 사람이 자기 이름을 넣으면, 그 피드백이 어떤 업데이트에 어떻게 반영됐는지 보여 준다.
+ * 피드백이나 아이디어를 보내 준 사람이 자기 이름을 넣으면, 그것이 어떤 업데이트에 어떻게 반영됐는지 보여 준다.
  * 이름은 소스에 그대로 두지 않고 해시로만 둔다 (공개 저장소에 이름이 남지 않고, 소스를 봐도 비밀 단어가 바로 보이지 않게).
- * 새 피드백을 넣을 때: node tools/egg-key.js 이름  → 나온 값을 KEYS에 넣고 ENTRIES에 내용을 적는다. */
+ * 새 사람을 넣을 때: node tools/egg-key.js 이름 이름만  → 나온 값을 KEYS에 넣고 ENTRIES에 내용을 적는다.
+ * 이름만 넣는 업데이트는 버전 번호를 올리거나 업데이트 소식에 적지 않는다 (사용자 규칙). sw.js CACHE만 올려 배포한다. */
 (function (root) {
   // 이름 다듬기: 띄어쓰기·끝의 '님'·문장부호를 없애고 소문자로
   function norm(s) {
@@ -24,7 +25,7 @@
   }
   const key = (word) => hash('studypromotion:' + norm(word));
 
-  // 피드백 내용 (누구 것인지는 KEYS로만 연결)
+  // 피드백 내용 (누구 것인지는 KEYS로만 연결). idea: 아이디어를 준 사람 (머리말이 '아이디어'로 바뀜)
   const ENTRIES = {
     a: {
       items: [
@@ -49,12 +50,28 @@
         { ver: '2.7', title: '시작 화면', text: '앱을 켜면 폰이 체스판을 한 칸씩 올라가 퀸으로 승급하는 모션이 나와요.' },
       ],
     },
+    d: {
+      idea: true,
+      items: [
+        { ver: '4.0', title: '그룹 스터디', text: '친구들과 그룹을 만들어 서로의 공부 시간과 순위를 보고, 함께 정한 목표를 채우고, 응원을 보내고, 같은 시각에 끝나는 타이머로 함께 집중해요.' },
+      ],
+    },
+    e: {
+      idea: true,
+      items: [
+        { ver: '3.8', title: '벽 튕기기', text: '이 비밀 입력칸에 ‘슛돌이’ 출신 축구 선수의 이름을 넣으면 열리는 공 게임이에요. 막대로 공을 받아 벽에 튕기고 위쪽 골대에 넣어요.' },
+      ],
+    },
   };
   // 이름(성까지 / 이름만) → 내용
   const KEYS = {
     '1an7mm0bmsl': 'a', el4y9uoav9: 'a',
     kc7a3czsdp: 'b', '1l4hadu92ka': 'b',
     bebyavobri: 'c', '1sw0f56sgyk': 'c',
+    q60rs3se95: 'd', '14wfay5lhuq': 'd', // 그룹 스터디 아이디어 (두 사람)
+    '24ut03sxqbl': 'd', '17smttqkuzc': 'd',
+    whtgly8use: 'e', '1hji6d4u5ul': 'e', // 벽 튕기기 아이디어 (두 사람)
+    p74gz7mdp6: 'e', '1mw5maclq0f': 'e',
   };
 
   // 테마 비밀 단어: 넣을 때마다 앱 전체(배경까지) 핑크 테마를 켜고 끈다
@@ -183,7 +200,7 @@
     const who = esc(typed);
     const head = hit.maker
       ? `<h3>만든 사람을 찾았어요</h3><p class="muted small">${who}님은 스터디 프로모션을 만든 사람이에요. 직접 낸 아이디어도 이렇게 들어갔어요.</p>`
-      : `<h3>${who}님, 고마워요!</h3><p class="muted small">베타테스트에서 보내 준 피드백이 이렇게 반영됐어요.</p>`;
+      : `<h3>${who}님, 고마워요!</h3><p class="muted small">${hit.idea ? '보내 준 아이디어가 이렇게 들어갔어요.' : '베타테스트에서 보내 준 피드백이 이렇게 반영됐어요.'}</p>`;
     out.innerHTML = `<div class="pawn-track egg-track" aria-hidden="true">${pawnTrack(100)}</div>${head}` +
       '<ul class="egg-list">' + hit.items.map((it) => `<li><span class="egg-ver">v${esc(it.ver)}</span><div><b>${esc(it.title)}</b><span>${esc(it.text)}</span></div></li>`).join('') + '</ul>';
     return true;

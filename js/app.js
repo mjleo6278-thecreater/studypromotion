@@ -1935,7 +1935,11 @@
     try {
       if (sessionStorage.getItem('studypromotion.updated')) {
         sessionStorage.removeItem('studypromotion.updated');
-        setTimeout(() => toast('새 버전으로 업데이트했어요', { action: '달라진 점', onAction: openNews }), 600);
+        // 버전 번호가 그대로인 배포(이스터에그에 이름만 넣기 같은 조용한 업데이트)는 알리지 않는다.
+        // 지난번에 연 버전은 js/backup.js가 studypromotion.appVersion에 적어 두고, 이 줄이 읽은 뒤에 새 버전으로 고친다.
+        let lastVer = null;
+        try { lastVer = localStorage.getItem('studypromotion.appVersion'); } catch (e) { /* 무시 */ }
+        if (lastVer !== APP_VERSION) setTimeout(() => toast('새 버전으로 업데이트했어요', { action: '달라진 점', onAction: openNews }), 600);
       }
     } catch (e) { /* 무시 */ }
   }

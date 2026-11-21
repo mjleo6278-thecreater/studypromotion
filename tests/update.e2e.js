@@ -31,6 +31,7 @@ const server = http.createServer((req, res) => {
   assert(await page.getAttribute('body', 'data-ver') === '1', '처음 버전 1');
 
   // 새 버전 배포 → 앱으로 돌아오면 확인 → 쓰는 중이 아니면 자동 새로고침
+  await page.evaluate(() => localStorage.setItem('studypromotion.appVersion', '0.9')); // 버전 번호가 바뀌는 배포
   version = 2;
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await page.waitForFunction(() => document.body.dataset.ver === '2', null, { timeout: 15000 });
@@ -48,6 +49,9 @@ const server = http.createServer((req, res) => {
   await page.click('#update-btn');
   await page.waitForFunction(() => document.body.dataset.ver === '3');
   assert(true, '"지금 적용"을 누르면 새 버전(3)');
+  // 버전 번호가 그대로인 배포(이스터에그에 이름만 넣기 등)는 '새 버전' 알림 없이 조용히
+  await page.waitForTimeout(1500);
+  assert(!/새 버전으로 업데이트했어요/.test(await page.textContent('#toast')), '버전 번호가 같으면 업데이트 알림을 띄우지 않음');
   assert(errors.length === 0, '페이지 오류 없음 ' + errors.join(' | '));
   await browser.close(); server.close();
 })().catch((e) => { console.error(e); process.exit(1); });
