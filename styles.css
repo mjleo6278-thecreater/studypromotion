@@ -1023,6 +1023,20 @@ a, .btn.link, .tab.active, .badge { color: var(--accent-text); }
 :root[data-accent="pink"][data-theme="dark"] .pt-sq.dark.passed { background: #5f213a; }
 :root[data-accent="pink"] .lock-screen .lock-sub { color: #ff78ae; }
 
+/* 테마 색: 초록 (v4.2) — 핑크와 같은 방식. 채우기는 원색, 글자는 흰 바탕에서 잘 읽히게 진하게 (대비 6.08:1) */
+:root[data-accent="green"] { --accent: #769656; --accent-soft: #edf1e9; --accent-text: #53693c; --ok: #769656; --done: #769656; --done-soft: #edf1e9; }
+@media (prefers-color-scheme: dark) {
+  :root[data-accent="green"]:not([data-theme="light"]) { --accent-soft: #22291b; --accent-text: #a3c283; --done-soft: #22291b; }
+  :root[data-accent="green"]:not([data-theme="light"]) .pt-sq.passed { background: #354228; }
+  :root[data-accent="green"]:not([data-theme="light"]) .pt-sq.dark.passed { background: #2a3421; }
+}
+:root[data-accent="green"][data-theme="dark"] { --accent-soft: #22291b; --accent-text: #a3c283; --done-soft: #22291b; }
+:root[data-accent="green"] .pt-sq.passed { background: #d6e0cc; }
+:root[data-accent="green"] .pt-sq.dark.passed { background: #bacaaa; }
+:root[data-accent="green"][data-theme="dark"] .pt-sq.passed { background: #354228; }
+:root[data-accent="green"][data-theme="dark"] .pt-sq.dark.passed { background: #2a3421; }
+:root[data-accent="green"] .lock-screen .lock-sub { color: #a3c283; }
+
 .accent-field { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
 .accent-label { font-size: 13px; color: var(--muted); }
 .accent-picks { display: inline-flex; gap: 6px; }
@@ -1282,6 +1296,60 @@ button, input, select, textarea, optgroup { font-family: inherit; }
 :root[data-skin="pink"][data-theme="dark"] .sp-sq.d { fill: #2c0f1f; }
 :root[data-skin="pink"] .pt-piece.queen { fill: var(--accent); }
 
+/* 비밀 테마: 전체 초록 (v4.2, 이스터에그 비밀 단어로 켜고 끔) — 전체 핑크와 같은 짜임 */
+:root[data-skin="green"] {
+  --bg: #f3f6f0; --surface: #fcfcfb; --text: #242e1a; --muted: #69765c; --line: #dee6d6;
+  --ink: #53693c; --ink-text: #ffffff;
+  --accent: #769656; --accent-soft: #e4eadd; --accent-text: #53693c;
+  --ok: #769656; --done: #769656; --done-soft: #e4eadd; --danger: #d9363e;
+  --board: #f8faf7; --dot: #d3ddc9; --card: #fcfcfb;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="green"]:not([data-theme="light"]) {
+    --bg: #0f120c; --surface: #1a1f15; --text: #f1f4ee; --muted: #91ab78; --line: #28311f;
+    --ink: #99b180; --ink-text: #0f120c;
+    --accent: #8ba66f; --accent-soft: #262e1e; --accent-text: #a3c283;
+    --ok: #8ba66f; --done: #8ba66f; --done-soft: #262e1e; --danger: #ff8a8a;
+    --board: #11150e; --dot: #2d3722; --card: #1a1f15;
+  }
+}
+:root[data-skin="green"][data-theme="dark"] {
+  --bg: #0f120c; --surface: #1a1f15; --text: #f1f4ee; --muted: #91ab78; --line: #28311f;
+  --ink: #99b180; --ink-text: #0f120c;
+  --accent: #8ba66f; --accent-soft: #262e1e; --accent-text: #a3c283;
+  --ok: #8ba66f; --done: #8ba66f; --done-soft: #262e1e; --danger: #ff8a8a;
+  --board: #11150e; --dot: #2d3722; --card: #1a1f15;
+}
+:root[data-skin="green"] .brand-mark { background: var(--ink) !important; box-shadow: none !important; }
+@media (hover: hover) { :root[data-skin="green"]:where(:not(.touch)) .btn.primary:hover { background: var(--accent); border-color: var(--accent); } }
+:root[data-skin="green"] .pt-sq { background: #ecf0e7; }
+:root[data-skin="green"] .pt-sq.dark { background: #d9e2d0; }
+:root[data-skin="green"] .pt-sq.passed { background: #c5d3b8; }
+:root[data-skin="green"] .pt-sq.dark.passed { background: #b0c29d; }
+:root[data-skin="green"] .pt-piece { fill: #242e1a; stroke: #fff; }
+:root[data-skin="green"] .board-viewport { --sq: rgba(118, 150, 86, 0.05); }
+:root[data-skin="green"] .lock-screen { background: #13180e; }
+:root[data-skin="green"] .lock-screen .lock-sub { color: #a3c283; }
+:root[data-skin="green"] .sp-sq { fill: #ecf0e7; }
+:root[data-skin="green"] .sp-sq.d { fill: #d9e2d0; }
+@media (prefers-color-scheme: dark) {
+  :root[data-skin="green"]:not([data-theme="light"]) .pt-sq { background: #262e1e; }
+  :root[data-skin="green"]:not([data-theme="light"]) .pt-sq.dark { background: #1f2518; }
+  :root[data-skin="green"]:not([data-theme="light"]) .pt-sq.passed { background: #425332; }
+  :root[data-skin="green"]:not([data-theme="light"]) .pt-sq.dark.passed { background: #37452a; }
+  :root[data-skin="green"]:not([data-theme="light"]) .pt-piece { fill: #f1f4ee; stroke: #0f120c; }
+  :root[data-skin="green"]:not([data-theme="light"]) .sp-sq { fill: #262e1e; }
+  :root[data-skin="green"]:not([data-theme="light"]) .sp-sq.d { fill: #1f2518; }
+}
+:root[data-skin="green"][data-theme="dark"] .pt-sq { background: #262e1e; }
+:root[data-skin="green"][data-theme="dark"] .pt-sq.dark { background: #1f2518; }
+:root[data-skin="green"][data-theme="dark"] .pt-sq.passed { background: #425332; }
+:root[data-skin="green"][data-theme="dark"] .pt-sq.dark.passed { background: #37452a; }
+:root[data-skin="green"][data-theme="dark"] .pt-piece { fill: #f1f4ee; stroke: #0f120c; }
+:root[data-skin="green"][data-theme="dark"] .sp-sq { fill: #262e1e; }
+:root[data-skin="green"][data-theme="dark"] .sp-sq.d { fill: #1f2518; }
+:root[data-skin="green"] .pt-piece.queen { fill: var(--accent); }
+
 /* 날짜 고르기: 달력 시트 */
 .date-btn .sel-label.ph { color: var(--muted); }
 .ui-back.pop .ui-date { min-width: 300px !important; }
@@ -1404,6 +1472,8 @@ input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-o
 :root[data-skin="pink"] .accent-field { flex-wrap: wrap; }
 :root[data-skin="pink"] .accent-picks { opacity: .4; pointer-events: none; }
 :root[data-skin="pink"] .accent-field::after { content: '지금은 비밀 테마(전체 핑크)가 켜져 있어요. 비밀 단어를 한 번 더 넣으면 원래대로 돌아와요.'; flex-basis: 100%; font-size: 12px; color: var(--muted); margin-top: 6px; word-break: keep-all; }
+:root[data-skin="green"] .accent-picks { opacity: .4; pointer-events: none; }
+:root[data-skin="green"] .accent-field::after { content: '지금은 비밀 테마(전체 초록)가 켜져 있어요. 비밀 단어를 한 번 더 넣으면 원래대로 돌아와요.'; flex-basis: 100%; font-size: 12px; color: var(--muted); margin-top: 6px; word-break: keep-all; }
 /* 펼치기(여러 장 한 번에 추가): 브라우저 기본 ▶ 대신 앱 모양 꺾쇠 */
 .bulk summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--accent-text, var(--accent)); font-weight: 600; }
 .bulk summary::-webkit-details-marker { display: none; }

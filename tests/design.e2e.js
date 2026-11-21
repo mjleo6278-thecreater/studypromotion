@@ -95,6 +95,45 @@ const url = process.env.APP_URL || 'file://' + path.resolve(__dirname, '../index
   await page.press('#egg-input', 'Enter');
   assert(!(await page.evaluate(() => document.documentElement.dataset.skin)), '한 번 더 넣으면 원래 테마');
 
+  // 비밀 단어로 전체 초록 테마 (v4.2). 실제 단어는 저장소에 남기지 않으려고 테스트용 단어를 잠시 넣는다
+  const greenWord = () => page.evaluate(() => { const E = App.egg; E.SKIN_KEYS[E.key('초록테스트')] = 'green'; });
+  const skinNow = () => page.evaluate(() => document.documentElement.dataset.skin || '');
+  const barColor = () => page.evaluate(() => document.querySelector('meta[name="theme-color"]').content);
+  await greenWord();
+  await page.fill('#egg-input', '초록 테스트');
+  await page.press('#egg-input', 'Enter');
+  assert((await skinNow()) === 'green', '비밀 단어로 초록 테마 켜짐');
+  await page.waitForTimeout(800);
+  const gbg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  assert(gbg === 'rgb(243, 246, 240)', '배경까지 초록: ' + gbg);
+  assert((await page.textContent('#egg-out')).includes('초록 테마가 켜졌어요') && (await page.textContent('#egg-out')).includes('초록으로 바뀌었어요'), '켜짐 안내(초록)');
+  assert((await barColor()) === '#769656', '폰 상단 바도 초록');
+  await page.reload();
+  assert((await skinNow()) === 'green' && (await barColor()) === '#769656', '다시 열어도 초록 유지(상단 바 포함)');
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  const gdark = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  assert(gdark === 'rgb(15, 18, 12)', '어두운 화면도 초록빛: ' + gdark);
+  await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+  // 설정의 테마 색은 잠기고 안내가 붙는다
+  await page.goto(url + '#account');
+  assert(await page.$eval('#accent-picks', (el) => getComputedStyle(el).pointerEvents === 'none'), '전체 초록일 땐 테마 색 고르기 잠김');
+  assert((await page.$eval('.accent-field', (el) => getComputedStyle(el, '::after').content)).includes('전체 초록'), '전체 초록 안내');
+  // 초록이 켜진 채로 핑크 단어를 넣으면 핑크로 바뀐다
+  await page.goto(url + '#about');
+  await page.fill('#egg-input', '전교회장');
+  await page.press('#egg-input', 'Enter');
+  assert((await skinNow()) === 'pink' && (await barColor()) === '#ff5c9a', '초록 → 핑크로 바뀜');
+  await page.fill('#egg-input', '전교회장');
+  await page.press('#egg-input', 'Enter');
+  assert(!(await skinNow()) && (await barColor()) === '#0a0a0a', '핑크 끄면 원래 테마');
+  await greenWord();
+  await page.fill('#egg-input', '초록테스트');
+  await page.press('#egg-input', 'Enter');
+  assert((await skinNow()) === 'green', '다시 초록');
+  await page.fill('#egg-input', '초록테스트');
+  await page.press('#egg-input', 'Enter');
+  assert(!(await skinNow()) && (await page.textContent('#egg-out')).includes('초록 테마가 다시 켜져요'), '한 번 더 넣으면 원래 테마(초록 안내)');
+
   // 시작 화면 (?splash로 강제)
   await page.goto(url.replace(/index\.html$/, 'index.html?splash'));
   assert(await page.isVisible('#splash'), '시작 화면 표시');

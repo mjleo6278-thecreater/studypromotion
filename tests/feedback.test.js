@@ -142,7 +142,30 @@ test('이스터에그: 해시가 바뀌지 않는다 (이미 넣어 둔 이름�
   assert.strictEqual(Egg.key('스터디프로모션'), 'cmbjycfyzq');
   assert.strictEqual(Egg.key('체크메이트'), 'w6myrxs27j');
   assert.strictEqual(Egg.key('체크 메이트 님'), 'w6myrxs27j');
-  assert.strictEqual(Object.keys(Egg.KEYS).length, 6); // 세 사람 × (성까지 / 이름만)
+  assert.strictEqual(Object.keys(Egg.KEYS).length, 14); // 일곱 사람 × (성까지 / 이름만)
+});
+
+test('이스터에그: 아이디어를 준 사람은 아이디어 몫으로 보이고, 다른 비밀 단어와 겹치지 않는다', () => {
+  Egg.KEYS[Egg.key('아이디어님')] = 'd';
+  try {
+    const hit = Egg.find('아이디어 님');
+    assert.ok(hit && hit.idea && !hit.maker && hit.items.some((it) => it.ver === '4.0'));
+  } finally { delete Egg.KEYS[Egg.key('아이디어님')]; }
+  assert.ok(Egg.ENTRIES.e.idea && Egg.ENTRIES.e.items.some((it) => it.ver === '3.8'));
+  assert.ok(!Egg.ENTRIES.a.idea && !Egg.ENTRIES.b.idea); // 베타테스트 피드백은 그대로
+  // 테마 비밀 단어(핑크·초록)마다 안내 이름과 상단 바 색이 있다
+  assert.deepStrictEqual([...new Set(Object.values(Egg.SKIN_KEYS))].sort(), ['green', 'pink']);
+  for (const s of Object.values(Egg.SKIN_KEYS)) assert.ok(Egg.SKINS[s] && Egg.SKINS[s].name && Egg.SKINS[s].to && /^#[0-9a-f]{6}$/.test(Egg.SKINS[s].bar), s);
+  for (const k of Object.keys(Egg.SKIN_KEYS)) assert.ok(!Egg.VIDEO_KEYS[k] && !Egg.GAME_KEYS[k], k);
+  // 이름 비밀 단어는 테마·영상·게임 단어와 겹치지 않는다 (겹치면 이름 대신 다른 것이 열림)
+  for (const k of Object.keys(Egg.KEYS)) assert.ok(!Egg.SKIN_KEYS[k] && !Egg.VIDEO_KEYS[k] && !Egg.GAME_KEYS[k], k);
+  // 두 사람이 같은 아이디어를 냈으면 같은 내용을 가리킨다
+  const count = (id) => Object.values(Egg.KEYS).filter((v) => v === id).length;
+  assert.strictEqual(count('d'), 2);
+  assert.strictEqual(count('f'), 2); // 그룹 스터디를 같이 낸 사람 중 초록 테마까지 부탁한 사람은 따로
+  assert.ok(Egg.ENTRIES.f.idea && ['4.0', '4.2'].every((v) => Egg.ENTRIES.f.items.some((it) => it.ver === v)));
+  assert.deepStrictEqual(Egg.ENTRIES.f.items[0], Egg.ENTRIES.d.items[0]); // 그룹 스터디 내용은 같게
+  assert.strictEqual(count('e'), 4);
 });
 
 test('이스터에그: 소스에 이름이 그대로 들어 있지 않다', () => {

@@ -55,13 +55,27 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   assert(await accentNow() === '#ff3d8b', '어두운 화면에서도 핑크');
   assert(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim()) === '#ff78ae', '어두운 화면 글자용 핑크');
   await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+  // 초록 (v4.2)
+  await page.click('[data-accent-pick="green"]');
+  assert(await page.evaluate(() => document.documentElement.dataset.accent) === 'green', '초록을 고르면 data-accent=green');
+  assert(await accentNow() === '#769656', '포인트 색이 초록');
+  assert((await toastText()).includes('초록'), '테마 색 알림: 초록');
+  assert(await page.$$eval('[data-accent-pick]', (bs) => bs.filter((b) => b.getAttribute('aria-checked') === 'true').map((b) => b.dataset.accentPick).join()) === 'green', '초록 하나만 선택됨으로 표시');
+  await page.reload();
+  assert(await page.evaluate(() => document.documentElement.dataset.accent) === 'green', '다시 열어도 초록 유지');
+  assert(await page.$eval('[data-accent-pick="green"]', (b) => b.classList.contains('active')), '다시 열어도 초록 버튼 선택');
+  assert(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim()) === '#53693c', '밝은 화면 글자용 초록');
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  assert(await accentNow() === '#769656', '어두운 화면에서도 초록');
+  assert(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim()) === '#a3c283', '어두운 화면 글자용 초록');
+  await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
   await page.click('[data-accent-pick="teal"]');
   assert(await page.evaluate(() => !document.documentElement.hasAttribute('data-accent')), '청록으로 되돌리기');
   assert(await accentNow() === '#04becd', '포인트 색이 다시 청록');
 
   // 3) 이스터에그 (실제 이름은 저장소에 남기지 않으려고 테스트용 단어를 잠시 넣는다)
   await page.goto(base + '#about');
-  await page.evaluate(() => { const E = App.egg; E.KEYS[E.key('테스트이름')] = 'a'; E.KEYS[E.key('다른이름')] = 'b'; E.KEYS[E.key('만든이')] = 'c'; });
+  await page.evaluate(() => { const E = App.egg; E.KEYS[E.key('테스트이름')] = 'a'; E.KEYS[E.key('다른이름')] = 'b'; E.KEYS[E.key('만든이')] = 'c'; E.KEYS[E.key('아이디어님')] = 'd'; E.KEYS[E.key('게임아이디어')] = 'e'; });
   await page.fill('#egg-input', '홍길동');
   await page.click('#egg-form button');
   assert(await page.$eval('#egg-out', (o) => !o.hidden && o.classList.contains('miss')), '모르는 단어는 아무 일도 없음');
@@ -73,6 +87,14 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   await page.press('#egg-input', 'Enter');
   egg = await page.$eval('#egg-out', (o) => o.textContent);
   assert(egg.includes('홈으로'), '다른 사람 이름이면 그 사람 피드백');
+  await page.fill('#egg-input', '아이디어님');
+  await page.press('#egg-input', 'Enter');
+  egg = await page.$eval('#egg-out', (o) => ({ hit: o.classList.contains('hit'), text: o.textContent }));
+  assert(egg.hit && egg.text.includes('아이디어님, 고마워요') && egg.text.includes('아이디어가 이렇게 들어갔어요') && egg.text.includes('그룹 스터디') && egg.text.includes('v4.0') && !egg.text.includes('베타테스트'), '아이디어를 준 사람 → 아이디어 몫으로 보임');
+  await page.fill('#egg-input', '게임아이디어');
+  await page.press('#egg-input', 'Enter');
+  egg = await page.$eval('#egg-out', (o) => ({ text: o.textContent, game: o.classList.contains('egg-game') }));
+  assert(egg.text.includes('벽 튕기기') && egg.text.includes('v3.8') && !egg.game && await page.evaluate(() => !document.querySelector('.bounce:not([hidden]), #bounce:not([hidden])')), '게임 아이디어를 준 사람은 게임이 열리지 않고 고마움 칸');
   await page.fill('#egg-input', '<b>만든이</b>');
   await page.press('#egg-input', 'Enter');
   assert(await page.$eval('#egg-out', (o) => o.classList.contains('miss')), '태그가 섞인 입력은 통과하지 않음');
