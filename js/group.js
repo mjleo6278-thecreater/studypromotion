@@ -206,6 +206,10 @@
     origin: '앱 주소에서만 쓸 수 있어요',
     server: '서버에 문제가 있어요. 잠시 뒤에 다시 해 주세요',
     bad: '요청을 처리하지 못했어요',
+    chatoff: '리더가 채팅을 꺼 두었어요',
+    fast: '조금 천천히 보내 주세요',
+    daymax: '오늘은 메시지를 더 보낼 수 없어요 (하루 300개)',
+    gone: '이미 지워진 메시지예요',
   };
   const errText = (code) => ERR[code] || ERR.server;
 
@@ -217,11 +221,13 @@
     if (!s.groups.some((g) => g.id === ui.cur)) { ui.cur = s.groups.length ? s.groups[0].id : null; saveUI(); }
     notice();
     paint();
+    if (root.GroupChat) root.GroupChat.onState(s); // 그룹 채팅 (js/groupchat.js): 새 메시지 점, 열어 둔 창
   }
   function forgetState() {
     S = null; sAt = 0; sUid = null; failed = null; sentSig = null;
     lsDel(CACHE_KEY);
     paint();
+    if (root.GroupChat) root.GroupChat.onState(null);
   }
 
   // 보낼 것: 날별 공부 시간과 공부 중 표시
@@ -342,6 +348,7 @@
     return parts.join(' · ');
   }
   const focusOK = () => !root.Features || root.Features.on('focus'); // 함께 집중은 집중 타이머로 한다
+  const chatFeat = () => !root.Features || root.Features.on('grchat'); // 그룹 채팅 (js/groupchat.js)
   const roomOf = (g, id, now) => (g && g.room && g.room.end > now && g.room.ms.includes(id) ? g.room : null);
   const meLive = () => !!liveNow();
 
@@ -393,7 +400,8 @@
     if (!s.groups.length) return note + emptyHTML(s);
     const g = curGroup(), ctx = ctxNow(), sm = summary(g, ctx);
     const chips = s.groups.length > 1 ? `<div class="gr-switch" role="tablist" aria-label="그룹 고르기">${s.groups.map((x) => `<button type="button" class="chip${x.id === g.id ? ' active' : ''}" role="tab" aria-selected="${x.id === g.id}" data-gr-pick="${esc(x.id)}">${esc(x.name)}</button>`).join('')}</div>` : '';
-    return note + chips + heroHTML(g, sm, ctx) + goalsHTML(g, sm) + rankHTML(g, sm) + gridHTML(g, sm, ctx) + cheersHTML(g, ctx) + mineHTML(s, g);
+    const chat = root.GroupChat ? root.GroupChat.cardHTML(g) : ''; // 그룹 채팅 칸 (js/groupchat.js)
+    return note + chips + heroHTML(g, sm, ctx) + chat + goalsHTML(g, sm) + rankHTML(g, sm) + gridHTML(g, sm, ctx) + cheersHTML(g, ctx) + mineHTML(s, g);
   }
   function emptyHTML(s) {
     return `<div class="panel gr-empty">${artHTML()}<h2>친구들과 같이 공부해요</h2>
@@ -402,9 +410,10 @@
         <li><b>지금 공부 중</b><span>누가 무슨 과목을 공부하고 있는지 바로 보여요</span></li>
         <li><b>함께 정한 목표</b><span>한 사람당 하루 목표와 이번 주에 다 같이 채울 시간을 정해요</span></li>
         <li><b>함께 집중</b><span>같은 시각에 끝나는 집중 타이머를 같이 켜요</span></li>
+        ${chatFeat() ? '<li><b>그룹 채팅</b><span>그룹 사람끼리 글로 이야기하고, 빠른 말을 눌러 바로 보내요</span></li>' : ''}
       </ul>
       <div class="btn-row left"><button class="btn primary" type="button" data-gr="create">그룹 만들기</button><button class="btn" type="button" data-gr="join">초대 코드로 들어가기</button></div>
-      <p class="muted small gr-privacy">그룹 사람들에게는 내가 정한 별명${s.me && s.me.n ? `(<b>${esc(s.me.n)}</b>)` : ''}과 날마다 공부한 시간, 공부 중 표시만 보여요. 이메일·계정 이름·할 일·시험 범위는 보이지 않아요.</p></div>`;
+      <p class="muted small gr-privacy">그룹 사람들에게는 내가 정한 별명${s.me && s.me.n ? `(<b>${esc(s.me.n)}</b>)` : ''}과 날마다 공부한 시간, 공부 중 표시${chatFeat() ? ', 내가 보낸 채팅' : ''}만 보여요. 이메일·계정 이름·할 일·시험 범위는 보이지 않아요.</p></div>`;
   }
   function heroHTML(g, sm, ctx) {
     const lead = memberOf(g, g.lead);
@@ -519,7 +528,7 @@
     return `<div class="panel gr-mine">
       <div class="gr-mine-row"><span class="muted small">내 별명</span><b>${esc(s.me.n || '')}</b><button class="btn link inline" type="button" data-gr="nick">바꾸기</button></div>
       <label class="check-field"><input type="checkbox" id="gr-sub"${sub ? ' checked' : ''}> 공부 중일 때 과목 이름도 보이기</label>
-      <p class="muted small gr-privacy">그룹 사람들에게는 별명과 날마다 공부한 시간, 공부 중 표시만 보여요. 이메일·계정 이름·할 일·시험 범위는 보이지 않아요.</p>
+      <p class="muted small gr-privacy">그룹 사람들에게는 별명과 날마다 공부한 시간, 공부 중 표시${chatFeat() ? ', 내가 보낸 채팅' : ''}만 보여요. 이메일·계정 이름·할 일·시험 범위는 보이지 않아요.</p>
       <button class="btn link danger" type="button" data-gr="leave">${esc(g.name)} 나가기</button>
     </div>`;
   }
@@ -541,7 +550,8 @@
     $('#h-group-title').textContent = g.name;
     $('#h-group').innerHTML = `<p class="gr-home-sub muted small">${bits.join(' · ')}</p>
       <ol class="gr-mini">${top.map((x) => `<li${x.m.id === S.me.id ? ' class="me"' : ''}><span class="gr-rank${x.rank === 1 && x.today > 0 ? ' first' : ''}">${x.rank}</span>${av(x.m, { cls: 'sm', live: x.live, crown: goal.day && x.today >= goal.day })}<b>${esc(x.m.n)}</b><span class="gr-min">${fmt(x.today)}</span></li>`).join('')}</ol>
-      ${r ? `<div class="gr-room mini${r.ms.includes(S.me.id) ? ' in' : ''}"><span>${ic('timer')}<b>함께 집중</b> ${Math.max(1, Math.ceil((r.end - ctx.now) / MIN))}분 남음 · ${r.ms.length}명</span>${r.ms.includes(S.me.id) || !focusOK() ? '' : `<button class="btn primary sm" type="button" data-gr-home="room-join" data-g="${esc(g.id)}">같이 하기</button>`}</div>` : ''}`;
+      ${r ? `<div class="gr-room mini${r.ms.includes(S.me.id) ? ' in' : ''}"><span>${ic('timer')}<b>함께 집중</b> ${Math.max(1, Math.ceil((r.end - ctx.now) / MIN))}분 남음 · ${r.ms.length}명</span>${r.ms.includes(S.me.id) || !focusOK() ? '' : `<button class="btn primary sm" type="button" data-gr-home="room-join" data-g="${esc(g.id)}">같이 하기</button>`}</div>` : ''}
+      ${root.GroupChat ? root.GroupChat.homeHTML(g) : ''}`;
   }
 
   /* ---------- 입력 창 (만들기·들어가기·별명·목표) ---------- */
@@ -802,13 +812,14 @@
   async function openMenu(gid) {
     const g = findGroup(gid);
     if (!g) return;
-    const lead = g.lead === S.me.id;
+    const lead = g.lead === S.me.id, chatOff = !!(g.chat && g.chat.on === false);
     const pick = await choose(g.name, [
       { value: 'invite', label: '초대하기', hint: `초대 코드 ${g.code}` },
       lead ? { value: 'rename', label: '그룹 이름 바꾸기' } : null,
       lead ? { value: 'goal', label: '목표 바꾸기', hint: '한 사람당 하루 목표 · 다 같이 주간 목표' } : null,
       lead ? { value: 'code', label: '초대 코드 새로 만들기', hint: '예전 코드로는 더 못 들어와요' } : null,
       lead && g.ban ? { value: 'unban', label: '내보낸 사람 다시 받기', hint: `${g.ban}명이 다시 들어올 수 있게 해요` } : null,
+      lead && chatFeat() && root.GroupChat ? (chatOff ? { value: 'chat-on', label: '채팅 켜기', hint: '그룹 사람들이 다시 이야기할 수 있어요' } : { value: 'chat-off', label: '채팅 끄기', hint: '아무도 보내지 못하고 지난 메시지도 숨어요' }) : null,
       { value: 'nick', label: '내 별명 바꾸기', hint: S.me.n || '' },
       { value: 'leave', label: '그룹 나가기' },
       lead ? { value: 'drop', label: '그룹 없애기', hint: '모든 사람이 그룹에서 빠지고 되돌릴 수 없어요' } : null,
@@ -824,6 +835,7 @@
         if (await act({ op: 'code', g: gid }, '초대 코드를 새로 만들었어요')) openInvite(gid);
       }
     } else if (pick === 'unban') await act({ op: 'unban', g: gid }, '내보낸 사람도 다시 들어올 수 있어요');
+    else if (pick === 'chat-on' || pick === 'chat-off') await root.GroupChat.setOn(gid, pick === 'chat-on');
     else if (pick === 'drop') {
       if (await ask(`‘${g.name}’ 그룹을 없앨까요?\n${g.ms.length}명 모두 그룹에서 빠지고 되돌릴 수 없어요. 각자의 공부 기록은 그대로예요.`, { ok: '그룹 없애기', danger: true })) await act({ op: 'drop', g: gid }, '그룹을 없앴어요');
     }
@@ -997,5 +1009,10 @@
     // 시험용
     get state() { return state(); },
     payload,
+    // 그룹 채팅(js/groupchat.js)이 쓰는 안쪽 도구
+    _: {
+      call, act, pull, paint, errText, state, findGroup, memberOf, av, liveNow, focusOK, joinRoom, copyText, user, remote, canTalk,
+      pick: (gid) => { if (gid && ui.cur !== gid) { ui.cur = gid; saveUI(); } },
+    },
   };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -25,6 +25,7 @@
     { id: 'plcarry', kind: 'sub', parent: 'plan', group: '플래너 안', name: '어제 못 끝낸 일 묻기', desc: '그날 처음 열 때 오늘로 옮길지 물어봐요' },
     { id: 'plslot', kind: 'sub', parent: 'plan', group: '플래너 안', name: '장소·시간 칸', desc: '할 일 왼쪽에서 집 · 독서실 · 야자 고르기' },
     { id: 'plreview', kind: 'sub', parent: 'plan', group: '플래너 안', name: '복습 줄', desc: '할 일 맨 위 선생님 이름, 누르면 체크' },
+    { id: 'grchat', kind: 'sub', parent: 'group', group: '그룹 안', name: '그룹 채팅', desc: '그룹 사람끼리 글로 이야기 · 빠른 말' },
     { id: 'ai', kind: 'sub', group: '어디서나', name: 'AI 도우미 세컨드', desc: '오른쪽 아래 둥근 버튼' },
     { id: 'home-sum', kind: 'home', name: '오늘 요약', desc: '공부 시간 · 할 일 · 연속 학습일', always: true },
     { id: 'home-group', kind: 'home', name: '우리 그룹', desc: '지금 공부 중인 친구 · 오늘 순위 · 함께 집중', needs: 'group' },

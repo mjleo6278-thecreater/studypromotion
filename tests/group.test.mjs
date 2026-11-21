@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handle, Counter, forgetKeys } from '../worker/src/index.js';
-import { groupOp, cleanNick, cleanGroupName, cleanCode, cleanGoal, cleanDays, cleanLive, cleanSubject, liveOn, LIMITS, CHEER_GAP, GROUP_STORE } from '../worker/src/group.js';
+import { groupOp, cleanNick, cleanGroupName, cleanCode, cleanGoal, cleanDays, cleanLive, cleanSubject, cleanMsg, liveOn, LIMITS, CHEER_GAP, GROUP_STORE, CHAT } from '../worker/src/group.js';
 
 const PROJECT = 'demo-project';
 const ORIGIN = 'https://app.example';
@@ -401,4 +401,197 @@ test('저장소 처리(groupOp)만 따로: 이상한 요청은 거절', async ()
   const s = await groupOp(st, { op: 'group-get', id: 'ffffffffffffffff', at: NOW, b: [] });
   assert.equal(s.ok, true);
   assert.deepEqual(await groupOp(st, { op: 'group-leave', id: 'ffffffffffffffff', at: NOW, b: { g: '../../x' } }), { error: 'nogroup' });
+});
+
+/* ===================== 그룹 채팅 (v4.1) ===================== */
+test('채팅 글 검사: 줄바꿈은 남기고 보이지 않는 글자는 빼고, 200자·8줄까지', () => {
+  assert.equal(cleanMsg('  안녕  '), '안녕');
+  assert.equal(cleanMsg('a\r\nb'), 'a\nb');
+  assert.equal(cleanMsg('a\n\n\n\nb'), 'a\n\nb', '빈 줄은 하나까지');
+  assert.equal(cleanMsg('a  \t b'), 'a b');
+  assert.equal(cleanMsg('줄 끝 빈칸   \n  다음 줄'), '줄 끝 빈칸\n다음 줄');
+  assert.equal(cleanMsg('a​b‮c⁦d﻿'), 'abcd', '보이지 않는 글자·방향 바꾸는 글자');
+  assert.equal(cleanMsg('\u0007삐'), '삐');
+  assert.equal(cleanMsg('👨‍👩‍👧 가족'), '👨‍👩‍👧 가족', '이모지를 잇는 글자(ZWJ)는 남김');
+  assert.equal(cleanMsg('가'.repeat(CHAT.len)), '가'.repeat(CHAT.len));
+  assert.equal(cleanMsg('가'.repeat(CHAT.len + 1)), null);
+  assert.equal(cleanMsg('😀'.repeat(CHAT.len)), '😀'.repeat(CHAT.len), '이모지 하나는 한 글자');
+  assert.equal(cleanMsg(Array(CHAT.lines).fill('줄').join('\n')).split('\n').length, CHAT.lines);
+  assert.equal(cleanMsg(Array(CHAT.lines + 1).fill('줄').join('\n')), null);
+  for (const v of ['', '   ', '\n\n', '​', null, undefined, 3, {}, ['a']]) assert.equal(cleanMsg(v), null, JSON.stringify(v));
+});
+
+test('채팅: 보내기·받기, since 번호 뒤 것만, 보낸 사람에게만 앱 번호, 그룹 보기에 새 메시지 번호와 미리 보기', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob', 'cat']);
+  w.now += MIN;
+  const a = await w.ok('amy', { op: 'say', g: gid, t: '  오늘 8시에 같이 하자  ', c: 'abc123', since: 0 });
+  assert.equal(a.groups, undefined, '채팅 답은 가볍게: 그룹 보기는 없음');
+  assert.equal(a.chat.on, true);
+  assert.equal(a.chat.full, true);
+  const mine = a.chat.ms.find((x) => x.t);
+  assert.equal(mine.t, '오늘 8시에 같이 하자');
+  assert.equal(mine.c, 'abc123', '보낸 사람은 앱 번호로 자기 메시지를 알아본다');
+  assert.equal(mine.n, 'AMY');
+  assert.deepEqual(a.chat.ms.filter((x) => x.k).map((x) => [x.k, x.n]), [['in', 'BOB'], ['in', 'CAT']], '들어온 사람은 자동 소식');
+  const b0 = await w.ok('bob', { op: 'chat', g: gid, since: 0 });
+  const seenByBob = b0.chat.ms.find((x) => x.t);
+  assert.equal(seenByBob.c, undefined, '다른 사람에게는 앱 번호가 안 감');
+  assert.equal(seenByBob.f, mine.f);
+  const v1 = b0.chat.v;
+  assert.deepEqual((await w.ok('bob', { op: 'chat', g: gid, since: v1 })).chat.ms, [], '새것이 없으면 빈 목록');
+  w.now += 2000;
+  await w.ok('cat', { op: 'say', g: gid, t: '좋아 ☕', since: 0 });
+  const b1 = await w.ok('bob', { op: 'chat', g: gid, since: v1 });
+  assert.equal(b1.chat.full, false);
+  assert.deepEqual(b1.chat.ms.map((x) => x.t), ['좋아 ☕'], 'since 뒤에 생긴 것만');
+  assert.equal((await w.ok('bob', { op: 'chat', g: gid, since: 9999 })).chat.full, true, '이상한 since면 전부');
+  // 그룹 보기의 요약: 다른 사람이 보낸 메시지 번호(내 것과 자동 소식은 빼고), 마지막 두 메시지
+  const g = groupOf(await w.ok('bob'), gid);
+  assert.equal(g.chat.on, true);
+  assert.equal(g.chat.v, b1.chat.v);
+  assert.equal(g.chat.nu.length, 2);
+  assert.deepEqual(g.chat.nu.map((x) => x[1]), [mine.f, groupOf(await w.ok('cat'), gid).ms.find((m) => m.n === 'CAT').id], '[번호, 보낸 사람] 짝');
+  assert.deepEqual(g.chat.tail.map((x) => x.t), ['오늘 8시에 같이 하자', '좋아 ☕']);
+  assert.equal(groupOf(await w.ok('amy'), gid).chat.nu.length, 1, '내가 보낸 것은 새 메시지가 아님');
+  // 같은 앱 번호로 다시 보내면 (답을 못 받아 다시 보낸 경우) 한 번만 들어간다
+  w.now += 2000;
+  await w.ok('amy', { op: 'say', g: gid, t: '오늘 8시에 같이 하자', c: 'abc123', since: 0 });
+  assert.equal((await w.ok('bob', { op: 'chat', g: gid, since: 0 })).chat.ms.filter((x) => x.t === '오늘 8시에 같이 하자').length, 1);
+  // 그룹에 없는 사람, 이상한 글
+  await w.err('dan', { op: 'chat', g: gid, since: 0 }, 'nogroup');
+  await w.err('dan', { op: 'say', g: gid, t: '안녕' }, 'nogroup');
+  w.now += 2000;
+  await w.err('amy', { op: 'say', g: gid, t: '   ' }, 'bad');
+  await w.err('amy', { op: 'say', g: gid, t: '가'.repeat(201) }, 'bad');
+  await w.err('amy', { op: 'say', g: gid, t: { x: 1 } }, 'bad');
+});
+
+test('채팅: 새로 들어온 사람은 들어온 뒤부터, 나간·내보내진 사람은 못 봄, 나가면 자동 소식', async () => {
+  const w = world();
+  const { gid, code } = await party(w, ['amy', 'bob', 'cat']);
+  w.now += MIN;
+  await w.ok('amy', { op: 'say', g: gid, t: '비밀 계획' });
+  w.now += MIN;
+  await w.ok('dan', { op: 'join', code, n: 'DAN' });
+  const d = await w.ok('dan', { op: 'chat', g: gid, since: 0 });
+  assert.ok(!d.chat.ms.some((x) => x.t === '비밀 계획'), '들어오기 전 메시지는 안 보임');
+  assert.deepEqual(d.chat.ms.map((x) => [x.k, x.n]), [['in', 'DAN']], '내가 들어온 소식부터');
+  assert.equal(groupOf(await w.ok('dan'), gid).chat.nu.length, 0);
+  w.now += MIN;
+  await w.ok('bob', { op: 'say', g: gid, t: '어서 와' });
+  assert.ok((await w.ok('dan', { op: 'chat', g: gid, since: 0 })).chat.ms.some((x) => x.t === '어서 와'));
+  // 나가기: 자동 소식, 나간 사람은 못 봄, 남긴 메시지는 그때 별명으로 남는다
+  w.now += MIN;
+  await w.ok('bob', { op: 'leave', g: gid });
+  await w.err('bob', { op: 'chat', g: gid, since: 0 }, 'nogroup');
+  const after = await w.ok('amy', { op: 'chat', g: gid, since: 0 });
+  assert.equal(after.chat.ms.at(-1).k, 'out');
+  assert.equal(after.chat.ms.at(-1).n, 'BOB');
+  assert.equal(after.chat.ms.find((x) => x.t === '어서 와').n, 'BOB');
+  // 내보내기: 자동 소식은 없고, 내보내진 사람은 못 봄
+  w.now += MIN;
+  const before = after.chat.v;
+  await w.ok('amy', { op: 'kick', g: gid, m: member(groupOf(await w.ok('amy'), gid), 'CAT').id });
+  await w.err('cat', { op: 'chat', g: gid, since: 0 }, 'nogroup');
+  assert.deepEqual((await w.ok('amy', { op: 'chat', g: gid, since: before })).chat.ms, [], '내보낸 일은 채팅에 알리지 않음');
+});
+
+test('채팅: 지우기는 내 메시지와 리더만, 지운 자리는 남고 since로 알려짐', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob', 'cat']);
+  w.now += MIN;
+  const s1 = (await w.ok('bob', { op: 'say', g: gid, t: '실수로 보냄' })).chat.ms.at(-1).s;
+  w.now += 2000;
+  const s2 = (await w.ok('cat', { op: 'say', g: gid, t: '이상한 말' })).chat.ms.at(-1).s;
+  w.now += 2000;
+  const s3 = (await w.ok('amy', { op: 'say', g: gid, t: '리더 공지' })).chat.ms.at(-1).s;
+  const v0 = (await w.ok('cat', { op: 'chat', g: gid, since: 0 })).chat.v;
+  await w.err('bob', { op: 'unsay', g: gid, s: s3 }, 'lead');
+  await w.err('bob', { op: 'unsay', g: gid, s: 'x' }, 'bad');
+  await w.err('bob', { op: 'unsay', g: gid, s: 9999 }, 'gone');
+  const sys = (await w.ok('bob', { op: 'chat', g: gid, since: 0 })).chat.ms.find((x) => x.k).s;
+  await w.err('amy', { op: 'unsay', g: gid, s: sys }, 'gone');
+  const r = await w.ok('bob', { op: 'unsay', g: gid, s: s1, since: v0 });
+  assert.deepEqual(r.chat.ms.map((x) => [x.s, x.x, x.t]), [[s1, 1, undefined]], '본인이 지움: 글은 사라짐');
+  await w.ok('amy', { op: 'unsay', g: gid, s: s2 });
+  const c = await w.ok('cat', { op: 'chat', g: gid, since: v0 });
+  assert.deepEqual(c.chat.ms.map((x) => [x.s, x.x]), [[s1, 1], [s2, 2]], '리더가 지움은 2, 바뀐 것은 since로 다시 옴');
+  assert.ok(!JSON.stringify([...w.hub()]).includes('실수로 보냄'), '저장소에서도 글이 지워짐');
+  await w.ok('bob', { op: 'unsay', g: gid, s: s1 }); // 이미 지운 것은 그대로
+  const g = groupOf(await w.ok('cat'), gid);
+  assert.deepEqual(g.chat.tail.map((x) => x.t), ['리더 공지'], '지운 메시지는 미리 보기와 새 메시지에서 빠짐');
+  assert.equal(g.chat.nu.length, 1);
+});
+
+test('채팅: 1초에 1개·1분에 20개·하루 300개까지, 다음 날 다시', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob']);
+  w.now += MIN;
+  await w.ok('amy', { op: 'say', g: gid, t: '1' });
+  await w.err('amy', { op: 'say', g: gid, t: '2' }, 'fast');
+  w.now += 999;
+  await w.err('amy', { op: 'say', g: gid, t: '2' }, 'fast');
+  w.now += 1;
+  await w.ok('amy', { op: 'say', g: gid, t: '2' });
+  for (let i = 3; i <= CHAT.perMin; i++) { w.now += 1000; await w.ok('amy', { op: 'say', g: gid, t: String(i) }); }
+  w.now += 1000;
+  await w.err('amy', { op: 'say', g: gid, t: 'x' }, 'fast');
+  await w.ok('bob', { op: 'say', g: gid, t: '나는 괜찮음' });
+  w.now += MIN;
+  await w.ok('amy', { op: 'say', g: gid, t: '1분 지나면 다시' });
+  // 하루 300개 (모든 그룹 합해서). 1분에 20개를 넘지 않게 3.5초마다
+  const day0 = new Date(w.now).toISOString().slice(0, 10);
+  let sent = CHAT.perMin + 1;
+  while (sent < CHAT.perDay) { w.now += 3500; await w.ok('amy', { op: 'say', g: gid, t: 'm' + sent }); sent++; }
+  assert.equal(new Date(w.now).toISOString().slice(0, 10), day0, '같은 날 안에 보냄');
+  w.now += 3500;
+  await w.err('amy', { op: 'say', g: gid, t: '301' }, 'daymax');
+  const c = await w.ok('bob', { op: 'chat', g: gid, since: 0 });
+  assert.ok(c.chat.ms.length <= CHAT.keep, '그룹마다 최근 150줄만');
+  assert.equal(c.chat.ms.at(-1).t, 'm299');
+  w.now = Date.UTC(2026, 10, 20, 0, 0, 1); // 다음 날 (UTC 0시 = 한국 오전 9시)
+  await w.ok('amy', { op: 'say', g: gid, t: '새 날' });
+});
+
+test('채팅: 7일 지난 줄은 사라지고, 리더가 끄면 숨고 못 보냄, 함께 집중은 자동 소식, 그룹을 없애면 채팅도', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob']);
+  w.now += MIN;
+  await w.ok('bob', { op: 'say', g: gid, t: '옛날 메시지' });
+  w.now += 7 * DAY + MIN;
+  const old = await w.ok('amy', { op: 'chat', g: gid, since: 0 });
+  assert.ok(!old.chat.ms.some((x) => x.t === '옛날 메시지'), '7일 지나면 안 보임');
+  assert.deepEqual(groupOf(await w.ok('amy'), gid).chat.tail, []);
+  await w.ok('bob', { op: 'say', g: gid, t: '새 메시지' });
+  assert.ok(!JSON.stringify([...w.hub()]).includes('옛날 메시지'), '새 줄을 넣을 때 저장소에서도 지움');
+  // 리더가 채팅 끄기
+  await w.err('bob', { op: 'edit', g: gid, chat: false }, 'lead');
+  await w.err('amy', { op: 'edit', g: gid, chat: 'off' }, 'bad');
+  await w.ok('amy', { op: 'edit', g: gid, chat: false });
+  w.now += 2000;
+  await w.err('bob', { op: 'say', g: gid, t: '들려?' }, 'chatoff');
+  const off = await w.ok('bob', { op: 'chat', g: gid, since: 0 });
+  assert.deepEqual([off.chat.on, off.chat.ms], [false, []]);
+  assert.deepEqual(groupOf(await w.ok('bob'), gid).chat, { on: false, v: 0, nu: [], tail: [] });
+  await w.ok('amy', { op: 'edit', g: gid, chat: true });
+  assert.ok((await w.ok('bob', { op: 'chat', g: gid, since: 0 })).chat.ms.some((x) => x.t === '새 메시지'), '다시 켜면 남아 있던 메시지가 보임');
+  // 함께 집중 시작은 자동 소식
+  await w.ok('bob', { op: 'room', g: gid, min: 50 });
+  const room = (await w.ok('amy', { op: 'chat', g: gid, since: 0 })).chat.ms.at(-1);
+  assert.deepEqual([room.k, room.n, room.min, room.end], ['room', 'BOB', 50, w.now + 50 * MIN]);
+  // 그룹을 없애면 채팅도
+  assert.ok(w.hub().has('m:' + gid));
+  await w.ok('amy', { op: 'drop', g: gid });
+  assert.equal(w.hub().has('m:' + gid), false);
+});
+
+test('채팅: 응답과 저장소에 이메일·로그인 번호·실제 이름이 없다', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy-uid-123', 'bob-uid-456']);
+  w.now += MIN;
+  const raws = [(await w.call('amy-uid-123', { op: 'say', g: gid, t: '안녕', c: 'zz9999' })).raw, (await w.call('bob-uid-456', { op: 'chat', g: gid, since: 0 })).raw, (await w.call('bob-uid-456')).raw];
+  for (const raw of raws) for (const secret of ['amy-uid-123', 'bob-uid-456', '@example.com', 'Real ']) assert.ok(!raw.includes(secret), secret);
+  const store = JSON.stringify([...w.hub()]);
+  for (const secret of ['amy-uid-123', 'bob-uid-456', '@example.com', 'Real ']) assert.ok(!store.includes(secret), '저장소 ' + secret);
 });

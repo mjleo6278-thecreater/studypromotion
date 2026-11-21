@@ -1107,6 +1107,8 @@ button, input, select, textarea, optgroup { font-family: inherit; }
 /* 시트(폰: 아래에서 올라옴) / 팝오버(넓은 화면: 버튼 아래) */
 .ui-back { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0); display: flex; align-items: flex-end; justify-content: center; transition: background .18s; }
 .ui-back.in { background: rgba(0, 0, 0, .38); }
+/* 닫히는 0.18초 동안은 뒤 화면을 바로 누를 수 있게 (빠르게 다음 칸을 눌러도 먹히지 않음) */
+.ui-back.out { pointer-events: none; }
 .ui-back.pop, .ui-back.pop.in { background: transparent; display: block; }
 .ui-sheet {
   background: var(--surface); color: var(--text); width: 100%; max-width: 520px; max-height: min(72vh, 560px);
@@ -2883,3 +2885,105 @@ body.bounce-open { overflow: hidden; }
   .tabs { gap: 2px; }
   .tab { flex-direction: column; gap: 2px; font-size: 12px; padding: 4px 8px; }
 }
+
+/* ================================================================
+   그룹 채팅 (v4.1, js/groupchat.js)
+   ================================================================ */
+/* 그룹 화면의 '채팅' 칸 */
+.gc-card .panel-head h2 { display: flex; align-items: center; gap: 8px; }
+.gc-new { display: inline-block; padding: 3px 9px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; line-height: 1.3; letter-spacing: 0; white-space: nowrap; }
+.gc-new.quiet { background: var(--bg); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.gc-prev { list-style: none; margin: 2px 0 14px; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.gc-prev li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.gc-prev b { flex: none; max-width: 32%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gc-prev .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gc-prev small { flex: none; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.gc-quiet { margin: 2px 0 14px; }
+.gc-open { display: inline-flex; align-items: center; gap: 6px; }
+.gc-open .ic { width: 17px; height: 17px; }
+/* 홈 '우리 그룹' 칸의 새 메시지 줄 */
+.gc-home { display: flex; align-items: center; gap: 8px; width: 100%; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.gc-home > .ic { width: 18px; height: 18px; color: var(--muted); }
+.gc-home .gc-chev { margin-left: auto; width: 16px; height: 16px; color: var(--muted); }
+/* 그룹 탭의 새 메시지 점 (타이머 탭의 '재는 중' 점과 같은 모양) */
+.tab.has-new .ico::after { content: ''; position: absolute; top: -1px; right: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--surface); }
+
+/* 채팅 창: 폰은 화면 전체(글자판이 올라오면 보이는 만큼), 넓은 화면은 가운데 창 */
+.ask-backdrop.gc-back { padding: var(--gc-top, 0px) 0 var(--gc-kb, 0px); align-items: stretch; justify-content: center; background: var(--bg); }
+.gc-box { position: relative; display: flex; flex-direction: column; width: 100%; min-width: 0; min-height: 0; background: var(--bg); color: var(--text); overflow: hidden; outline: none; }
+@media (min-width: 721px) and (min-height: 521px), (min-width: 721px) and (pointer: fine) {
+  .ask-backdrop.gc-back { padding: 24px; align-items: center; background: rgba(0, 0, 0, .4); }
+  .gc-box { max-width: 560px; height: min(calc(100dvh - 48px), 820px); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 40px rgba(0, 0, 0, .2); }
+  .gc-b { font-size: 14.5px; }
+  .gc-form textarea { font-size: 14.5px; }
+}
+.gc-head { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 8px 8px 4px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.gc-head .icon-btn { min-width: 40px; min-height: 40px; color: var(--text); }
+.gc-head .icon-btn .ic { width: 22px; height: 22px; }
+.gc-ttl { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.gc-ttl h2 { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gc-ttl small { font-size: 12px; color: var(--muted); }
+.gc-ttl small.bad { color: var(--danger); }
+.gc-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.gc-list { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px 14px; }
+.gc-list > :first-child { margin-top: auto; } /* 메시지가 적으면 아래(적는 칸 쪽)부터 */
+.gc-note { align-self: center; display: flex; align-items: center; gap: 5px; margin: 0 0 2px; font-size: 12px; color: var(--muted); text-align: center; }
+.gc-note .ic { width: 13px; height: 13px; }
+.gc-wait { align-self: center; margin: 24px 0; text-align: center; }
+.gc-empty { align-self: center; display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 28px 0 8px; text-align: center; }
+.gc-day { align-self: center; margin: 6px 0 0; }
+.gc-day span { display: inline-block; padding: 3px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 12px; color: var(--muted); }
+.gc-sys { align-self: center; max-width: 94%; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin: 2px 0; font-size: 12.5px; color: var(--muted); text-align: center; }
+.gc-sys .ic { width: 15px; height: 15px; }
+.gc-sys .btn { padding: 4px 11px; font-size: 12.5px; min-height: 0; }
+.gc-sys-tag { display: inline-flex; align-items: center; gap: 3px; color: var(--accent-text); font-weight: 700; }
+.gc-hid { font-style: italic; }
+/* 말풍선: 내 것은 오른쪽 검은색(어두운 화면은 흰색), 친구 것은 왼쪽 흰색. 같은 사람이 이어 보내면 이름·얼굴은 한 번만 */
+.gc-msg { display: flex; align-items: flex-start; gap: 8px; }
+.gc-msg.cont { margin-top: -5px; }
+.gc-av-sp { flex: none; width: 34px; }
+.gc-who { min-width: 0; max-width: calc(100% - 42px); display: flex; flex-direction: column; gap: 4px; }
+.gc-who > small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.gc-line { display: flex; align-items: flex-end; gap: 6px; min-width: 0; }
+.gc-b { min-width: 0; margin: 0; padding: 9px 12px; border: 1px solid var(--line); border-radius: 5px 16px 16px 16px; background: var(--surface); color: var(--text); font-size: 15px; line-height: 1.45; white-space: pre-wrap; word-break: keep-all; overflow-wrap: anywhere; cursor: default; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; transition: box-shadow .15s; }
+.gc-msg.cont .gc-b { border-top-left-radius: 16px; }
+.gc-msg.me { justify-content: flex-end; }
+.gc-msg.me .gc-line { flex-direction: row-reverse; max-width: 86%; }
+.gc-msg.me .gc-b { border-color: var(--ink); border-radius: 16px 5px 16px 16px; background: var(--ink); color: var(--ink-text); }
+.gc-msg.me.cont .gc-b { border-top-right-radius: 16px; }
+.gc-b.del, .gc-msg.me .gc-b.del { border-style: dashed; border-color: var(--line); background: transparent; color: var(--muted); font-style: italic; }
+.gc-msg time, .gc-st { flex: none; padding-bottom: 3px; font-size: 11px; color: var(--muted); white-space: nowrap; }
+.gc-st { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.gc-st.fail { color: var(--danger); font-weight: 600; }
+.gc-retry { padding: 0; border: 0; background: none; color: var(--accent-text); font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; }
+.gc-msg.sending .gc-b { opacity: .55; }
+.gc-msg.failed .gc-b { box-shadow: 0 0 0 2px var(--danger); cursor: pointer; }
+.gc-b.pressing, .gc-b.pick { box-shadow: 0 0 0 3px var(--accent); }
+.gc-b:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gc-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.gc-jump { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); padding: 7px 14px; border: 0; border-radius: 999px; background: var(--ink); color: var(--ink-text); font: inherit; font-size: 13px; font-weight: 700; box-shadow: 0 4px 14px rgba(0, 0, 0, .18); cursor: pointer; }
+.gc-jump[hidden] { display: none; }
+/* 빠른 말 · 적는 칸 */
+.gc-foot { flex: none; padding: 9px 0 calc(8px + env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); }
+.gc-quick { display: flex; gap: 6px; overflow-x: auto; padding: 0 12px 9px; scrollbar-width: none; }
+.gc-quick::-webkit-scrollbar { display: none; }
+.gc-chip { flex: none; padding: 6px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--text); font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.gc-chip:active { transform: scale(.96); }
+.gc-form { display: flex; align-items: flex-end; gap: 8px; padding: 0 12px; }
+.gc-form textarea { flex: 1; min-width: 0; height: 42px; max-height: 124px; resize: none; padding: 9px 15px; border: 1px solid var(--line); border-radius: 21px; background: var(--bg); color: var(--text); font: inherit; font-size: 16px; line-height: 1.45; outline: none; }
+.gc-form textarea:focus { border-color: var(--text); }
+.gc-form textarea::placeholder { color: var(--muted); }
+.gc-send { flex: none; width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: var(--ink); color: var(--ink-text); cursor: pointer; }
+.gc-send .ic { width: 20px; height: 20px; stroke-width: 2.4; }
+.gc-send:disabled { opacity: .3; cursor: default; }
+.gc-send:focus-visible, .gc-chip:focus-visible, .gc-home:focus-visible, .gc-jump:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gc-meta { display: flex; gap: 8px; margin: 0; padding: 0 18px; font-size: 12px; }
+.gc-meta > span { padding-top: 5px; }
+.gc-meta > span:empty { display: none; }
+.gc-err { color: var(--danger); font-weight: 600; }
+.gc-count { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gc-count.over { color: var(--danger); font-weight: 700; }
+/* 채팅 창이 열려 있으면 알림은 위쪽에 (아래 적는 칸을 가리지 않게) */
+body.gc-showing .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)); }
+@media (hover: hover) { :where(:root:not(.touch)) .gc-chip:hover, :where(:root:not(.touch)) .gc-home:hover { border-color: var(--text); } :where(:root:not(.touch)) .gc-b[data-gc-s]:not(.pick):hover { box-shadow: 0 0 0 2px var(--line); cursor: pointer; } }
+@media print { .gc-back { display: none !important; } }
