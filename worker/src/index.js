@@ -50,6 +50,7 @@ const DEFAULT_MODEL = '@cf/google/gemma-4-26b-a4b-it';
 const MAX_MESSAGES = 16;   // 지시문 1 + 지난 대화 + 이번 질문
 const MAX_CHARS = 24000;   // 한 번에 받는 글의 길이 (지시문 포함, 사진은 빼고 센다)
 const MAX_IMAGE = 1500000; // 사진 한 장의 길이 (base64 글자 수, 약 1.1MB). 앱은 긴 변 1280픽셀 JPEG로 줄여 보내서 보통 0.2~0.5MB
+const PHOTO_EXTRA_TOKENS = 1500; // 사진 질문에 더 주는 답 길이
 const IMAGE_HEAD = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]/;
 const ROLES = ['system', 'user', 'assistant'];
 
@@ -406,7 +407,8 @@ export async function handle(request, env, deps, ctx) {
   const refund = async () => { if (!counter || free) return; try { left = (await count('refund')).left; } catch (e) { /* 못 돌려줘도 답은 보낸다 */ } };
 
   // 5) 모델에 묻기. 생각하기(reasoning)는 끈다: 이 모델은 기본으로 켜져 있고, 켜 두면 생각에 답 길이를 다 써 버린다
-  const maxTokens = parseInt(env.MAX_TOKENS, 10) || 2000;
+  // 사진 질문은 읽은 글(<read>)과 카드 후보(30장까지)를 함께 적으므로 답 길이를 넉넉히 준다 (쓴 만큼만 무료 양에서 빠진다)
+  const maxTokens = (parseInt(env.MAX_TOKENS, 10) || 2000) + (photo ? PHOTO_EXTRA_TOKENS : 0);
   const model = env.MODEL || DEFAULT_MODEL;
   const plain = { messages, stream: true, max_tokens: maxTokens };
   const thinking = /^(on|1|true|yes)$/i.test(String(env.THINKING || '').trim());

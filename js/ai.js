@@ -25,7 +25,7 @@
   const NAME = '세컨드';
   const KEY = 'studypromotion.ai';
   const KEEP = 60; // 남겨 두는 말의 수
-  const PHOTO = { max: 1280, small: 1024, chars: 1400000, thumb: 240, keepThumbs: 12, file: 40 * 1024 * 1024 }; // 보내는 사진의 긴 변·글자 수 상한, 대화에 남기는 작은 그림, 고를 수 있는 파일 크기
+  const PHOTO = { max: 1280, small: 1024, chars: 1400000, thumb: 360, keepThumbs: 12, file: 40 * 1024 * 1024 }; // 보내는 사진의 긴 변·글자 수 상한, 대화에 남기는 작은 그림, 고를 수 있는 파일 크기
   const PHOTO_CHIPS = ['해석해 줘', '단어 뜻 알려 줘', '카드로 만들어 줘', '풀이 힌트만 줘'];
   const PHOTO_ASK = '이 사진을 풀이해 줘'; // 사진만 보내고 글을 안 쓰면
 
@@ -317,8 +317,9 @@
 
   function msgHTML(m) {
     if (m.role === 'user') {
-      const shot = !m.photo ? '' : /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(m.img || '')
-        ? `<img class="ai-shot" src="${m.img}" alt="보낸 사진">` : `<span class="ai-shot gone">${ICON.album}사진</span>`; // 오래된 사진은 작은 그림을 지웠다
+      const src = (photos[m.id] && photos[m.id].full) || m.img || ''; // 이번에 보낸 사진은 또렷하게, 다시 열면 작은 그림으로
+      const shot = !m.photo ? '' : /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(src)
+        ? `<img class="ai-shot" src="${src}" alt="보낸 사진">` : `<span class="ai-shot gone">${ICON.album}사진</span>`; // 오래된 사진은 작은 그림을 지웠다
       return `<div class="ai-msg me" data-id="${esc(m.id)}">${shot}<div class="ai-bubble">${lines(m.text)}</div></div>`;
     }
     let h = `<div class="ai-msg ai" data-id="${esc(m.id)}">`;

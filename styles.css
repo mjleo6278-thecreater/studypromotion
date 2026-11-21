@@ -1978,7 +1978,8 @@ body:has(.lock-screen:not([hidden])) .ai-fab { display: none; }
 .ai-msg.me .ai-shot.gone { width: max-content; height: auto; display: flex; align-items: center; gap: 5px; padding: 6px 11px; font-size: 12.5px; color: var(--muted); background: var(--bg); }
 .ai-shot.gone svg { width: 15px; height: 15px; }
 .ai-read { margin: 0 0 10px; border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; color: var(--muted); background: var(--bg); line-height: 1.55; }
-.ai-read summary { cursor: pointer; font-weight: 600; color: var(--text); }
+.ai-read summary { cursor: pointer; font-weight: 600; color: var(--text); -webkit-tap-highlight-color: transparent; }
+.ai-read summary:focus:not(:focus-visible) { outline: none; }
 .ai-read p { margin: 6px 0 0; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
 @media (max-height: 520px) { .ai-att-th img { width: 48px; height: 48px; } .ai-msg.me .ai-shot { width: 110px; height: 110px; } }
 

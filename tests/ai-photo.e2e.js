@@ -159,8 +159,9 @@ const server = http.createServer((req, res) => {
     const me = s.msgs.find((m) => m.photo);
     return { len: raw.length, img: me && me.img ? me.img.length : 0, read: (s.msgs.find((m) => m.read) || {}).read || '' };
   });
-  const thumbInfo = await inspect(page, await page.getAttribute('#ai-log .ai-msg.me img.ai-shot', 'src'));
-  assert(kept.img > 0 && kept.img < 40000 && kept.len < 60000 && Math.max(thumbInfo.w, thumbInfo.h) === 240 && !thumbInfo.secret, `기기에는 작은 그림(긴 변 240픽셀, ${Math.round(kept.img / 1024)}KB)만 남기고 보낸 사진은 남기지 않음`);
+  const thumbInfo = await inspect(page, await page.evaluate(() => JSON.parse(localStorage.getItem('studypromotion.ai')).msgs.find((m) => m.photo).img));
+  assert(kept.img > 0 && kept.img < 50000 && kept.len < 90000 && Math.max(thumbInfo.w, thumbInfo.h) === 360 && !thumbInfo.secret, `기기에는 작은 그림(긴 변 360픽셀, ${Math.round(kept.img / 1024)}KB)만 남기고 보낸 사진은 남기지 않음`);
+  assert(Math.max(...Object.values(await inspect(page, await page.getAttribute('#ai-log .ai-msg.me img.ai-shot', 'src'))).filter((v) => typeof v === 'number').slice(0, 2)) === 1280, '이번에 연 동안은 보낸 사진을 또렷하게 보여 줌');
   assert(/seguiré estudiando/.test(kept.read), '읽은 글은 대화와 함께 남음 (다시 열어도 이어 묻기)');
 
   /* ===== 5) 답을 못 받으면: 다시 보내기에 사진도 같이, 앱을 다시 열었으면 사진을 다시 고르게 ===== */

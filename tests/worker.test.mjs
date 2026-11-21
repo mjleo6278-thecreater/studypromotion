@@ -685,6 +685,9 @@ test('사진: PHOTO_TO가 all이 아니면 주인 계정만 보낼 수 있고, �
   const owner = await w.ask(await token({ sub: 'owner-1', email: OWNER }), { messages: withPhoto('해석해 줘'), v: 2 });
   assert.equal(owner.status, 200);
   assert.deepEqual(w.runs[0].input.messages[1].content[0], { type: 'image_url', image_url: { url: JPG } }); // 사진을 그대로 모델에 넘긴다
+  assert.equal(w.runs[0].input.max_tokens, 1200 + 1500); // 읽은 글과 카드 후보를 적을 만큼 답 길이를 더 준다
+  await w.ask(await token({ sub: 'owner-1', email: OWNER }), { v: 2 });
+  assert.equal(w.runs[1].input.max_tokens, 1200); // 글만 보낸 질문은 그대로
 
   forgetKeys();
   const all = world({ env: { PHOTO_TO: 'all' } });
