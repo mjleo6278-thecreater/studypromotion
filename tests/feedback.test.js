@@ -161,7 +161,10 @@ test('이스터에그: 아이디어를 준 사람은 아이디어 몫으로 보�
   for (const k of Object.keys(Egg.KEYS)) assert.ok(!Egg.SKIN_KEYS[k] && !Egg.VIDEO_KEYS[k] && !Egg.GAME_KEYS[k], k);
   // 두 사람이 같은 아이디어를 냈으면 같은 내용을 가리킨다
   const count = (id) => Object.values(Egg.KEYS).filter((v) => v === id).length;
-  assert.strictEqual(count('d'), 4);
+  assert.strictEqual(count('d'), 2);
+  assert.strictEqual(count('f'), 2); // 그룹 스터디를 같이 낸 사람 중 초록 테마까지 부탁한 사람은 따로
+  assert.ok(Egg.ENTRIES.f.idea && ['4.0', '4.2'].every((v) => Egg.ENTRIES.f.items.some((it) => it.ver === v)));
+  assert.deepStrictEqual(Egg.ENTRIES.f.items[0], Egg.ENTRIES.d.items[0]); // 그룹 스터디 내용은 같게
   assert.strictEqual(count('e'), 4);
 });
 
