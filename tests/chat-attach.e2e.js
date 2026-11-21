@@ -534,6 +534,12 @@ const hasExif = (buf) => buf.includes(Buffer.from('Exif\0\0', 'latin1'));
   assert(opCalls(jiwoo, 'thumbs').some((c) => c.body.as.includes(aid3)), '다시 보이게 하면 그때 받음');
 
   /* ===== 8) 지우기: 서버의 사진도 지워짐 (보낸 사람 · 리더) ===== */
+  // 지우가 그 사진을 크게 보는 중
+  await jiwoo.tap(jiwoo.page.locator(`#gc-list .gx-ph:has(img[data-gx-th="${aid1}"])`));
+  await jiwoo.page.waitForSelector('#gx-view:not([hidden])');
+  await jiwoo.page.waitForFunction(() => document.querySelector('#gx-view-img').naturalWidth === 1600);
+  const viewing = await jiwoo.page.$eval('#gx-view-img', (i) => i.src);
+  const thumbUrl = await jiwoo.page.$eval(`#gc-list img[data-gx-th="${aid1}"]`, (i) => i.src);
   await longPress(me, me.page.locator('#gc-list .gc-msg.me .gx-ph').first());
   await me.page.waitForSelector('.ui-back.in .ch-opt');
   assert(await choices(me) === '사진 저장|설명 복사|사진 지우기', '내 사진 메뉴: 사진 저장 · 설명 복사 · 사진 지우기 ' + await choices(me));
@@ -544,6 +550,14 @@ const hasExif = (buf) => buf.includes(Buffer.from('Exif\0\0', 'latin1'));
   assert(!lines().some((x) => x.a === aid1) && lines().some((x) => x.x === 1 && !x.p && !x.t), '채팅 줄은 ‘지운 메시지예요’만 남음');
   await jiwoo.page.evaluate(() => GroupChat.poll());
   await jiwoo.page.waitForFunction((a) => !document.querySelector(`#gc-list [data-gx-th="${a}"]`), aid1);
+  await jiwoo.page.waitForSelector('#gx-view', { state: 'hidden' });
+  await waitToast(jiwoo, /지워진 사진이에요/);
+  const alive = (u) => jiwoo.page.evaluate(async (u) => { try { await fetch(u); return true; } catch (e) { return false; } }, u);
+  const nErr = errors.length;
+  const dead = !(await alive(viewing)) && !(await alive(thumbUrl));
+  await jiwoo.page.waitForTimeout(300);
+  errors.splice(nErr); // 위에서 일부러 열어 본 (놓아준) 주소의 실패 줄은 뺀다
+  assert(dead, '크게 보던 친구 화면도 닫히고, 받아 둔 사진과 작은 그림을 놓아줌');
   r = await api('doyun', { op: 'file', g: gid, a: aid1 });
   assert(r.error === 'gone', '지운 사진은 누구도 받을 수 없음');
   // 리더: 서연의 사진 지우기

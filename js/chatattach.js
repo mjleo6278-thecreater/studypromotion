@@ -169,6 +169,7 @@
   const thumbs = new Map(); // 파일 번호 → 작은 그림 주소(blob:), '' = 없어진 사진
   const fulls = new Map();  // 파일 번호 → { blob, url } 최근 8장
   const want = new Set();
+  const owner = new Map(); // 파일 번호 → 그룹 (지워지거나 7일이 지난 사진을 놓아줄 때)
   let wantGid = null, thumbBusy = false, thumbFailAt = 0;
   function keepFull(aid, blob, url) {
     fulls.delete(aid);
@@ -183,7 +184,7 @@
   function forget() {
     for (const u of thumbs.values()) if (u) URL.revokeObjectURL(u);
     for (const v of fulls.values()) URL.revokeObjectURL(v.url);
-    thumbs.clear(); fulls.clear(); want.clear();
+    thumbs.clear(); fulls.clear(); want.clear(); owner.clear();
   }
   // 채팅 목록의 사진에 작은 그림을 채운다 (받아 둔 것은 바로, 없는 것은 12장씩 서버에서)
   function paintThumbs(el) {
@@ -193,7 +194,24 @@
       else if (u === '') img.closest('.gx-ph').classList.add('gone');
     });
   }
+  // 채팅에서 사라진 사진(지움 · 7일 지남)은 받아 둔 그림도 놓아준다. 크게 보던 사진이면 닫는다
+  function prune(gid) {
+    const c = C.cacheOf(gid);
+    if (!c.loaded) return;
+    const live = new Set(c.lines.filter((x) => x.a && !x.x).map((x) => x.a));
+    for (const [a, g] of [...owner]) {
+      if (g !== gid || live.has(a)) continue;
+      owner.delete(a);
+      const u = thumbs.get(a);
+      if (u) URL.revokeObjectURL(u);
+      thumbs.delete(a);
+      const f = fulls.get(a);
+      if (f) { URL.revokeObjectURL(f.url); fulls.delete(a); }
+      if (V.x && V.x.a === a && !V.el.hidden) { closeView(); toast('지워진 사진이에요'); }
+    }
+  }
   function hydrate(el, gid) {
+    prune(gid);
     if (gid !== wantGid) { want.clear(); wantGid = gid; }
     el.querySelectorAll('img[data-gx-th]').forEach((img) => { if (!thumbs.has(img.dataset.gxTh)) want.add(img.dataset.gxTh); });
     paintThumbs(el);
@@ -210,7 +228,7 @@
         for (const a of batch) {
           want.delete(a);
           const b = j.th && j.th[a];
-          if (!thumbs.has(a)) thumbs.set(a, b ? URL.createObjectURL(b64Blob(b)) : '');
+          if (!thumbs.has(a)) { thumbs.set(a, b ? URL.createObjectURL(b64Blob(b)) : ''); owner.set(a, gid); }
         }
         if (C.openId === gid) paintThumbs();
       }
@@ -225,6 +243,7 @@
     if (!j.img) throw fail('gone');
     const blob = b64Blob(j.img);
     keepFull(x.a, blob);
+    owner.set(x.a, gid);
     return blob;
   }
 
@@ -286,6 +305,7 @@
     if (x.p === 'img' && x.loc) {
       if (m && m.a) { // 내가 보낸 사진은 다시 받지 않는다
         thumbs.set(m.a, x.loc.th);
+        owner.set(m.a, x.g);
         keepFull(m.a, x.loc.blob, x.loc.full);
         x.loc.kept = true;
       }
