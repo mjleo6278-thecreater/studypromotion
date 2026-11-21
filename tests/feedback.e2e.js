@@ -55,6 +55,20 @@ const dayKey = (ts) => { const d = new Date(ts); return d.getFullYear() + '-' + 
   assert(await accentNow() === '#ff3d8b', '어두운 화면에서도 핑크');
   assert(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim()) === '#ff78ae', '어두운 화면 글자용 핑크');
   await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
+  // 초록 (v4.2)
+  await page.click('[data-accent-pick="green"]');
+  assert(await page.evaluate(() => document.documentElement.dataset.accent) === 'green', '초록을 고르면 data-accent=green');
+  assert(await accentNow() === '#769656', '포인트 색이 초록');
+  assert((await toastText()).includes('초록'), '테마 색 알림: 초록');
+  assert(await page.$$eval('[data-accent-pick]', (bs) => bs.filter((b) => b.getAttribute('aria-checked') === 'true').map((b) => b.dataset.accentPick).join()) === 'green', '초록 하나만 선택됨으로 표시');
+  await page.reload();
+  assert(await page.evaluate(() => document.documentElement.dataset.accent) === 'green', '다시 열어도 초록 유지');
+  assert(await page.$eval('[data-accent-pick="green"]', (b) => b.classList.contains('active')), '다시 열어도 초록 버튼 선택');
+  assert(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim()) === '#53693c', '밝은 화면 글자용 초록');
+  await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'dark'));
+  assert(await accentNow() === '#769656', '어두운 화면에서도 초록');
+  assert(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--accent-text').trim()) === '#a3c283', '어두운 화면 글자용 초록');
+  await page.evaluate(() => document.documentElement.removeAttribute('data-theme'));
   await page.click('[data-accent-pick="teal"]');
   assert(await page.evaluate(() => !document.documentElement.hasAttribute('data-accent')), '청록으로 되돌리기');
   assert(await accentNow() === '#04becd', '포인트 색이 다시 청록');

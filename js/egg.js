@@ -56,6 +56,14 @@
         { ver: '4.0', title: '그룹 스터디', text: '친구들과 그룹을 만들어 서로의 공부 시간과 순위를 보고, 함께 정한 목표를 채우고, 응원을 보내고, 같은 시각에 끝나는 타이머로 함께 집중해요.' },
       ],
     },
+    // 그룹 스터디 아이디어를 같이 낸 사람 중 초록 테마도 부탁한 사람 (d와 같은 그룹 스터디 + 초록 테마)
+    f: {
+      idea: true,
+      items: [
+        { ver: '4.0', title: '그룹 스터디', text: '친구들과 그룹을 만들어 서로의 공부 시간과 순위를 보고, 함께 정한 목표를 채우고, 응원을 보내고, 같은 시각에 끝나는 타이머로 함께 집중해요.' },
+        { ver: '4.2', title: '초록 테마', text: '계정·설정 › 설정 › 테마 색에서 초록(체스판 초록)을 고르면 버튼, 타이머, 진행 칸이 초록으로 바뀌어요. 이 비밀 입력칸에 특별한 비밀 단어를 넣으면 배경과 카드까지 앱 전체가 초록이 돼요.' },
+      ],
+    },
     e: {
       idea: true,
       items: [
@@ -68,14 +76,16 @@
     '1an7mm0bmsl': 'a', el4y9uoav9: 'a',
     kc7a3czsdp: 'b', '1l4hadu92ka': 'b',
     bebyavobri: 'c', '1sw0f56sgyk': 'c',
-    q60rs3se95: 'd', '14wfay5lhuq': 'd', // 그룹 스터디 아이디어 (두 사람)
-    '24ut03sxqbl': 'd', '17smttqkuzc': 'd',
+    q60rs3se95: 'd', '14wfay5lhuq': 'd', // 그룹 스터디 아이디어
+    '24ut03sxqbl': 'f', '17smttqkuzc': 'f', // 그룹 스터디 아이디어 + 초록 테마
     whtgly8use: 'e', '1hji6d4u5ul': 'e', // 벽 튕기기 아이디어 (두 사람)
     p74gz7mdp6: 'e', '1mw5maclq0f': 'e',
   };
 
-  // 테마 비밀 단어: 넣을 때마다 앱 전체(배경까지) 핑크 테마를 켜고 끈다
-  const SKIN_KEYS = { '10zjsj579q2': 'pink' };
+  // 테마 비밀 단어: 넣을 때마다 앱 전체(배경까지) 핑크·초록 테마를 켜고 끈다 (다른 테마가 켜져 있으면 그 테마로 바꾼다)
+  const SKIN_KEYS = { '10zjsj579q2': 'pink', m9smkr13ys: 'green' };
+  // name·to: 안내 글에 쓰는 이름('…로 바뀌었어요'), bar: 폰 상단 바 색 (index.html 맨 위 스크립트에도 같은 색)
+  const SKINS = { pink: { name: '핑크', to: '핑크로', bar: '#ff5c9a' }, green: { name: '초록', to: '초록으로', bar: '#769656' } };
   const SKIN_STORE = 'studypromotion.skin';
   const skinOf = (word) => SKIN_KEYS[key(word)] || null;
   function getSkin() { try { return localStorage.getItem(SKIN_STORE) || ''; } catch (e) { return ''; } }
@@ -83,7 +93,7 @@
     const d = document.documentElement;
     if (skin) d.setAttribute('data-skin', skin); else d.removeAttribute('data-skin');
     const m = document.querySelector('meta[name="theme-color"]');
-    if (m) m.setAttribute('content', skin === 'pink' ? '#ff5c9a' : '#0a0a0a');
+    if (m) m.setAttribute('content', SKINS[skin] ? SKINS[skin].bar : '#0a0a0a');
   }
   function toggleSkin(skin) {
     const next = getSkin() === skin ? '' : skin;
@@ -127,22 +137,23 @@
     return id ? Object.assign({ id, name: n }, ENTRIES[id]) : null;
   }
 
-  const lib = { norm, hash, key, find, skinOf, videoOf, gameOf, embedUrl, watchUrl, ENTRIES, KEYS, SKIN_KEYS, VIDEOS, VIDEO_KEYS, GAME_KEYS };
+  const lib = { norm, hash, key, find, skinOf, videoOf, gameOf, embedUrl, watchUrl, ENTRIES, KEYS, SKIN_KEYS, SKINS, VIDEOS, VIDEO_KEYS, GAME_KEYS };
   if (typeof module !== 'undefined' && module.exports) { module.exports = lib; return; }
 
   const App = root.App;
   if (!App) return;
   const { $, esc, pawnTrack } = App;
 
-  function showSkin(on) {
+  function showSkin(skin, on) {
+    const { name, to } = SKINS[skin];
     const out = $('#egg-out');
     out.hidden = false;
     out.classList.remove('miss', 'hit', 'egg-video', 'egg-game');
     void out.offsetWidth;
     out.classList.add('hit');
     out.innerHTML = on
-      ? '<div class="pawn-track egg-track" aria-hidden="true">' + pawnTrack(100) + '</div><h3>핑크 테마가 켜졌어요</h3><p class="muted small">배경부터 버튼, 타이머, 진행 칸까지 앱 전체가 핑크로 바뀌었어요. 같은 비밀 단어를 한 번 더 넣으면 원래 테마로 돌아가요.</p>'
-      : '<h3>원래 테마로 돌아왔어요</h3><p class="muted small">같은 비밀 단어를 다시 넣으면 핑크 테마가 다시 켜져요.</p>';
+      ? '<div class="pawn-track egg-track" aria-hidden="true">' + pawnTrack(100) + `</div><h3>${name} 테마가 켜졌어요</h3><p class="muted small">배경부터 버튼, 타이머, 진행 칸까지 앱 전체가 ${to} 바뀌었어요. 같은 비밀 단어를 한 번 더 넣으면 원래 테마로 돌아가요.</p>`
+      : `<h3>원래 테마로 돌아왔어요</h3><p class="muted small">같은 비밀 단어를 다시 넣으면 ${name} 테마가 다시 켜져요.</p>`;
   }
 
   function showVideo(v) {
@@ -179,7 +190,7 @@
 
   function show(word) {
     const skin = skinOf(word);
-    if (skin) { showSkin(!!toggleSkin(skin)); return true; }
+    if (skin) { showSkin(skin, !!toggleSkin(skin)); return true; }
     const video = videoOf(word);
     if (video) { showVideo(video); return true; }
     if (gameOf(word)) { showGame(); return true; }
@@ -216,6 +227,6 @@
     else if (e.target.closest('[data-egg-game]') && root.Bounce) root.Bounce.open();
   });
 
-  App.egg = { show, find, key, KEYS, toggleSkin, getSkin, videoOf, gameOf, close: closeOut };
+  App.egg = { show, find, key, KEYS, SKIN_KEYS, toggleSkin, getSkin, videoOf, gameOf, close: closeOut };
   applySkin(getSkin());
 })(typeof window !== 'undefined' ? window : globalThis);
