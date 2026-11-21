@@ -1107,6 +1107,8 @@ button, input, select, textarea, optgroup { font-family: inherit; }
 /* 시트(폰: 아래에서 올라옴) / 팝오버(넓은 화면: 버튼 아래) */
 .ui-back { position: fixed; inset: 0; z-index: 80; background: rgba(0, 0, 0, 0); display: flex; align-items: flex-end; justify-content: center; transition: background .18s; }
 .ui-back.in { background: rgba(0, 0, 0, .38); }
+/* 닫히는 0.18초 동안은 뒤 화면을 바로 누를 수 있게 (빠르게 다음 칸을 눌러도 먹히지 않음) */
+.ui-back.out { pointer-events: none; }
 .ui-back.pop, .ui-back.pop.in { background: transparent; display: block; }
 .ui-sheet {
   background: var(--surface); color: var(--text); width: 100%; max-width: 520px; max-height: min(72vh, 560px);

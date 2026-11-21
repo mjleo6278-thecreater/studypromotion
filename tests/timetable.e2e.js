@@ -309,7 +309,7 @@ const SW = 'studypromotion.stopwatch';
   assert(/버전 4\.1/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
   const shown = () => page.$$eval('#about-news .ver', (els) => els.filter((e) => !e.hidden && e.offsetParent !== null).map((e) => ({ v: e.dataset.ver, when: e.querySelector('.ver-when').textContent, n: e.querySelectorAll('.news li').length })));
   let sh = await shown();
-  assert(sh.length === 1 && sh[0].v === '4.1' && /버전 4\.1 · 2026년 11월 20일 업데이트/.test(sh[0].when) && /그룹 채팅/.test(await page.textContent('#about-news .ver:not([hidden])')) && /빠른 말/.test(await page.textContent('#about-news .ver:not([hidden])')) && /✱✱/.test(await page.textContent('#about-news .ver:not([hidden])')), '4.1 소식: 그룹 채팅, 빠른 말, 욕설 가리기 ' + sh[0].when);
+  assert(sh.length === 1 && sh[0].v === '4.1' && /버전 4\.1 · 2026년 11월 21일 업데이트/.test(sh[0].when) && /그룹 채팅/.test(await page.textContent('#about-news .ver:not([hidden])')) && /빠른 말/.test(await page.textContent('#about-news .ver:not([hidden])')) && /✱✱/.test(await page.textContent('#about-news .ver:not([hidden])')), '4.1 소식: 그룹 채팅, 빠른 말, 욕설 가리기 ' + sh[0].when);
   await page.tap('#ver-tabs [data-ver-tab="4.0"]');
   sh = await shown();
   assert(sh.length === 1 && sh[0].v === '4.0' && /버전 4\.0 · 2026년 11월 19일 업데이트/.test(sh[0].when) && /그룹 스터디/.test(await page.textContent('#about-news .ver:not([hidden])')) && /함께 정한 목표/.test(await page.textContent('#about-news .ver:not([hidden])')) && /별명만/.test(await page.textContent('#about-news .ver:not([hidden])')), '4.0 소식: 그룹 스터디, 함께 정한 목표, 별명만 보임 ' + sh[0].when);
