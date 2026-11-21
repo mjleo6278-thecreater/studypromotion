@@ -376,7 +376,7 @@ const SW = 'studypromotion.stopwatch';
   fit = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
   assert(fit.sw <= fit.cw, '버전 탭이 많아도 화면이 옆으로 밀리지 않음 (360)');
   // 업데이트한 뒤의 알림 → 달라진 점
-  await page.evaluate(() => { sessionStorage.setItem('studypromotion.updated', '1'); location.hash = '#home'; });
+  await page.evaluate(() => { sessionStorage.setItem('studypromotion.updated', '1'); localStorage.setItem('studypromotion.appVersion', '4.0'); location.hash = '#home'; }); // 버전 번호가 바뀐 업데이트
   await page.reload();
   await page.waitForFunction(() => /새 버전으로 업데이트했어요/.test(document.querySelector('#toast').textContent));
   assert(/달라진 점/.test(await toastOf(page)), '업데이트 알림에 ‘달라진 점’ 단추');
