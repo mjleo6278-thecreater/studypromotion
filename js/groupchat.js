@@ -246,7 +246,7 @@
     lastAct = Date.now();
     netErr = null;
     back.hidden = false;
-    doc.body.classList.add('gc-open');
+    doc.body.classList.add('gc-showing');
     paintHead(g);
     ta.value = drafts[gid] || '';
     grow(); meta('');
@@ -267,7 +267,7 @@
     openGid = null;
     clearTimeout(pollT); pollT = null;
     back.hidden = true;
-    doc.body.classList.remove('gc-open');
+    doc.body.classList.remove('gc-showing');
     back.style.removeProperty('--gc-kb'); back.style.removeProperty('--gc-top');
     if (ta === doc.activeElement) ta.blur();
     const f = lastFocus; lastFocus = null;

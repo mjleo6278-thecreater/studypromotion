@@ -2908,7 +2908,7 @@ body.bounce-open { overflow: hidden; }
 
 /* 채팅 창: 폰은 화면 전체(글자판이 올라오면 보이는 만큼), 넓은 화면은 가운데 창 */
 .ask-backdrop.gc-back { padding: var(--gc-top, 0px) 0 var(--gc-kb, 0px); align-items: stretch; justify-content: center; background: var(--bg); }
-.gc-box { position: relative; display: flex; flex-direction: column; width: 100%; min-height: 0; background: var(--bg); color: var(--text); overflow: hidden; outline: none; }
+.gc-box { position: relative; display: flex; flex-direction: column; width: 100%; min-width: 0; min-height: 0; background: var(--bg); color: var(--text); overflow: hidden; outline: none; }
 @media (min-width: 721px) and (min-height: 521px), (min-width: 721px) and (pointer: fine) {
   .ask-backdrop.gc-back { padding: 24px; align-items: center; background: rgba(0, 0, 0, .4); }
   .gc-box { max-width: 560px; height: min(calc(100dvh - 48px), 820px); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 12px 40px rgba(0, 0, 0, .2); }
@@ -2982,6 +2982,6 @@ body.bounce-open { overflow: hidden; }
 .gc-count { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
 .gc-count.over { color: var(--danger); font-weight: 700; }
 /* 채팅 창이 열려 있으면 알림은 위쪽에 (아래 적는 칸을 가리지 않게) */
-body.gc-open .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)); }
+body.gc-showing .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)); }
 @media (hover: hover) { :where(:root:not(.touch)) .gc-chip:hover, :where(:root:not(.touch)) .gc-home:hover { border-color: var(--text); } :where(:root:not(.touch)) .gc-b[data-gc-s]:not(.pick):hover { box-shadow: 0 0 0 2px var(--line); cursor: pointer; } }
 @media print { .gc-back { display: none !important; } }
