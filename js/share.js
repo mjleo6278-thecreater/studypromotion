@@ -99,7 +99,7 @@
    *  d: { title, date, total, goal, exam: {name, dday}|null, subjects: [{name, color, minutes}],
    *       timeline: Stats.dayTimeline 결과, colorOf(subjectId), range: '9:00 ~ 17:03', track: {square, promoted} }
    */
-  // 지금 고른 테마 색(청록/핑크)을 그림에도 쓴다
+  // 지금 고른 테마 색(청록/핑크/초록)을 그림에도 쓴다
   function themeAccent() {
     try {
       const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();

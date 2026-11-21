@@ -153,6 +153,10 @@ test('이스터에그: 아이디어를 준 사람은 아이디어 몫으로 보�
   } finally { delete Egg.KEYS[Egg.key('아이디어님')]; }
   assert.ok(Egg.ENTRIES.e.idea && Egg.ENTRIES.e.items.some((it) => it.ver === '3.8'));
   assert.ok(!Egg.ENTRIES.a.idea && !Egg.ENTRIES.b.idea); // 베타테스트 피드백은 그대로
+  // 테마 비밀 단어(핑크·초록)마다 안내 이름과 상단 바 색이 있다
+  assert.deepStrictEqual([...new Set(Object.values(Egg.SKIN_KEYS))].sort(), ['green', 'pink']);
+  for (const s of Object.values(Egg.SKIN_KEYS)) assert.ok(Egg.SKINS[s] && Egg.SKINS[s].name && Egg.SKINS[s].to && /^#[0-9a-f]{6}$/.test(Egg.SKINS[s].bar), s);
+  for (const k of Object.keys(Egg.SKIN_KEYS)) assert.ok(!Egg.VIDEO_KEYS[k] && !Egg.GAME_KEYS[k], k);
   // 이름 비밀 단어는 테마·영상·게임 단어와 겹치지 않는다 (겹치면 이름 대신 다른 것이 열림)
   for (const k of Object.keys(Egg.KEYS)) assert.ok(!Egg.SKIN_KEYS[k] && !Egg.VIDEO_KEYS[k] && !Egg.GAME_KEYS[k], k);
   // 두 사람이 같은 아이디어를 냈으면 같은 내용을 가리킨다

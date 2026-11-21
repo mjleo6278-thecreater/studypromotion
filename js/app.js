@@ -1717,8 +1717,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '4.1';
-  const APP_DATE = '2026년 11월 21일';
+  const APP_VERSION = '4.2';
+  const APP_DATE = '2026년 11월 22일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
@@ -2004,8 +2004,8 @@
     toast('화면 밝기: ' + THEME_LABEL[theme]);
   });
 
-  /* ---------- 테마 색 (청록 / 핑크) ---------- */
-  const ACCENTS = { teal: '청록', pink: '핑크' };
+  /* ---------- 테마 색 (청록 / 핑크 / 초록) ---------- */
+  const ACCENTS = { teal: '청록', pink: '핑크', green: '초록' };
   let accent = 'teal';
   try { accent = localStorage.getItem('studypromotion.accent') || 'teal'; } catch (e) { /* 무시 */ }
   if (!ACCENTS[accent]) accent = 'teal';
