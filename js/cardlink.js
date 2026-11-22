@@ -118,7 +118,9 @@
     return (base || HOME) + '#cards&z=' + bytesB64url(await pipe(new TextEncoder().encode(json), new CompressionStream('deflate-raw')));
   }
 
-  const api = { isLink, read, build, buildZip, enc, decodePart, sameKey, LIMIT, HOME };
+  // 채팅으로 받은 단어장(js/chatattach.js) → read()와 같은 모양 { deck, cards, bad, dup, over }
+  const prepare = (deck, cards) => tidy(deck, Array.isArray(cards) ? cards : [], 0);
+  const api = { isLink, read, build, buildZip, enc, decodePart, sameKey, prepare, LIMIT, HOME };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; return; }
   root.CardLink = api;
 
@@ -229,7 +231,10 @@
   }
 
   // 같은 덱에 이미 있는 카드(앞·뒤가 같으면)는 빼고 넣는다. 같은 링크를 두 번 눌러도 한 벌만
-  function apply(data, choice) {
+  //  o: { open: false 넣은 뒤 복습 화면으로 가지 않음 (채팅에서 담을 때), from 카드가 어디서 왔는지 }
+  function apply(data, choice, o) {
+    o = o || {};
+    const stay = o.open === false;
     const { store, uid, now } = root.App;
     const t = now();
     const added = [];
@@ -249,10 +254,10 @@
         have.add(k);
         const id = uid();
         added.push(id);
-        st.cards.push(root.SRS.newCard({ id, deckId: d.id, front, back, createdAt: t, from: 'link' }, t));
+        st.cards.push(root.SRS.newCard({ id, deckId: d.id, front, back, createdAt: t, from: o.from || 'link' }, t));
       });
     });
-    if (root.App.openDeck) root.App.openDeck(deckId);
+    if (root.App.openDeck && !stay) root.App.openDeck(deckId);
     root.App.toast(`'${deckName}' 덱에 카드 ${added.length}장을 넣었어요`, {
       action: '되돌리기',
       onAction: () => {
@@ -261,8 +266,8 @@
           st.cards = st.cards.filter((c) => !ids.has(c.id));
           if (madeDeck && !st.cards.some((c) => c.deckId === deckId)) st.decks = st.decks.filter((x) => x.id !== deckId);
         });
-        if (madeDeck && root.App.openDeck) root.App.openDeck(null);
-        root.App.toast('가져온 카드를 뺐어요');
+        if (madeDeck && root.App.openDeck && !stay) root.App.openDeck(null);
+        root.App.toast(stay ? '담은 카드를 뺐어요' : '가져온 카드를 뺐어요');
       },
     });
     return { deckId, added: added.length };
@@ -303,4 +308,8 @@
   if (getPending()) schedule();
 
   api.take = take;
+  // 채팅의 '내 복습에 담기' (js/chatattach.js): 같은 확인 창과 넣기
+  api.confirm = confirmSheet;
+  api.apply = apply;
+  api.settle = settle;
 })(typeof window !== 'undefined' ? window : globalThis);
