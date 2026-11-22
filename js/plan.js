@@ -240,7 +240,7 @@
         else if (c) Stats.uncreditDone(state, 'task:' + x.id, now);
       }
     });
-    if ('due' in patch && patch.due !== t.due) moveTask(state, id, patch.due, now);
+    if ('due' in patch && patch.due !== t.due) moveTask(state, id, patch.due, now, { keepTwin: true }); // 고치기 창에서 날짜를 바꾼 건 합치지 않는다 (반복으로 바꾸기와 겹치지 않게)
     return list.length;
   }
   // 옮기기 전 날짜를 남긴다: 오늘이나 지난 날의 안 끝낸 일을 뒤로 미루면 처음 날짜(from)를 적고, 그날이나 그 앞으로 되돌리면 지운다
@@ -250,18 +250,63 @@
     if (S.isKey(first) && first <= today && key > first) t.from = first;
     else delete t.from;
   }
-  // 할 일을 다른 날로 (key 'YYYY-MM-DD', 없으면 날짜 안 정함). 옮긴 날의 맨 아래에 놓는다
-  function moveTask(state, id, key, now) {
+  // 같은 일인가: 둘 다 범위와 이었으면 같은 범위 항목일 때만. 아니면 같은 반복 묶음이거나 이름·과목이 같을 때 (4.4.1)
+  function sameTask(a, b) {
+    if (!a || !b) return false;
+    if (a.topicId && b.topicId) return a.topicId === b.topicId;
+    if (a.rep && b.rep && a.rep.id && a.rep.id === b.rep.id) return true;
+    return cleanTitle(a.title) === cleanTitle(b.title) && (a.subjectId || null) === (b.subjectId || null);
+  }
+  // 그날(key)에 이미 있는 같은 일 (안 끝낸 것, t 말고). 없으면 null
+  const twinOn = (tasks, t, key) => (S.isKey(key) ? dayTasks(tasks, key).find((x) => x.id !== t.id && !x.done && sameTask(x, t)) || null : null);
+  const copy = (o) => JSON.parse(JSON.stringify(o));
+  const MERGE_KEYS = ['from', 'part', 'slotId', 'estimateMin', 'topicId'];
+  // 옮긴 할 일 t를 그날 이미 있던 같은 일 keep에 합치고 t는 목록에서 뺀다 (같은 일이 두 줄이 되지 않게, 4.4.1).
+  // 처음 날짜는 더 이른 쪽, 세모·장소·예상 시간·범위는 keep에 없을 때만 t 것을 쓰고, t로 잰 공부 시간·타임테이블 일정은 keep으로 옮긴다.
+  // before: 옮기기 전 t 사본. 반환 되돌리기용 { into, task, at, keep(keep의 옛 값), sessions, events }
+  function absorb(state, t, keep, before) {
+    const old = {};
+    MERGE_KEYS.forEach((k) => { old[k] = keep[k]; });
+    if (S.isKey(t.from) && t.from < keep.due && (!S.isKey(keep.from) || t.from < keep.from)) keep.from = t.from;
+    if (t.part && !keep.part) keep.part = true;
+    if (t.slotId && !keep.slotId) keep.slotId = t.slotId;
+    if (+t.estimateMin > 0 && !(+keep.estimateMin > 0)) keep.estimateMin = t.estimateMin;
+    if (t.topicId && !keep.topicId) keep.topicId = t.topicId;
+    const sessions = [], events = [];
+    (state.sessions || []).forEach((s) => { if (s && s.taskId === t.id) { s.taskId = keep.id; sessions.push(s.id); } });
+    (state.events || []).forEach((e) => { if (e && e.taskId === t.id) { e.taskId = keep.id; events.push(e.id); } });
+    const at = state.tasks.indexOf(t);
+    state.tasks.splice(at, 1);
+    return { into: keep.id, task: before, at, keep: old, sessions, events };
+  }
+  // 합친 것 되돌리기: 뺀 할 일을 제자리에 다시 넣고, keep의 옛 값과 기록·일정의 할 일을 돌린다
+  function unabsorb(state, m) {
+    const keep = (state.tasks || []).find((x) => x && x.id === m.into);
+    if (keep) MERGE_KEYS.forEach((k) => { if (m.keep[k] === undefined) delete keep[k]; else keep[k] = m.keep[k]; });
+    const back = (list, ids) => { const set = new Set(ids); (list || []).forEach((x) => { if (x && set.has(x.id) && x.taskId === m.into) x.taskId = m.task.id; }); };
+    back(state.sessions, m.sessions);
+    back(state.events, m.events);
+    if (!state.tasks.some((x) => x && x.id === m.task.id)) state.tasks.splice(Math.min(m.at, state.tasks.length), 0, copy(m.task));
+  }
+  // 할 일을 다른 날로 (key 'YYYY-MM-DD', 없으면 날짜 안 정함). 옮긴 날의 맨 아래에 놓는다.
+  // 그날에 같은 일(안 끝낸 것)이 이미 있으면 그 줄에 합친다 (opts.keepTwin이면 합치지 않음).
+  // 반환 되돌리기용 { id, due, pos, from, merged? } (merged가 있으면 합쳐서 이 할 일은 없어짐). 할 일이 없으면 false
+  function moveTask(state, id, key, now, opts) {
     const t = (state.tasks || []).find((x) => x && x.id === id);
     if (!t) return false;
+    const prev = { id: t.id, due: t.due, pos: t.pos, from: t.from };
+    const before = copy(t);
     markFrom(t, key, Stats.dayKey(now));
     t.due = S.isKey(key) ? key : null;
     t.pos = now;
-    return true;
+    const keep = !t.done && !(opts && opts.keepTwin) ? twinOn(state.tasks, t, t.due) : null;
+    if (keep) prev.merged = absorb(state, t, keep, before);
+    return prev;
   }
   // 지난 날 못 한 할 일을 오늘로 (오늘 목록 맨 위에, 원래 차례대로). ids를 주면 그 할 일만.
   // 세모·장소·잰 시간은 할 일에 붙어 있어서 그대로 같이 가고, 처음 날짜(from)를 남긴다.
-  // 반환 [{ id, due, pos, from }] (되돌리기용 옛 값)
+  // 오늘에 같은 일이 이미 있으면(같이 옮긴 다른 날의 같은 일도) 한 줄로 합친다.
+  // 반환 [{ id, due, pos, from, merged? }] (되돌리기용 옛 값)
   function carryOver(state, today, now, ids) {
     const want = Array.isArray(ids) ? new Set(ids) : null;
     const list = overdue(state.tasks, today).filter((t) => !want || want.has(t.id));
@@ -270,15 +315,19 @@
     const base = first ? order(first) : now;
     return list.map((t, i) => {
       const prev = { id: t.id, due: t.due, pos: t.pos, from: t.from };
+      const before = copy(t);
       t.from = t.from || t.due;
       t.due = today;
       t.pos = base - (list.length - i);
+      const keep = twinOn(state.tasks, t, today);
+      if (keep) prev.merged = absorb(state, t, keep, before);
       return prev;
     });
   }
-  // 되돌리기: carryOver·moveTask 전에 찍어 둔 { id, due, pos, from }로 돌린다
+  // 되돌리기: carryOver·moveTask 전에 찍어 둔 { id, due, pos, from, merged? }로 돌린다 (나중 것부터)
   function restoreMoves(state, prev) {
-    (prev || []).forEach((p) => {
+    (prev || []).slice().reverse().forEach((p) => {
+      if (p.merged) { unabsorb(state, p.merged); return; }
       const x = (state.tasks || []).find((y) => y && y.id === p.id);
       if (!x) return;
       x.due = p.due;
@@ -287,19 +336,18 @@
     });
   }
   // 오늘로 옮길지 물어볼 지난 날 못 끝낸 일 (최근 날부터, 그날 안에서는 목록 차례).
-  // 오늘에 같은 반복 묶음이나 같은 이름·과목 할 일이 이미 있거나, 더 최근 날에 같은 일이 있으면 처음에 체크를 꺼 둔다.
-  // 반환 [{ t, on }]
+  // 오늘에 같은 일(같은 범위·반복 묶음·이름과 과목)이 이미 있거나, 더 최근 날에 같은 일이 있으면 처음에 체크를 꺼 둔다.
+  // merge: 오늘에 안 끝낸 같은 일이 있어서 옮기면 그 줄과 합쳐진다
+  // 반환 [{ t, on, merge }]
   function carryChoices(state, today) {
     const list = overdue(state.tasks, today);
     if (!list.length) return [];
-    const same = (t) => (t.rep && t.rep.id ? 'r:' + t.rep.id : 't:' + t.title + '|' + (t.subjectId || ''));
-    const seen = new Set(dayTasks(state.tasks, today).map(same));
+    const seen = dayTasks(state.tasks, today).slice();
     const days = [...new Set(list.map((t) => t.due))].sort().reverse();
     const out = [];
     days.forEach((k) => sortDay(state, list.filter((t) => t.due === k)).list.forEach((t) => {
-      const key = same(t);
-      out.push({ t, on: !seen.has(key) });
-      seen.add(key);
+      out.push({ t, on: !seen.some((x) => sameTask(x, t)), merge: !!twinOn(state.tasks, t, today) });
+      seen.push(t);
     }));
     return out;
   }
@@ -539,7 +587,7 @@
   const api = {
     WD, REP_MAX, dayTitle, shortDay, relDay, nextExam, ddayText, weekKeys,
     dayTasks, undated, overdue, daySummary, studyMinutes, taskMinutes, taskColor,
-    repeatDates, repText, defaultUntil, makeTasks, seriesFrom, editTask, moveTask, carryOver, restoreMoves, carryChoices, fromText,
+    repeatDates, repText, defaultUntil, makeTasks, seriesFrom, editTask, moveTask, carryOver, restoreMoves, carryChoices, fromText, sameTask, twinOn,
     topicComplete, linkState, syncLinked, setDone, topicTask, scopeChoices, noteOf, setNote,
     DEFAULT_SLOTS, slotList, ensureSlots, slotOf, setSlot, addSlot, renameSlot, removeSlot, moveSlot, sortDay, dayList,
     markOf, nextMark, setMark, teacherList, teachersOn, reviewedOn, toggleReview, addTeacher, editTeacher, removeTeacher, moveTeacher,

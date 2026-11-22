@@ -408,9 +408,12 @@
   }
   function moveTo(t, key) {
     if (t.due === key) return;
-    const prev = [{ id: t.id, due: t.due, pos: t.pos, from: t.from }];
-    store.update((st) => { P.moveTask(st, t.id, key, now()); });
-    toast(key ? `${withJosa(key, '으로/로')} 옮겼어요` : '날짜 안 정한 할 일로 옮겼어요', { action: '되돌리기', onAction: () => store.update((st) => P.restoreMoves(st, prev)) });
+    let prev = [];
+    store.update((st) => { const p = P.moveTask(st, t.id, key, now()); if (p) prev = [p]; });
+    if (!prev.length) return;
+    // 그날에 같은 일이 이미 있으면 한 줄로 합쳐진다 (4.4.1)
+    const msg = !key ? '날짜 안 정한 할 일로 옮겼어요' : prev[0].merged ? `${withJosa(key, '에/에')} 같은 할 일이 있어서 한 줄로 합쳤어요` : `${withJosa(key, '으로/로')} 옮겼어요`;
+    toast(msg, { action: '되돌리기', onAction: () => store.update((st) => P.restoreMoves(st, prev)) });
   }
   async function removeTask(t) {
     const series = P.seriesFrom(store.get().tasks, t);
@@ -451,7 +454,7 @@
     const onlyY = ch.every((o) => o.t.due === y);
     const many = new Set(ch.map((o) => o.t.due)).size > 1;
     let last = null;
-    const items = ch.map(({ t }) => {
+    const items = ch.map(({ t, merge }) => {
       let h = '';
       if (many && t.due !== last) { last = t.due; h = `<p class="ui-group pl-cy-day">${esc(P.dayTitle(t.due))} · ${esc(P.relDay(t.due, tk))}</p>`; }
       const on = chosen.has(t.id);
@@ -461,7 +464,7 @@
       const got = P.taskMinutes(st.sessions, t);
       const sub = [sb ? sb.name : '', +t.estimateMin > 0 ? fm(+t.estimateMin) : '', x ? x.name : '', got ? '공부 ' + fm(got) : '', P.repText(t.rep)].filter(Boolean).join(' · ');
       return h + `<button type="button" class="pl-sc-item pl-cy-item${on ? ' on' : ''}" data-pl-cy="${esc(t.id)}" role="checkbox" aria-checked="${on}"><span class="pl-sc-box">${ic('check')}</span>` +
-        `<span class="pl-sc-text"><b>${esc(t.title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="pl-cy-mark${m ? ' ' + m : ''}" title="${MARK_NAME[m]}">${MARK_SVG[m]}</span></button>`;
+        `<span class="pl-sc-text"><b>${esc(t.title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}${merge ? '<small class="pl-cy-twin">오늘에도 있어요 · 옮기면 한 줄로 합쳐져요</small>' : ''}</span><span class="pl-cy-mark${m ? ' ' + m : ''}" title="${MARK_NAME[m]}">${MARK_SVG[m]}</span></button>`;
     }).join('');
     const okText = () => (chosen.size ? `${chosen.size}개 오늘로 옮기기` : '옮길 일을 골라 주세요');
     const lead = onlyY ? `어제 ${P.dayTitle(y)}에 덜 끝낸 할 일이에요.` : '지난 날 덜 끝낸 할 일이에요.';
@@ -491,7 +494,11 @@
     store.update((s) => { prev = P.carryOver(s, today(), now(), ids); });
     if (!prev.length) return 0;
     carryOpen = false;
-    toast(`할 일 ${prev.length}개를 오늘로 옮겼어요`, { action: '되돌리기', onAction: () => store.update((s) => P.restoreMoves(s, prev)) });
+    const merged = prev.filter((p) => p.merged).length;
+    const msg = !merged ? `할 일 ${prev.length}개를 오늘로 옮겼어요`
+      : merged === prev.length ? `오늘에 같은 할 일이 있어서 한 줄로 합쳤어요${merged > 1 ? ` (${merged}개)` : ''}`
+      : `할 일 ${prev.length}개를 오늘로 옮겼어요 · ${merged}개는 같은 할 일과 한 줄로 합쳤어요`;
+    toast(msg, { action: '되돌리기', onAction: () => store.update((s) => P.restoreMoves(s, prev)) });
     return prev.length;
   }
   // 그날 처음 홈이나 플래너를 열면 한 번 묻는다 (시작 화면·잠금·다른 창이 없어지고, 계정 기록과 맞춘 뒤)
