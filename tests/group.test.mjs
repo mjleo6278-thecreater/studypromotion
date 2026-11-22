@@ -4,7 +4,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { handle, Counter, forgetKeys } from '../worker/src/index.js';
-import { groupOp, cleanNick, cleanGroupName, cleanCode, cleanGoal, cleanDays, cleanLive, cleanSubject, cleanMsg, liveOn, LIMITS, CHEER_GAP, GROUP_STORE, CHAT } from '../worker/src/group.js';
+import { groupOp, cleanNick, cleanGroupName, cleanCode, cleanGoal, cleanDays, cleanLive, cleanSubject, cleanMsg, liveOn, LIMITS, CHEER_GAP, GROUP_STORE, CHAT,
+  ATTACH, b64Size, jpegSize, cleanCaption, cleanRecord, cleanDeck, altText } from '../worker/src/group.js';
 
 const PROJECT = 'demo-project';
 const ORIGIN = 'https://app.example';
@@ -591,6 +592,271 @@ test('채팅: 응답과 저장소에 이메일·로그인 번호·실제 이름�
   const { gid } = await party(w, ['amy-uid-123', 'bob-uid-456']);
   w.now += MIN;
   const raws = [(await w.call('amy-uid-123', { op: 'say', g: gid, t: '안녕', c: 'zz9999' })).raw, (await w.call('bob-uid-456', { op: 'chat', g: gid, since: 0 })).raw, (await w.call('bob-uid-456')).raw];
+  for (const raw of raws) for (const secret of ['amy-uid-123', 'bob-uid-456', '@example.com', 'Real ']) assert.ok(!raw.includes(secret), secret);
+  const store = JSON.stringify([...w.hub()]);
+  for (const secret of ['amy-uid-123', 'bob-uid-456', '@example.com', 'Real ']) assert.ok(!store.includes(secret), '저장소 ' + secret);
+});
+
+/* ===================== 채팅에 붙이는 것 (v4.3): 사진 · 공부 기록 카드 · 단어장 ===================== */
+// JPEG처럼 시작하는 n바이트 (서버는 앞의 FF D8 FF와 크기만 본다)
+const jpeg = (n, fill) => { const b = Buffer.alloc(n, fill || 7); b[0] = 0xff; b[1] = 0xd8; b[2] = 0xff; b[3] = 0xe0; return b.toString('base64'); };
+const PHOTO = jpeg(300 * 1024), THUMB = jpeg(30 * 1024, 9);
+const photo = (o) => Object.assign({ op: 'say', p: 'img', img: PHOTO, th: THUMB, w: 1600, h: 1200, since: 0 }, o);
+const REC = { sp: 'd', d: '2026-11-19', m: 205, g: 180, fo: 4, td: [5, 7], sk: 12, sb: [{ n: '수학', m: 100, c: '#4F86E8' }, { n: '영어', m: 55, c: '#3fb27f' }, { m: 40, c: '#ef7d3c' }, { x: 1, m: 10, c: '' }], o: 0 };
+const fileKeys = (w) => [...w.hub().keys()].filter((k) => k.startsWith('a:')).sort();
+
+test('붙이는 것 검사: base64·JPEG, 설명 한 줄, 공부 기록 카드, 단어장', () => {
+  assert.equal(b64Size('AAAA'), 3);
+  assert.equal(b64Size('AAA='), 2);
+  assert.equal(b64Size('AA=='), 1);
+  for (const bad of ['', 'AAA', 'AA=A', 'A$AA', null, 5]) assert.equal(b64Size(bad), -1, String(bad));
+  assert.equal(jpegSize(jpeg(1000), 2000), 1000);
+  assert.equal(jpegSize(jpeg(3000), 2000), 0, '너무 큼');
+  assert.equal(jpegSize(Buffer.from('GIF89a..').toString('base64'), 2000), 0, 'JPEG가 아님');
+  assert.equal(cleanCaption('  22번\n어떻게 풀어? ', 100), '22번 어떻게 풀어?', '줄바꿈은 빈칸으로');
+  assert.equal(cleanCaption('', 100), '');
+  assert.equal(cleanCaption(undefined, 100), '');
+  assert.equal(cleanCaption('가'.repeat(41), 40), null);
+  assert.equal(cleanCaption({}, 40), null);
+  // 공부 기록 카드
+  const r = cleanRecord(REC);
+  assert.deepEqual(r.sb, [{ n: '수학', m: 100, c: '#4f86e8' }, { n: '영어', m: 55, c: '#3fb27f' }, { m: 40, c: '#ef7d3c' }, { x: 1, m: 10, c: '' }], '이름 숨긴 과목·과목 없음');
+  assert.deepEqual([r.sp, r.d, r.m, r.g, r.fo, r.td, r.sk, r.o], ['d', '2026-11-19', 205, 180, 4, [5, 7], 12, 0]);
+  assert.equal(cleanRecord(Object.assign({}, REC, { sp: 'w', d: '2026-11-16', e: '2026-11-19', m: 900 })).e, '2026-11-19');
+  for (const bad of [
+    { sp: 'm' }, { d: '19-11-2026' }, { m: 1441 }, { m: -1 }, { g: 2000 }, { td: [8, 7] }, { td: [1] }, { sb: new Array(6).fill({ m: 1 }) },
+    { sb: [{ n: '', m: 'x' }] }, { sp: 'w', d: '2026-11-10', e: '2026-11-19' }, { sp: 'w', d: '2026-11-19', e: '2026-11-18' }, { sp: 'w' },
+  ]) assert.equal(cleanRecord(Object.assign({}, REC, bad)), null, JSON.stringify(bad));
+  assert.equal(cleanRecord(null), null);
+  assert.equal(cleanRecord(Object.assign({}, REC, { title: '할 일 제목' })).title, undefined, '모르는 칸(할 일 제목 등)은 버린다');
+  // 단어장
+  assert.deepEqual(cleanDeck({ n: ' 수능  영단어 ', cs: [[' abandon ', '버리다\n포기하다'], ['able', '할 수 있는']] }), { n: '수능 영단어', cs: [['abandon', '버리다 포기하다'], ['able', '할 수 있는']] });
+  assert.equal(cleanDeck({ cs: [['a', 'b']] }).n, '단어장', '이름이 없으면');
+  for (const bad of [{ n: 'x', cs: [] }, { n: 'x', cs: [['a', '']] }, { n: 'x', cs: [['a']] }, { n: 'x', cs: [['a'.repeat(301), 'b']] }, { n: 'x', cs: [['a', 'b'.repeat(501)]] },
+    { n: '가'.repeat(41), cs: [['a', 'b']] }, { n: 'x', cs: new Array(1001).fill(['a', 'b']) }, { n: 'x', cs: 'a~b' }, null])
+    assert.equal(cleanDeck(bad), null, JSON.stringify(bad).slice(0, 80));
+  assert.equal(cleanDeck({ n: 'x', cs: new Array(1000).fill(['가'.repeat(100), '나'.repeat(101)]) }), null, '글자 수 합 20만 자까지');
+  assert.equal(cleanDeck({ n: 'x', cs: new Array(1000).fill(['가'.repeat(100), '나'.repeat(100)]) }).cs.length, 1000);
+  // 예전 앱에 보이는 글
+  assert.equal(altText({ p: 'img', t: '22번' }), '📷 사진 · 22번');
+  assert.equal(altText({ p: 'rec', r: { sp: 'w', m: 205 }, t: '' }), '📊 이번 주 공부 3시간 25분');
+  assert.equal(altText({ p: 'deck', dn: 'Day 12', cn: 30 }), '🗂️ 단어장 ‘Day 12’ 카드 30장');
+});
+
+test('사진: 보내면 그룹 사람에게 작은 그림과 원본, 늦게 들어온 사람·그룹 밖은 못 봄, 같은 앱 번호는 한 번만', async () => {
+  const w = world();
+  const { gid, code } = await party(w, ['amy', 'bob']);
+  w.now += MIN;
+  const a = await w.ok('amy', photo({ g: gid, t: '22번 이거\n어떻게 풀어? 🙋', c: 'ph0001' }));
+  const x = a.chat.ms.find((m) => m.p === 'img');
+  assert.deepEqual([x.w, x.h, x.cap, x.t, x.c], [1600, 1200, '22번 이거 어떻게 풀어? 🙋', '📷 사진 · 22번 이거 어떻게 풀어? 🙋', 'ph0001']);
+  assert.match(x.a, /^[0-9a-z]{12}$/);
+  assert.equal(x.img, undefined, '줄에는 사진 내용이 없다');
+  assert.deepEqual(fileKeys(w), ['a:' + x.a, 'a:' + x.a + ':s']);
+  // bob: 줄·작은 그림·원본
+  const seen = (await w.ok('bob', { op: 'chat', g: gid, since: 0 })).chat.ms.find((m) => m.p === 'img');
+  assert.deepEqual([seen.a, seen.cap, seen.c], [x.a, x.cap, undefined]);
+  const th = await w.ok('bob', { op: 'thumbs', g: gid, as: [x.a, 'zzzzzzzzzzzz'] });
+  assert.deepEqual(th.th, { [x.a]: THUMB, zzzzzzzzzzzz: null }, '없는 번호는 null');
+  const f = await w.ok('bob', { op: 'file', g: gid, a: x.a });
+  assert.deepEqual([f.img === PHOTO, f.w, f.h], [true, 1600, 1200]);
+  // 그룹 요약: 새 메시지로 세고, 미리 보기는 글로
+  const g = groupOf(await w.ok('bob'), gid);
+  assert.equal(g.chat.nu.length, 1);
+  assert.equal(g.chat.tail.at(-1).t, '📷 사진 · 22번 이거 어떻게 풀어? 🙋');
+  // 다시 보내도 (답을 못 받은 경우) 한 번만
+  w.now += 2000;
+  await w.ok('amy', photo({ g: gid, t: '22번 이거 어떻게 풀어? 🙋', c: 'ph0001' }));
+  assert.equal(fileKeys(w).length, 2);
+  // 나중에 들어온 사람, 그룹 밖 사람
+  await w.ok('cat', { op: 'join', code, n: 'CAT' });
+  assert.deepEqual((await w.ok('cat', { op: 'thumbs', g: gid, as: [x.a] })).th, { [x.a]: null }, '들어오기 전 사진은 안 보임');
+  await w.err('cat', { op: 'file', g: gid, a: x.a }, 'gone');
+  await w.err('dan', { op: 'thumbs', g: gid, as: [x.a] }, 'nogroup');
+  await w.err('dan', { op: 'file', g: gid, a: x.a }, 'nogroup');
+  // 이상한 요청
+  await w.err('bob', { op: 'thumbs', g: gid, as: [] }, 'bad');
+  await w.err('bob', { op: 'thumbs', g: gid, as: new Array(13).fill(0).map((_, i) => 'a'.repeat(11) + i.toString(36)) }, 'bad');
+  await w.err('bob', { op: 'thumbs', g: gid, as: ['../x'] }, 'bad');
+  await w.err('bob', { op: 'file', g: gid, a: 'nope' }, 'bad');
+  w.now += 2000;
+  await w.err('bob', photo({ g: gid, img: Buffer.from('<svg>').toString('base64') }), 'bad');
+  await w.err('bob', photo({ g: gid, th: 'not base64!' }), 'bad');
+  await w.err('bob', photo({ g: gid, w: 0 }), 'bad');
+  await w.err('bob', photo({ g: gid, h: 5000 }), 'bad');
+  await w.err('bob', photo({ g: gid, t: '가'.repeat(101) }), 'bad');
+  await w.err('bob', photo({ g: gid, p: 'gif' }), 'bad');
+  await w.err('bob', photo({ g: gid, img: jpeg(ATTACH.img + 1) }), 'big');
+  await w.err('bob', photo({ g: gid, th: jpeg(ATTACH.thumb + 1) }), 'big');
+  assert.equal(fileKeys(w).length, 2, '거절한 사진은 남지 않는다');
+});
+
+test('사진: 본문 크기 (사진·단어장을 붙인 메시지만 1.6MB까지)', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob']);
+  w.now += MIN;
+  await w.ok('amy', photo({ g: gid, img: jpeg(ATTACH.img) })); // 원본 900KB = base64 1.2MB
+  const big = JSON.stringify(photo({ g: gid, img: jpeg(1300 * 1024) }));
+  assert.ok(big.length > 1600000);
+  const r = await w.call('amy', big);
+  assert.deepEqual([r.status, r.body.error], [413, 'big']);
+  await w.err('amy', { op: 'say', g: gid, t: '안녕', pad: 'x'.repeat(20000) }, 'bad');
+  await w.err('amy', { op: 'chat', g: gid, p: 'img', pad: 'x'.repeat(20000) }, 'bad');
+});
+
+test('사진: 지우면 서버에서도 바로 지우고, 리더는 남의 사진도, 그룹을 없애면 모두', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob', 'cat']);
+  w.now += MIN;
+  const s1 = (await w.ok('bob', photo({ g: gid, t: '내 사진' }))).chat.ms.find((m) => m.p === 'img');
+  w.now += 2000;
+  const s2 = (await w.ok('cat', photo({ g: gid }))).chat.ms.findLast((m) => m.p === 'img');
+  assert.equal(fileKeys(w).length, 4);
+  const total0 = w.hub().get('ax').t;
+  assert.equal(total0, 2 * (PHOTO.length + THUMB.length));
+  await w.err('cat', { op: 'unsay', g: gid, s: s1.s }, 'lead');
+  const d1 = await w.ok('bob', { op: 'unsay', g: gid, s: s1.s, since: 0 });
+  const gone = d1.chat.ms.find((m) => m.s === s1.s);
+  assert.deepEqual(Object.keys(gone).sort(), ['at', 'f', 'n', 's', 'v', 'x'], '지운 줄에는 사진·설명이 남지 않는다');
+  assert.deepEqual(fileKeys(w), ['a:' + s2.a, 'a:' + s2.a + ':s']);
+  assert.equal(w.hub().get('ax').t, total0 / 2);
+  await w.err('amy', { op: 'file', g: gid, a: s1.a }, 'gone');
+  assert.deepEqual((await w.ok('amy', { op: 'thumbs', g: gid, as: [s1.a] })).th, { [s1.a]: null });
+  // 리더(amy)는 남의 사진도
+  await w.ok('amy', { op: 'unsay', g: gid, s: s2.s });
+  assert.deepEqual(fileKeys(w), []);
+  assert.equal(w.hub().get('ax').t, 0);
+  // 그룹을 없애면 사진도
+  w.now += 2000;
+  await w.ok('bob', photo({ g: gid }));
+  w.now += 2000;
+  await w.ok('amy', { op: 'say', g: gid, p: 'deck', deck: { n: 'Day 1', cs: [['a', 'b']] } });
+  assert.equal(fileKeys(w).length, 3);
+  await w.ok('amy', { op: 'drop', g: gid });
+  assert.deepEqual(fileKeys(w), []);
+  assert.deepEqual(w.hub().get('ax').a, {});
+});
+
+test('사진: 리더가 채팅을 끄면 작은 그림·원본도 못 받음', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob']);
+  w.now += MIN;
+  const x = (await w.ok('bob', photo({ g: gid }))).chat.ms.find((m) => m.p === 'img');
+  await w.ok('amy', { op: 'edit', g: gid, chat: false });
+  await w.err('bob', { op: 'thumbs', g: gid, as: [x.a] }, 'chatoff');
+  await w.err('amy', { op: 'file', g: gid, a: x.a }, 'chatoff');
+  await w.ok('amy', { op: 'edit', g: gid, chat: true });
+  assert.equal((await w.ok('amy', { op: 'file', g: gid, a: x.a })).img, PHOTO);
+});
+
+test('사진: 한 사람 하루 20장, 그룹 하나 7일 100장, 저장소 전체 600MB', async () => {
+  const w = world();
+  const names = ['amy', 'bob', 'cat', 'dan', 'eve', 'fay'];
+  const { gid } = await party(w, names);
+  w.now += MIN;
+  const small = { img: jpeg(2000), th: jpeg(500) };
+  for (let i = 0; i < ATTACH.photoDay; i++) { w.now += 3500; await w.ok('amy', photo(Object.assign({ g: gid }, small))); }
+  w.now += 3500;
+  await w.err('amy', photo(Object.assign({ g: gid }, small)), 'photoday');
+  await w.ok('amy', { op: 'say', g: gid, t: '글은 보낼 수 있어' });
+  // 그룹 100장: 넷이 20장씩 더 보내면 100장
+  for (const n of ['bob', 'cat', 'dan', 'eve']) for (let i = 0; i < ATTACH.photoDay; i++) { w.now += 3500; await w.ok(n, photo(Object.assign({ g: gid }, small))); }
+  w.now += 3500;
+  await w.err('fay', photo(Object.assign({ g: gid }, small)), 'photogroup');
+  // 하루가 지나면 사람 상한은 다시, 그룹 상한은 7일이 지나야
+  w.now += DAY;
+  await w.err('amy', photo(Object.assign({ g: gid }, small)), 'photogroup');
+  w.now += 6 * DAY;
+  await w.ok('amy', photo(Object.assign({ g: gid }, small)));
+  // 저장소 전체 상한 (거의 찬 것처럼 꾸민다)
+  const ax = w.hub().get('ax');
+  w.hub().set('ax', Object.assign({}, ax, { t: ATTACH.total - 1000 }));
+  w.now += 3500;
+  await w.err('bob', photo(Object.assign({ g: gid }, small)), 'space');
+  await w.ok('bob', { op: 'say', g: gid, p: 'rec', r: REC }, 'space');
+});
+
+test('7일이 지난 사진·단어장은 한 시간 안에 서버에서 지운다 (조용한 그룹도), 150줄을 넘겨 밀려난 사진도', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob']);
+  const { gid: quiet } = await party(w, ['cat', 'dan']);
+  w.now += MIN;
+  await w.ok('amy', photo({ g: gid }));
+  w.now += 2000;
+  await w.ok('cat', photo({ g: quiet, t: '조용한 그룹의 사진' }));
+  w.now += 2000;
+  await w.ok('cat', { op: 'say', g: quiet, p: 'deck', deck: { n: 'Day 2', cs: [['x', 'y']] } });
+  assert.equal(fileKeys(w).length, 5);
+  w.now += 7 * DAY - 10 * MIN;
+  await w.ok('bob');
+  assert.equal(fileKeys(w).length, 5, '7일 전에는 그대로');
+  w.now += 70 * MIN; // 7일 + 1시간쯤
+  await w.ok('bob'); // 아무 요청이나 (조용한 그룹 사람이 아니어도)
+  assert.deepEqual(fileKeys(w), []);
+  assert.equal(w.hub().get('ax').t, 0);
+  assert.equal(JSON.stringify(w.hub().get('m:' + quiet)).includes('조용한 그룹의 사진'), false, '그 줄도 지운다');
+  // 150줄을 넘겨 밀려난 사진
+  await w.ok('amy', photo({ g: gid }));
+  for (let i = 0; i < CHAT.keep; i++) { w.now += 3500; await w.ok(i % 2 ? 'amy' : 'bob', { op: 'say', g: gid, t: 'm' + i }); }
+  assert.deepEqual(fileKeys(w), [], '줄이 밀려나면 사진도 지운다');
+});
+
+test('공부 기록 카드: 보낸 순간의 숫자만 줄에 담기고, 한마디 40자, 이상하면 거절', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob']);
+  w.now += MIN;
+  const a = await w.ok('amy', { op: 'say', g: gid, p: 'rec', r: Object.assign({ tasks: ['영어 단어 외우기'] }, REC), t: '오늘은 수학 위주로!', c: 'rec001', since: 0 });
+  const x = a.chat.ms.find((m) => m.p === 'rec');
+  assert.deepEqual([x.cap, x.t, x.r.m, x.r.sb.length, x.r.tasks], ['오늘은 수학 위주로!', '📊 오늘 공부 3시간 25분 · 오늘은 수학 위주로!', 205, 4, undefined]);
+  assert.deepEqual(fileKeys(w), [], '카드는 파일 없이 줄에만');
+  const b = (await w.ok('bob', { op: 'chat', g: gid, since: 0 })).chat.ms.find((m) => m.p === 'rec');
+  assert.deepEqual(b.r, x.r);
+  w.now += 2000;
+  await w.err('amy', { op: 'say', g: gid, p: 'rec', r: Object.assign({}, REC, { m: -5 }) }, 'bad');
+  await w.err('amy', { op: 'say', g: gid, p: 'rec', r: REC, t: '가'.repeat(41) }, 'bad');
+  await w.err('amy', { op: 'say', g: gid, p: 'rec' }, 'bad');
+  // 지우기
+  const d = await w.ok('amy', { op: 'unsay', g: gid, s: x.s, since: 0 });
+  assert.equal(d.chat.ms.find((m) => m.s === x.s).r, undefined);
+});
+
+test('단어장: 이름과 카드 앞·뒤만, 줄에는 장수와 앞 3장, 원본은 file로, 1000장까지, 하루 10개', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy', 'bob']);
+  w.now += MIN;
+  const cs = Array.from({ length: 30 }, (_, i) => ['word' + i, '뜻 ' + i]);
+  cs[0] = ['abandon', '버리다, 포기하다 — '.repeat(5) + '끝'];
+  const a = await w.ok('amy', { op: 'say', g: gid, p: 'deck', deck: { n: '수능 영단어 Day 12', cs, ease: 2.5 }, c: 'deck01', since: 0 });
+  const x = a.chat.ms.find((m) => m.p === 'deck');
+  assert.deepEqual([x.dn, x.cn, x.pv.length, x.t], ['수능 영단어 Day 12', 30, 3, '🗂️ 단어장 ‘수능 영단어 Day 12’ 카드 30장']);
+  assert.ok([...x.pv[0][1]].length <= 60, '미리 보기는 짧게');
+  assert.equal(x.pv[1][0], 'word1');
+  const f = await w.ok('bob', { op: 'file', g: gid, a: x.a });
+  assert.deepEqual(f.deck, { n: '수능 영단어 Day 12', cs: cs.map(([q, r]) => [q, r.trim()]) }, '덱 전체 (복습 기록은 없음)');
+  assert.deepEqual((await w.ok('bob', { op: 'thumbs', g: gid, as: [x.a] })).th, { [x.a]: null }, '단어장은 작은 그림이 없다');
+  w.now += 2000;
+  await w.err('amy', { op: 'say', g: gid, p: 'deck', deck: { n: 'x', cs: new Array(1001).fill(['a', 'b']) } }, 'big');
+  await w.err('amy', { op: 'say', g: gid, p: 'deck', deck: { n: 'x', cs: [['', 'b']] } }, 'bad');
+  await w.err('amy', { op: 'say', g: gid, p: 'deck' }, 'bad');
+  for (let i = 1; i < ATTACH.deckDay; i++) { w.now += 3500; await w.ok('amy', { op: 'say', g: gid, p: 'deck', deck: { n: 'd' + i, cs: [['a', 'b']] } }); }
+  w.now += 3500;
+  await w.err('amy', { op: 'say', g: gid, p: 'deck', deck: { n: 'd11', cs: [['a', 'b']] } }, 'deckday');
+  // 1000장짜리 덱 (본문은 크지만 1.6MB 안)
+  w.now += 3500;
+  const k = await w.ok('bob', { op: 'say', g: gid, p: 'deck', deck: { n: '큰 덱', cs: Array.from({ length: 1000 }, (_, i) => ['단어'.repeat(40) + i, '뜻'.repeat(60) + i]) } });
+  assert.equal(k.chat.ms.find((m) => m.dn === '큰 덱').cn, 1000);
+});
+
+test('붙인 것: 응답과 저장소에 이메일·로그인 번호·실제 이름이 없다', async () => {
+  const w = world();
+  const { gid } = await party(w, ['amy-uid-123', 'bob-uid-456']);
+  w.now += MIN;
+  const x = (await w.ok('amy-uid-123', photo({ g: gid, t: '사진' }))).chat.ms.find((m) => m.p === 'img');
+  w.now += 2000;
+  await w.ok('amy-uid-123', { op: 'say', g: gid, p: 'rec', r: REC });
+  w.now += 2000;
+  await w.ok('amy-uid-123', { op: 'say', g: gid, p: 'deck', deck: { n: 'd', cs: [['a', 'b']] } });
+  const raws = [(await w.call('bob-uid-456', { op: 'chat', g: gid, since: 0 })).raw, (await w.call('bob-uid-456', { op: 'thumbs', g: gid, as: [x.a] })).raw];
   for (const raw of raws) for (const secret of ['amy-uid-123', 'bob-uid-456', '@example.com', 'Real ']) assert.ok(!raw.includes(secret), secret);
   const store = JSON.stringify([...w.hub()]);
   for (const secret of ['amy-uid-123', 'bob-uid-456', '@example.com', 'Real ']) assert.ok(!store.includes(secret), '저장소 ' + secret);

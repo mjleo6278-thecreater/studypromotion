@@ -173,7 +173,7 @@
     const headers = { Authorization: 'Bearer ' + tok };
     if (body) headers['Content-Type'] = 'application/json';
     const ctl = root.AbortController ? new AbortController() : null;
-    const timer = setTimeout(() => { if (ctl) ctl.abort(); }, 15000);
+    const timer = setTimeout(() => { if (ctl) ctl.abort(); }, (opts && opts.timeout) || 15000); // 사진을 올릴 때는 더 기다린다
     try {
       let res;
       try {
@@ -210,6 +210,12 @@
     fast: '조금 천천히 보내 주세요',
     daymax: '오늘은 메시지를 더 보낼 수 없어요 (하루 300개)',
     gone: '이미 지워진 메시지예요',
+    big: '너무 커서 보낼 수 없어요',
+    photoday: '사진은 하루에 20장까지 보낼 수 있어요',
+    photogroup: '이 그룹은 7일 동안 사진을 100장까지 보낼 수 있어요. 오래된 사진이 지워지면 다시 보낼 수 있어요',
+    deckday: '단어장은 하루에 10개까지 보낼 수 있어요',
+    deckgroup: '이 그룹은 7일 동안 단어장을 50개까지 보낼 수 있어요',
+    space: '지금은 사진을 보낼 수 없어요. 나중에 다시 해 주세요',
   };
   const errText = (code) => ERR[code] || ERR.server;
 

@@ -363,7 +363,7 @@ test('플래너 3.10: 어제 못 끝낸 일 고르기 — 고른 것만, 세모�
   assert.strictEqual(P.taskMinutes(st.sessions, a), 25, '잰 시간도 그대로 할 일에');
   assert.strictEqual(d.due, Y, '고르지 않은 일은 그대로');
   assert.strictEqual(P.fromText(a, TODAY), '어제부터');
-  // 4.2.1: 오늘로 옮긴 '빈칸'이 있으니 그제의 '빈칸'은 그 줄에 합쳐지고, 처음 날짜는 더 이른 그제
+  // 4.3.1: 오늘로 옮긴 '빈칸'이 있으니 그제의 '빈칸'은 그 줄에 합쳐지고, 처음 날짜는 더 이른 그제
   const pf = P.carryOver(st, TODAY, NOW, [f.id]);
   assert.strictEqual(pf[0].merged.into, b.id);
   assert.ok(!st.tasks.some((t) => t.id === f.id), '같은 일은 한 줄만');
@@ -378,7 +378,7 @@ test('플래너 3.10: 어제 못 끝낸 일 고르기 — 고른 것만, 세모�
   assert.strictEqual(P.fromText(a, TODAY), '');
 });
 
-test('플래너 4.2.1: 두 날에 넣은 같은 일을 옮겨도 한 줄 — 합치고, 되돌리면 그대로', () => {
+test('플래너 4.3.1: 두 날에 넣은 같은 일을 옮겨도 한 줄 — 합치고, 되돌리면 그대로', () => {
   const Y = '2026-11-16', TM = '2026-11-18';
   // 사용자 사례: 범위에서 어제와 오늘에 같은 항목('14회 · 분석')을 넣고 어제 것을 오늘로
   const st = scopeState();
