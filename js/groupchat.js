@@ -7,6 +7,7 @@
  * - 공부하는 동안(스톱워치·집중 타이머·폰 잠금)은 새 메시지 표시를 숨기고, 창을 열면 한 번 묻는다 (settings.groupChatStudy === false면 끔).
  * - 욕설은 보는 사람의 앱에서 ✱✱로 가린다 (settings.groupChatFilter === false면 끔). 링크는 글자로만 보인다.
  * - 읽음 표시·입력 중 표시·앱 밖 알림은 없다.
+ * - 사진·공부 기록 카드·단어장(v4.3)은 js/chatattach.js가 만들고 그린다. 이 파일은 보내는 줄(send의 extra)과 메뉴만 같이 쓴다.
  * 위쪽(lib)은 node 시험에서도 쓰는 순수 함수, 아래는 브라우저 화면.
  */
 (function (root) {
@@ -114,6 +115,7 @@
   const { store, $, esc, toast, ask, choose } = App;
   const doc = root.document;
   const ic = (name, cls) => App.ic(name, cls);
+  const A = () => root.ChatAttach || null; // 사진·공부 기록·단어장 (js/chatattach.js, 이 파일 다음에 읽힌다)
   const featOn = () => !root.Features || root.Features.on('grchat');
   const canChat = () => G.canTalk() && featOn();
   const settings = () => store.get().settings || {};
@@ -359,6 +361,7 @@
     const sr = `<span class="gc-sr">${esc(name)}${x.pend ? '' : ', ' + esc(ampm(x.at))}: </span>`;
     let b;
     if (x.x) b = `<p class="gc-b del">${sr}${x.x === 2 ? '리더가 지운 메시지예요' : '지운 메시지예요'}</p>`;
+    else if (x.p && A()) b = A().bubbleHTML(g, x, { mine: o.mine, name, sr, key: x.pend ? `data-gc-c="${esc(x.c)}"` : `data-gc-s="${x.s}"` }); // 사진·공부 기록·단어장
     else b = `<p class="gc-b" tabindex="0" role="button" aria-haspopup="menu" ${x.pend ? `data-gc-c="${esc(x.c)}"` : `data-gc-s="${x.s}"`}>${sr}${esc(shown(x.t))}</p>`;
     let side = '';
     if (x.pend) side = x.fail ? `<span class="gc-st fail">${esc(x.fail)}<button type="button" class="gc-retry" data-gc-retry="${esc(x.c)}">다시 보내기</button></span>` : '<span class="gc-st">보내는 중</span>';
@@ -410,6 +413,7 @@
       if (stick) list.scrollTop = list.scrollHeight;
       else { list.scrollTop = keep; if (o.fresh) jump.hidden = false; }
     }
+    if (A()) A().hydrate(list, gid); // 사진의 작은 그림 채우기 (없는 것만 서버에서)
     paintHead(g);
     markRead();
     updateDot();
@@ -428,17 +432,21 @@
   }
   const queue = [];
   let sending = false, lastSent = 0;
-  function send(t) {
+  // t: 글 (붙인 것이면 미리 보기 글). extra: 붙인 것 { p, …보여 줄 것, up 서버로 보낼 것, loc 이 기기의 사진 }
+  function send(t, extra) {
     const gid = openGid;
-    if (!gid) return;
+    if (!gid) return null;
     const s = G.state();
-    const x = { pend: 1, c: newId(), t, at: Date.now(), f: me(), n: (s && s.me && s.me.n) || '', g: gid };
+    const x = Object.assign({ pend: 1, c: newId(), t, at: Date.now(), f: me(), n: (s && s.me && s.me.n) || '', g: gid }, extra || null);
     cacheOf(gid).lines.push(x);
     lastAct = Date.now();
     renderList({ stick: true });
     queue.push(x);
     pump();
+    return x;
   }
+  // 못 보낸 까닭 (보내는 줄 옆 글)
+  const failText = (code) => (code === 'fast' ? '너무 빨라요' : code === 'daymax' ? '오늘은 그만' : '못 보냈어요');
   async function pump() {
     if (sending) return;
     const x = queue.shift();
@@ -451,13 +459,18 @@
       if (!c.lines.includes(x)) return; // 기다리는 동안 '보내지 않기'를 눌렀다
       if (!canChat()) throw Object.assign(new Error('offline'), { code: navigator.onLine === false ? 'offline' : 'server' });
       const no = ++reqNo;
-      const j = await G.call({ op: 'say', g: x.g, t: x.t, c: x.c, since: c.loaded ? c.v : 0 });
+      const body = { op: 'say', g: x.g, c: x.c, since: c.loaded ? c.v : 0 };
+      if (x.p) Object.assign(body, { p: x.p }, x.up); else body.t = x.t;
+      const big = x.p === 'img' || x.p === 'deck'; // 사진·단어장은 올리는 데 오래 걸릴 수 있다
+      const j = await G.call(body, big ? { timeout: 90000 } : null);
       lastSent = Date.now();
+      if (x.p && A()) A().sent(x, j.chat); // 내가 보낸 사진은 다시 받지 않게
       take(x.g, j.chat, no);
     } catch (e) {
       lastSent = Date.now();
-      x.fail = e.code === 'offline' ? '못 보냈어요' : e.code === 'fast' ? '너무 빨라요' : e.code === 'daymax' ? '오늘은 그만' : '못 보냈어요';
-      if (['fast', 'daymax', 'chatoff', 'name', 'nogroup'].includes(e.code)) toast(G.errText(e.code));
+      x.fail = failText(e.code);
+      if (['fast', 'daymax', 'chatoff', 'name', 'nogroup', 'photoday', 'photogroup', 'deckday', 'deckgroup', 'space'].includes(e.code)) toast(G.errText(e.code));
+      else if (e.code === 'big') toast(x.p === 'deck' ? '단어장이 너무 커요 (카드 1000장까지)' : '사진이 너무 커요. 다른 사진을 골라 주세요');
       if (e.code === 'chatoff' || e.code === 'nogroup') G.pull();
       if (x.g === openGid) renderList();
     } finally {
@@ -477,7 +490,9 @@
   function dropPending(cid) {
     const gid = openGid, c = gid && caches[gid];
     if (!c) return;
-    c.lines = c.lines.filter((y) => !(y.pend && y.c === cid));
+    const x = c.lines.find((y) => y.pend && y.c === cid);
+    c.lines = c.lines.filter((y) => y !== x);
+    if (x && x.p && A()) A().dropped(x); // 이 기기의 사진 주소를 놓아준다
     renderList();
   }
   async function submit() {
@@ -522,6 +537,8 @@
   });
 
   /* ---------- 메시지 메뉴 (꾹 누르기 · 오른쪽 클릭 · 마우스로 누르기) ---------- */
+  // 메뉴가 열리는 것: 말풍선, 사진, 공부 기록 카드, 단어장 카드 (메시지 번호 s, 보내는 중이면 앱 번호 c)
+  const PICK = '[data-gc-s], [data-gc-c]';
   const lineOf = (el) => {
     const c = openGid && caches[openGid];
     if (!c || !el) return null;
@@ -530,47 +547,55 @@
     return null;
   };
   const preview = (t) => { const s = String(t || '').replace(/\s+/g, ' '); return [...s].length > 60 ? [...s].slice(0, 60).join('') + '…' : s; };
+  const KIND = { img: '사진', rec: '공부 기록', deck: '단어장' };
   let menuOpen = false;
   async function msgMenu(el) {
     const x = lineOf(el), gid = openGid, g = gid && G.findGroup(gid);
     if (!x || !g || x.x || menuOpen) return;
     if (x.pend && !x.fail) return;
     const my = me(), mine = x.f === my, lead = g.lead === my, name = mine ? '나' : nameOf(g, x);
+    const kind = KIND[x.p] || '메시지', text = x.p ? x.cap || '' : x.t; // 복사할 글 (사진 설명·공부 기록 한마디)
     menuOpen = true;
     el.classList.add('pick');
     let v;
     try {
       if (x.pend) {
-        v = await choose('보내지 못한 메시지', [
+        v = await choose(`보내지 못한 ${kind}`, [
           { value: 'retry', label: '다시 보내기' },
           { value: 'drop', label: '보내지 않기', hint: '이 기기에서 지워요' },
-          { value: 'copy', label: '복사' },
-        ], { note: preview(x.t) });
+          text ? { value: 'copy', label: x.p ? '글 복사' : '복사' } : null,
+        ].filter(Boolean), { note: preview(x.t) });
       } else {
-        const opts = [{ value: 'copy', label: '복사' }];
+        const opts = [];
+        if (x.p === 'img') opts.push({ value: 'save', label: '사진 저장' });
+        if (x.p === 'deck' && !mine) opts.push({ value: 'import', label: '내 복습에 담기', hint: '링크로 가져오기와 같은 확인 창이 떠요' });
+        if (text) opts.push({ value: 'copy', label: x.p === 'img' ? '설명 복사' : x.p ? '한마디 복사' : '복사' });
         if (!mine) opts.push({ value: 'hide', label: `${name} 님 메시지 가리기`, hint: '내 화면에서만 가려지고 상대는 몰라요' });
-        if (mine || lead) opts.push({ value: 'del', label: '메시지 지우기', hint: mine ? '모두에게 ‘지운 메시지예요’로 보여요' : '리더 · 모두에게 ‘리더가 지운 메시지예요’로 보여요' });
-        v = await choose(mine ? '내 메시지' : `${name} 님의 메시지`, opts, { note: preview(shown(x.t)) });
+        if (mine || lead) opts.push({ value: 'del', label: `${kind === '메시지' ? '메시지' : kind} 지우기`, hint: (mine ? '모두에게 ‘지운 메시지예요’로 보여요' : '리더 · 모두에게 ‘리더가 지운 메시지예요’로 보여요') + (x.p === 'img' || x.p === 'deck' ? ` · 서버의 ${kind}도 지워요` : '') });
+        v = await choose(mine ? `내 ${kind}` : `${name} 님의 ${kind}`, opts, { note: preview(shown(x.t)) });
       }
     } finally {
       menuOpen = false;
       el.classList.remove('pick');
     }
     if (!v || gid !== openGid) return;
-    if (v === 'copy') toast((await G.copyText(shown(x.t))) ? '메시지를 복사했어요' : '복사하지 못했어요');
+    if (v === 'copy') toast((await G.copyText(shown(text))) ? (x.p ? '글을 복사했어요' : '메시지를 복사했어요') : '복사하지 못했어요');
     else if (v === 'retry') retry(x.c);
     else if (v === 'drop') dropPending(x.c);
     else if (v === 'hide') hide(x.f, name);
     else if (v === 'del') unsay(gid, x, mine);
+    else if ((v === 'save' || v === 'import') && A()) A().act(v, x, gid);
   }
   async function unsay(gid, x, mine) {
-    const msg = mine ? '이 메시지를 지울까요?\n모두의 화면에서 ‘지운 메시지예요’로 바뀌어요.' : '이 메시지를 지울까요?\n모두의 화면에서 ‘리더가 지운 메시지예요’로 바뀌어요.';
+    const kind = KIND[x.p] || '메시지';
+    const after = x.p === 'img' || x.p === 'deck' ? ` 서버에 있는 ${kind}도 지워져요.` : '';
+    const msg = mine ? `이 ${kind}${kind === '메시지' ? '를' : '을'} 지울까요?\n모두의 화면에서 ‘지운 메시지예요’로 바뀌어요.${after}` : `이 ${kind}${kind === '메시지' ? '를' : '을'} 지울까요?\n모두의 화면에서 ‘리더가 지운 메시지예요’로 바뀌어요.${after}`;
     if (!(await ask(msg, { ok: '지우기', danger: true }))) return;
     const c = cacheOf(gid), no = ++reqNo;
     try {
       const j = await G.call({ op: 'unsay', g: gid, s: x.s, since: c.loaded ? c.v : 0 });
       take(gid, j.chat, no);
-      toast('메시지를 지웠어요');
+      toast(x.p ? `${kind}을 지웠어요` : '메시지를 지웠어요');
     } catch (e) {
       toast(G.errText(e.code));
       if (e.code === 'gone' || e.code === 'lead') poll();
@@ -657,21 +682,33 @@
     if (r) return retry(r.dataset.gcRetry);
     if (e.target.closest('[data-gc-room]')) { const gid = openGid; close(); G.joinRoom(gid); return; }
     if (e.target.closest('#gc-jump')) { list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' }); jump.hidden = true; return; }
-    const bub = e.target.closest('.gc-b[data-gc-s], .gc-b[data-gc-c]');
+    if (e.target.closest('#gc-add')) { if (A()) A().menu(); return; } // + 사진·공부 기록·단어장
+    // 사진: 누르면 크게 보기 (꾹 누른 직후는 빼고, 보내지 못한 사진은 메뉴)
+    const ph = e.target.closest('[data-gx-open]');
+    if (ph) {
+      if (ph.closest('.failed')) msgMenu(ph);
+      else if (Date.now() - pressAt > 800 && A()) A().view(lineOf(ph), openGid);
+      return;
+    }
+    // 단어장 카드의 '내 복습에 담기' · '복습에서 보기'
+    const act = e.target.closest('[data-gx-act]');
+    if (act) { if (Date.now() - pressAt > 800 && A()) A().act(act.dataset.gxAct, lineOf(act.closest(PICK)), openGid); return; }
+    const bub = e.target.closest(PICK);
     // 마우스는 눌러서 메뉴, 손가락은 꾹 눌러서 (보내지 못한 메시지는 그냥 눌러도)
     if (bub && (fine() || bub.closest('.failed')) && Date.now() - pressAt > 800) msgMenu(bub);
   });
   back.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { e.preventDefault(); close(); return; }
-    const bub = e.target.closest && e.target.closest('.gc-b[data-gc-s], .gc-b[data-gc-c]');
-    if (bub && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); msgMenu(bub); }
+    // Enter·스페이스로 메뉴 (사진 단추는 크게 보기라 빼고, 메뉴는 오른쪽 클릭 키로)
+    const bub = e.target.closest && e.target.closest(PICK);
+    if (bub && bub === e.target && !bub.matches('button') && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); msgMenu(bub); }
   });
   // 꾹 누르기 (0.48초). 안드로이드는 꾹 누르면 contextmenu도 오므로 한 번만 연다
   let pressT = null, pressXY = null, pressAt = 0;
   const unpress = () => { if (pressT) { clearTimeout(pressT); pressT = null; } list.querySelectorAll('.pressing').forEach((x) => x.classList.remove('pressing')); };
   list.addEventListener('pointerdown', (e) => {
     if (e.pointerType === 'mouse') return;
-    const bub = e.target.closest('.gc-b[data-gc-s], .gc-b[data-gc-c]');
+    const bub = e.target.closest(PICK);
     if (!bub) return;
     unpress();
     pressXY = [e.clientX, e.clientY];
@@ -682,7 +719,7 @@
   list.addEventListener('pointerup', unpress);
   list.addEventListener('pointercancel', unpress);
   list.addEventListener('contextmenu', (e) => {
-    const bub = e.target.closest('.gc-b[data-gc-s], .gc-b[data-gc-c]');
+    const bub = e.target.closest(PICK);
     if (!bub) return;
     e.preventDefault();
     if (Date.now() - pressAt < 1000) return;
@@ -733,6 +770,12 @@
     // 시험용
     unread: (gid) => unread(G.findGroup(gid)),
     poll,
+    // 사진·공부 기록·단어장(js/chatattach.js)이 쓰는 안쪽 도구
+    _: {
+      get openId() { return openGid; },
+      send, lineOf, me, nameOf, shown, looksContact, close, renderList, cacheOf, ampm,
+      refresh: () => { lastHTML = ''; renderList(); },
+    },
   };
   updateDot();
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -30,6 +30,8 @@
  *   GET  /group   Authorization: Bearer <확인표>   내 별명과 내가 든 그룹들 (그룹마다 사람들의 별명·날별 공부 시간·공부 중 표시·목표·응원)
  *   POST /group   Authorization: Bearer <확인표>   { op: 'sync' | 'name' | 'create' | 'peek' | 'join' | 'leave' | 'cheer' | 'room' | ... , ... }
  *   못 할 때:     { error: "login" | "name"(별명이 필요) | "badname" | "gname" | "code"(없는 초대 코드) | "full" | "many" | "banned" | "lead"(리더만) | "nogroup" | "wait" | "slow" | "bad" | "server" }
+ *                 채팅(v4.1~): "chatoff" | "fast" | "daymax" | "gone", 붙인 것(v4.3): "big" | "photoday" | "photogroup" | "deckday" | "deckgroup" | "space"
+ *   본문은 16KB까지. 사진·단어장을 붙인 say만 1.6MB까지 받는다
  *   사람은 Firebase 사용자 번호를 SHA-256으로 바꾼 값('group:' + 번호, 벽 튕기기와 다른 값)으로만 가리킨다. 이메일·이름은 받지 않는다
  *
  * 설정 (wrangler.toml의 [vars]. OWNER_EMAILS만 Cloudflare 화면에서 비밀 값으로)
@@ -167,7 +169,10 @@ export class Counter {
   async fetch(request) {
     const msg = await request.json();
     if (String(msg.op).startsWith('board')) return Response.json(await boardOp(this.state.storage, msg)); // 벽 튕기기 순위 저장소 (아래)
-    if (String(msg.op).startsWith('group-')) return Response.json(await groupOp(this.state.storage, msg)); // 그룹 스터디 저장소 (group.js)
+    if (String(msg.op).startsWith('group-')) { // 그룹 스터디 저장소 (group.js). 못 하면 400(서버 문제면 503)
+      const r = await groupOp(this.state.storage, msg);
+      return Response.json(r, { status: r && r.error ? (r.error === 'server' ? 503 : 400) : 200 });
+    }
     const { op, day, limit, q, at, again } = msg;
     const st = this.state.storage, key = 'n:' + day;
     const n = (await st.get(key)) || 0;
@@ -300,7 +305,8 @@ async function bounce(request, env, deps, now, json) {
 }
 
 /* ---------- 그룹 스터디 요청 ---------- */
-const GROUP_BODY_MAX = 16000; // 앱이 보내는 본문은 많아야 1KB쯤
+const GROUP_BODY_MAX = 16000;    // 앱이 보내는 본문은 많아야 1KB쯤
+const GROUP_FILE_MAX = 1600000;  // 사진(원본 900KB + 작은 그림, base64)이나 단어장을 붙인 say (v4.3)
 async function group(request, env, deps, now, json) {
   const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.get('Authorization') || '');
   let user = null;
@@ -309,23 +315,35 @@ async function group(request, env, deps, now, json) {
     catch (e) { return json({ error: 'server' }, 503); } // 구글의 열쇠를 받아 오지 못함
   }
   if (!user) return json({ error: 'login' }, 401);
-  let body = {};
+  let body = {}, raw = '{}';
   if (request.method === 'POST') {
-    let raw = '';
+    if (+(request.headers.get('Content-Length') || 0) > GROUP_FILE_MAX) return json({ error: 'big' }, 413);
+    raw = '';
     try { raw = await request.text(); } catch (e) { /* 아래에서 거절 */ }
-    if (!raw || raw.length > GROUP_BODY_MAX) return json({ error: 'bad' }, 400);
+    if (!raw) return json({ error: 'bad' }, 400);
+    if (raw.length > GROUP_FILE_MAX) return json({ error: 'big' }, 413);
     try { body = JSON.parse(raw); } catch (e) { body = null; }
     if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: 'bad' }, 400);
+    // 큰 본문은 사진·단어장을 붙인 메시지만
+    if (raw.length > GROUP_BODY_MAX && !(body.op === 'say' && (body.p === 'img' || body.p === 'deck'))) return json({ error: 'bad' }, 400);
   }
   const op = request.method === 'GET' ? 'get' : String(body.op || '');
   if (!GROUP_OPS.includes(op)) return json({ error: 'bad' }, 400);
   const id = await fingerprint('group:' + user.sub); // 사람 번호: 이메일·이름 대신
   const store = env.COUNTER.get(env.COUNTER.idFromName(GROUP_STORE));
-  let r;
-  try { r = await (await store.fetch('https://group/', { method: 'POST', body: JSON.stringify({ op: 'group-' + op, id, at: now, b: body }) })).json(); }
+  // 받은 본문은 이미 읽어 본 JSON이라 그대로 이어 붙여 넘긴다 (사진처럼 긴 글을 다시 JSON으로 만드는 일을 줄인다)
+  const msg = '{"op":' + JSON.stringify('group-' + op) + ',"id":' + JSON.stringify(id) + ',"at":' + JSON.stringify(now) + ',"b":' + raw + '}';
+  let res;
+  try { res = await store.fetch('https://group/', { method: 'POST', body: msg }); }
   catch (e) { console.error(JSON.stringify({ at: 'group', op, error: String((e && e.message) || e).slice(0, 200) })); return json({ error: 'server' }, 503); }
-  if (r && r.error) return json(r, r.error === 'server' ? 503 : 400);
-  return json(r);
+  if (res.status !== 200) { // 못 함: { error }
+    let r = null;
+    try { r = await res.json(); } catch (e) { /* 아래에서 */ }
+    return json(r && r.error ? { error: r.error } : { error: 'server' }, r && r.error && r.error !== 'server' ? 400 : 503);
+  }
+  // 됨: 저장소의 답(사진이면 큰 글)을 다시 읽지 않고 그대로 보낸다
+  const out = json({});
+  return new Response(res.body, { status: 200, headers: out.headers });
 }
 
 /* ---------- 요청 처리 ---------- */
