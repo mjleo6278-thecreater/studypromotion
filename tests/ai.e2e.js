@@ -111,7 +111,8 @@ const server = http.createServer((req, res) => {
   await page.tap('#ai-fab');
   await page.waitForTimeout(350);
   assert(await page.isVisible('#ai-panel .ai-sheet') && (await page.textContent('#ai-title')) === '세컨드', '단추를 누르면 대화 창이 열림');
-  assert((await page.locator('#ai-log .ai-eg').count()) === 5 && /수학 I 일정 넣어 줘/.test(await page.textContent('#ai-log')), '처음에는 인사와 예시 다섯 개 (내 과목 이름으로)');
+  assert((await page.locator('#ai-log [data-eg]').count()) === 5 && /수학 I 일정 넣어 줘/.test(await page.textContent('#ai-log')), '처음에는 인사와 예시 다섯 개 (내 과목 이름으로)');
+  assert((await page.locator('#ai-log [data-photo-eg]').count()) === 2, '사진을 쓸 수 있으면 사진으로 묻기 예시 두 개');
   let fit = await page.evaluate(() => { const r = document.querySelector('.ai-sheet').getBoundingClientRect(); return { w: r.width, bottom: Math.round(r.bottom), sw: document.documentElement.scrollWidth }; });
   assert(fit.w === 360 && fit.bottom === 780 && fit.sw <= 360, '폰에서는 아래에서 올라오는 시트 (옆으로 밀리지 않음)');
   await page.goBack();
@@ -265,7 +266,7 @@ const server = http.createServer((req, res) => {
   await page.waitForSelector('#ask:not([hidden])');
   await page.tap('#ask-ok');
   await page.waitForTimeout(150);
-  assert((await page.locator('#ai-log .ai-msg').count()) === 0 && (await page.locator('#ai-log .ai-eg').count()) === 5 && (await page.evaluate(() => JSON.parse(localStorage.getItem('studypromotion.ai')).msgs.length)) === 0, '새 대화: 지난 대화를 지우고 처음 화면으로');
+  assert((await page.locator('#ai-log .ai-msg').count()) === 0 && (await page.locator('#ai-log [data-eg]').count()) === 5 && (await page.evaluate(() => JSON.parse(localStorage.getItem('studypromotion.ai')).msgs.length)) === 0, '새 대화: 지난 대화를 지우고 처음 화면으로');
   // v3.2.2: 지울 대화가 없으면 새 대화 단추를 숨긴다 (비어 있을 때 눌러도 아무 일이 없어 고장처럼 보였다)
   assert(await page.isHidden('#ai-new') && await page.isVisible('#ai-close') && await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('ai-sheet')), '대화가 비면 새 대화 단추가 숨고 초점은 창으로');
   await say(page, 'hola 뜻', '안녕이라는 뜻이에요.');

@@ -65,9 +65,9 @@ const FAKE = `
       if (where === '/me') {
         if (srv.meDelay) await new Promise((ok) => setTimeout(ok, srv.meDelay));
         if (!token) return json(route, { open: everyone, signedIn: false });
-        if (owner) return json(route, { open: true, signedIn: true, unlimited: true });
+        if (owner) return json(route, { open: true, signedIn: true, unlimited: true, photo: true });
         if (!everyone) return json(route, { open: false, signedIn: true });
-        return json(route, { open: true, signedIn: true, unlimited: false, left: srv.limit - srv.used, limit: srv.limit });
+        return json(route, { open: true, signedIn: true, unlimited: false, left: srv.limit - srv.used, limit: srv.limit, photo: false });
       }
       // 그룹 스터디(v4.0): 이 시험의 사람들은 그룹에 들지 않았다
       if (where === '/group') return token ? json(route, { ok: true, me: { id: '0123456789abcdef', n: null }, groups: [], lim: { members: 20, groups: 5 } }) : json(route, { error: 'login' }, 401);
@@ -139,6 +139,7 @@ const FAKE = `
   assert(sent.token === 'tok-g1' && sent.body.messages[0].role === 'system' && sent.body.messages[sent.body.messages.length - 1].content === 'echar de menos가 무슨 뜻이야?', '질문을 로그인 확인표와 함께 서버로 보냄');
   assert((await page.locator('#ai-log .ai-msg.ai').last().locator('.ai-text b').textContent()) === 'echar de menos' && /그리워하다/.test(await page.locator('#ai-log .ai-msg.ai').last().locator('.ai-text').textContent()), '조금씩 온 답을 이어 붙여 보여 줌');
   assert((await page.textContent('#ai-left')) === '횟수 제한 없음' && srv.used === 0, '주인 계정은 횟수를 쓰지 않음');
+  assert(await page.isVisible('#ai-photo') && await page.evaluate(() => JSON.parse(localStorage.getItem('studypromotion.ai.gate')).photo === true), '사진을 열어 준 계정(주인)에게는 사진 단추가 보이고 기기에 기억함');
 
   /* ===== 2-1) 반복 일정을 말로 넣는다 (2026-11-15에 실제로 실패했던 말) ===== */
   const last = () => page.locator('#ai-log .ai-msg.ai').last();
@@ -254,6 +255,7 @@ const FAKE = `
   await page.tap('#ai-fab');
   await page.waitForTimeout(300);
   assert((await page.textContent('#ai-left')) === '오늘 2번 남음', '모두에게 열면 단추가 보이고 남은 횟수를 알려 줌');
+  assert(await page.isHidden('#ai-photo') && (await page.locator('#ai-log [data-photo-eg]').count()) === 0 && (await page.getAttribute('#ai-input', 'placeholder')) === '모르는 표현을 묻거나 할 일을 말해 보세요', '사진을 아직 열지 않은 계정에는 사진 단추·사진 예시가 없음');
   await ask(page, '하나');
   assert((await page.textContent('#ai-left')) === '오늘 1번 남음', '물을 때마다 남은 횟수가 줄어듦');
   await ask(page, '둘');

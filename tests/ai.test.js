@@ -152,10 +152,11 @@ test('서버가 넘겨 준 한 줄을 읽는다: 모델마다 다른 모양, 생
   assert.deepStrictEqual([AI.readChunk({ error: { message: '모델이 멈춤' } }).error, AI.readChunk({ error: { message: '모델이 멈춤' } }).detail], ['server', '모델이 멈춤']);
   for (const odd of [null, 'x', 3, [], { choices: 'x' }, { choices: [null] }]) assert.strictEqual(AI.readChunk(odd).text, '');
 });
-test('카드 후보는 다섯 개까지, 앞뒤가 다 있는 것만', () => {
-  const cards = Array.from({ length: 7 }, (_, i) => ({ front: 'f' + i, back: 'b' + i })).concat([{ front: '', back: 'x' }]);
+test('카드 후보는 서른 개까지(사진 속 단어장), 앞뒤가 다 있는 것만', () => {
+  const cards = Array.from({ length: 33 }, (_, i) => ({ front: 'f' + i, back: 'b' + i })).concat([{ front: '', back: 'x' }]);
   const r = AI.parseReply('설명입니다.\n<cards>' + JSON.stringify(cards) + '</cards>');
-  assert.strictEqual(r.cards.length, 5);
+  assert.strictEqual(r.cards.length, 30);
+  assert.match(AI.PROMPT_ASK, /5개까지/); // 보통 질문에서는 지시문이 다섯 개까지만 적게 한다
   assert.deepStrictEqual(r.cards[0], { front: 'f0', back: 'b0' });
   assert.strictEqual(r.text, '설명입니다.');
 });
@@ -679,4 +680,47 @@ test('AI에게 꺼 둔 기능 이름을 알려 준다 (없으면 그 줄이 없�
   const text = AI.contextText(AI.buildContext(st, NOW));
   assert.match(text, /꺼 둔 기능: 복습, 스톱워치\. /);
   assert.ok(!text.includes('타임테이블') && !text.includes('세컨드'), '홈 칸과 AI 자신은 말하지 않음');
+});
+
+/* ---------- 사진 보내기 (v4.4) ---------- */
+test('사진: 세컨드가 사진에서 읽은 글(<read>)을 따로 꺼낸다', () => {
+  const r = AI.parseReply('<read>1. Ojalá que no llueva.\n2. Aunque esté cansado, seguiré.  \n\n\n\nel paraguas</read>\n**뜻**\n피곤하더라도 계속할 거야.\n<cards>[{"front":"el paraguas","back":"우산"}]</cards>');
+  assert.strictEqual(r.read, '1. Ojalá que no llueva.\n2. Aunque esté cansado, seguiré.\n\nel paraguas');
+  assert.strictEqual(r.text, '**뜻**\n피곤하더라도 계속할 거야.');
+  assert.deepStrictEqual(r.cards, [{ front: 'el paraguas', back: '우산' }]);
+  assert.strictEqual(AI.parseReply('그냥 답').read, '');
+  assert.strictEqual(AI.parseReply('<read>' + '가'.repeat(5000) + '</read>답').read.length, AI.LIMIT.read);
+  // 답이 오는 동안: 읽은 글은 숨기고, 다 읽은 뒤의 답만 보인다
+  assert.strictEqual(AI.visibleText('<read>Ojalá que'), '');
+  assert.strictEqual(AI.visibleText('<rea'), '');
+  assert.strictEqual(AI.visibleText('<read>Ojalá</read>\n**뜻**\n바람'), '**뜻**\n바람');
+  assert.strictEqual(AI.visibleText('앞말 <read>읽는 중'), '앞말');
+});
+test('사진: 지시문에 사진 규칙을 붙이고, 지난 사진은 읽은 글로 대신한다', () => {
+  const ctx = AI.buildContext(sample(), NOW);
+  const m = AI.messages('4번 해석해 줘', ctx, [], false, { photo: true });
+  assert.ok(m[0].content.includes(AI.PROMPT_PHOTO) && m[0].content.includes('<read>'));
+  assert.ok(!AI.messages('안녕', ctx, [], false)[0].content.includes('[사진]'));
+  const hist = [
+    { role: 'user', text: '4번 해석해 줘', photo: true },
+    { role: 'assistant', text: '피곤하더라도 계속 공부할 거야.', read: '4. Aunque esté cansado, seguiré estudiando.\nel paraguas · la nube' },
+  ];
+  const next = AI.messages('단어도 카드로 만들어 줘', ctx, hist, false);
+  assert.strictEqual(next.length, 4);
+  assert.strictEqual(next[1].content, '[사진을 붙여 보냄]\n4번 해석해 줘');
+  assert.strictEqual(next[2].content, '<read>4. Aunque esté cansado, seguiré estudiando.\nel paraguas · la nube</read>\n피곤하더라도 계속 공부할 거야.');
+  assert.match(next[0].content, /지난 대화의 <read>/);
+  assert.ok(!next[0].content.includes(AI.PROMPT_PHOTO)); // 이번엔 사진이 없다
+  // 이번에도 사진을 붙이면 '읽은 글을 쓰지 말라'는 말은 넣지 않는다
+  assert.ok(!AI.messages('이건?', ctx, hist, false, { photo: true })[0].content.includes('지난 대화의 <read>'));
+  // 읽은 글은 1200자보다 길게 남긴다
+  const long = AI.messages('다음', ctx, [{ role: 'user', text: 'q', photo: true }, { role: 'assistant', text: 'a', read: '가'.repeat(1900) }], false);
+  assert.ok(long[2].content.includes('가'.repeat(1900)));
+});
+test('사진: 카드로 만들어 달라는 말은 앱 정보 없이 보낸다 (사진의 단어를 카드 후보로)', () => {
+  assert.strictEqual(AI.needsApp('카드로 만들어 줘'), true);
+  assert.strictEqual(AI.needsApp('카드로 만들어 줘', true), false);
+  assert.strictEqual(AI.needsApp('단어 복습 카드로 만들어 줘', true), false);
+  assert.strictEqual(AI.needsApp('이 시간표 일정으로 넣어 줘', true), true);
+  assert.strictEqual(AI.needsApp('해석해 줘', true), false);
 });
