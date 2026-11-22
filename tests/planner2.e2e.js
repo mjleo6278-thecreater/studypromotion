@@ -269,6 +269,7 @@ function seed() {
   assert(/어제 못 끝낸 할 일 2개/.test(await page.textContent('.ui-back.in .ui-sheet-head')), '그날 처음 열면 묻는 창: 어제 못 끝낸 일 2개');
   const cy = await page.$$eval('.ui-back.in [data-pl-cy]', (els) => els.map((e) => e.dataset.plCy + (e.classList.contains('on') ? '*' : '')).join(','));
   assert(cy === 'y1*,y2', '오늘도 같은 일(영동T 단어)이 있으면 처음부터 체크를 꺼 둠: ' + cy);
+  assert(/한 줄로 합쳐져요/.test(await page.textContent('.ui-back.in [data-pl-cy="y2"] .pl-cy-twin')) && !(await page.$('.ui-back.in [data-pl-cy="y1"] .pl-cy-twin')), '4.2.1: 오늘에도 있는 일엔 옮기면 한 줄로 합쳐진다고 알림');
   const y1Text = await page.textContent('.ui-back.in [data-pl-cy="y1"]');
   assert(/수학/.test(y1Text) && /야자2/.test(y1Text) && /공부 35분/.test(y1Text) && await page.isVisible('.ui-back.in [data-pl-cy="y1"] .pl-cy-mark.t'), '△ 표시·장소·잰 시간도 보여 줌: ' + y1Text);
   assert(/1개 오늘로 옮기기/.test(await page.textContent('.ui-back.in [data-pl-cy-ok]')), '단추에 옮길 수');
@@ -306,6 +307,22 @@ function seed() {
   await sheetGone(page);
   await page.waitForTimeout(150);
   assert((await task(page, 'y1')).due === TODAY && (await task(page, 'y2')).due === YDAY && !!(await page.$('#pl-todo .pl-carry')), "띠의 '오늘로'도 같은 고르는 창 (고르지 않은 일은 띠에 남음)");
+  // 4.2.1: 어제와 오늘에 같은 일(영동T 단어)이 있을 때 어제 것을 옮기면 두 줄이 되지 않고 오늘 줄에 합쳐짐
+  const wordRows = async () => (await page.$$eval('#pl-list > .pl-item .pl-title', (els) => els.map((e) => e.textContent))).filter((x) => x === '영동T 단어').length;
+  assert(await wordRows() === 1, '옮기기 전 오늘 칸의 영동T 단어 1줄');
+  await page.tap('#pl-todo [data-pl-carry]');
+  await sheetIn(page);
+  await page.tap('.ui-back.in [data-pl-cy="y2"]');
+  await page.tap('.ui-back.in [data-pl-cy-ok]');
+  await sheetGone(page);
+  await page.waitForTimeout(150);
+  st = await state(page);
+  assert(!st.tasks.some((t) => t.id === 'y2') && st.tasks.find((t) => t.id === 'd0').from === YDAY && await wordRows() === 1, '같은 일은 한 줄로 합쳐지고 처음 날짜는 어제');
+  assert(/같은 할 일이 있어서 한 줄로 합쳤어요/.test(await toastOf(page)) && /어제부터/.test(await page.textContent(row('d0') + ' .pl-tag.from')) && !(await page.$('#pl-todo .pl-carry')), "합쳤다는 알림, 남은 줄에 '어제부터', 띠도 없어짐");
+  await page.tap('#toast .toast-act');
+  await page.waitForTimeout(150);
+  st = await state(page);
+  assert(st.tasks.find((t) => t.id === 'y2').due === YDAY && !('from' in st.tasks.find((t) => t.id === 'd0')) && await wordRows() === 1 && !!(await page.$('#pl-todo .pl-carry')), '되돌리면 어제 칸에 다시, 띠도 다시');
   await page.evaluate((k) => App.store.update((s) => { s.tasks.find((t) => t.id === 'y2').due = k; }), TODAY);
   await page.waitForTimeout(100);
 

@@ -363,13 +363,105 @@ test('플래너 3.10: 어제 못 끝낸 일 고르기 — 고른 것만, 세모�
   assert.strictEqual(P.taskMinutes(st.sessions, a), 25, '잰 시간도 그대로 할 일에');
   assert.strictEqual(d.due, Y, '고르지 않은 일은 그대로');
   assert.strictEqual(P.fromText(a, TODAY), '어제부터');
-  P.carryOver(st, TODAY, NOW, [f.id]);
-  assert.strictEqual(P.fromText(f, TODAY), '11/15부터');
-  assert.ok(P.dayTasks(st.tasks, TODAY).slice(0, 3).some((t) => t.id === f.id));
+  // 4.2.1: 오늘로 옮긴 '빈칸'이 있으니 그제의 '빈칸'은 그 줄에 합쳐지고, 처음 날짜는 더 이른 그제
+  const pf = P.carryOver(st, TODAY, NOW, [f.id]);
+  assert.strictEqual(pf[0].merged.into, b.id);
+  assert.ok(!st.tasks.some((t) => t.id === f.id), '같은 일은 한 줄만');
+  assert.strictEqual(P.dayTasks(st.tasks, TODAY).filter((t) => t.title === '빈칸').length, 1);
+  assert.strictEqual(P.fromText(b, TODAY), '11/15부터');
+  P.restoreMoves(st, pf);
+  assert.strictEqual(st.tasks.find((t) => t.id === f.id).due, Y2, '되돌리면 그제 일도 제자리');
+  assert.strictEqual(b.from, Y);
   P.restoreMoves(st, prev);
   assert.strictEqual(a.due, Y);
   assert.ok(!('from' in a), '되돌리면 처음 날짜도 지운다');
   assert.strictEqual(P.fromText(a, TODAY), '');
+});
+
+test('플래너 4.2.1: 두 날에 넣은 같은 일을 옮겨도 한 줄 — 합치고, 되돌리면 그대로', () => {
+  const Y = '2026-11-16', TM = '2026-11-18';
+  // 사용자 사례: 범위에서 어제와 오늘에 같은 항목('14회 · 분석')을 넣고 어제 것을 오늘로
+  const st = scopeState();
+  const y = P.topicTask(st, 'a1', Y, { uid, now: 1 });
+  const t = P.topicTask(st, 'a1', TODAY, { uid, now: 2 });
+  const other = task({ title: '다른 일', due: TODAY });
+  y.part = true;
+  y.slotId = 'slot3';
+  t.estimateMin = null;
+  st.tasks.push(other, y, t);
+  st.sessions.push({ id: 's1', minutes: 25, endedAt: NOW - 86400000, taskId: y.id, subjectId: 'math' });
+  st.events.push({ id: 'ev1', kind: 'study', title: '', taskId: y.id, date: Y, start: '19:00', end: '20:00' });
+  assert.ok(P.sameTask(y, t));
+  const ch = P.carryChoices(st, TODAY);
+  assert.deepStrictEqual(ch.map((o) => [o.t.id, o.on, o.merge]), [[y.id, false, true]], '오늘에도 있으니 처음엔 꺼 두고, 옮기면 합쳐진다고 알림');
+  const before = JSON.stringify(st);
+  const prev = P.carryOver(st, TODAY, NOW, [y.id]);
+  assert.strictEqual(prev.length, 1);
+  assert.strictEqual(prev[0].merged.into, t.id);
+  assert.deepStrictEqual(P.dayTasks(st.tasks, TODAY).map((x) => x.id), [t.id, other.id], '오늘엔 같은 일이 한 줄만 (원래 자리)');
+  assert.ok(!st.tasks.some((x) => x.id === y.id));
+  assert.strictEqual(P.fromText(t, TODAY), '어제부터');
+  assert.strictEqual(t.part, true, '세모도 같이');
+  assert.strictEqual(t.slotId, 'slot3', '정해 둔 장소도');
+  assert.strictEqual(t.estimateMin, 30, '예상 시간이 없으면 옮긴 쪽 것');
+  assert.strictEqual(st.sessions[0].taskId, t.id, '어제 잰 시간도 남은 줄로');
+  assert.strictEqual(st.events[0].taskId, t.id, '타임테이블 일정도');
+  assert.strictEqual(P.overdue(st.tasks, TODAY).length, 0);
+  P.restoreMoves(st, prev);
+  assert.strictEqual(JSON.stringify(st), before, '되돌리면 두 날 모두 원래대로');
+
+  // ⋯ '오늘로'·'내일로 미루기'(moveTask)도 같게. 장소·세모는 남는 줄에 이미 있으면 그대로
+  t.slotId = 'slot1';
+  const before2 = JSON.stringify(st);
+  const p2 = P.moveTask(st, y.id, TODAY, NOW);
+  assert.strictEqual(p2.merged.into, t.id);
+  assert.strictEqual(t.slotId, 'slot1');
+  assert.strictEqual(t.from, Y);
+  assert.strictEqual(P.dayTasks(st.tasks, TODAY).length, 2);
+  P.restoreMoves(st, [p2]);
+  assert.strictEqual(JSON.stringify(st), before2);
+  const tm = P.topicTask(st, 'a1', TM, { uid, now: 3 });
+  st.tasks.push(tm);
+  const p3 = P.moveTask(st, t.id, TM, NOW);
+  assert.strictEqual(p3.merged.into, tm.id, '내일에 같은 일이 있으면 내일 줄로 합침');
+  assert.strictEqual(tm.from, TODAY);
+  assert.strictEqual(P.dayTasks(st.tasks, TM).length, 1);
+  P.restoreMoves(st, [p3]);
+  assert.strictEqual(P.dayTasks(st.tasks, TODAY).filter((x) => x.topicId === 'a1').length, 1);
+
+  // 합치지 않는 경우: 다른 범위 항목, 끝낸 일, 고치기 창에서 날짜 바꾸기, 날짜 안 정함
+  const st2 = scopeState();
+  const a = P.topicTask(st2, 'a1', Y, { uid, now: 1 });
+  const b = P.topicTask(st2, 'a2', TODAY, { uid, now: 2 });
+  b.title = a.title;
+  st2.tasks.push(a, b);
+  assert.ok(!P.sameTask(a, b), '이름이 같아도 다른 범위 항목이면 다른 일');
+  assert.ok(!P.moveTask(st2, a.id, TODAY, NOW).merged);
+  assert.strictEqual(P.dayTasks(st2.tasks, TODAY).length, 2);
+  const d1 = task({ title: '단어', due: TODAY, done: true }), d2 = task({ title: '단어', due: Y });
+  const e1 = task({ title: '숙제', due: TODAY }), e2 = task({ title: '숙제', due: Y });
+  const n1 = task({ title: '노트', due: null }), n2 = task({ title: '노트', due: TODAY });
+  st2.tasks.push(d1, d2, e1, e2, n1, n2);
+  assert.ok(!P.moveTask(st2, d2.id, TODAY, NOW).merged, '오늘 것을 이미 끝냈으면 합치지 않음');
+  P.editTask(st2, e2.id, { due: TODAY }, NOW);
+  assert.strictEqual(P.dayTasks(st2.tasks, TODAY).filter((x) => x.title === '숙제').length, 2, '고치기 창은 그대로');
+  assert.ok(!P.moveTask(st2, n2.id, null, NOW).merged, '날짜 안 정함으로는 합치지 않음');
+  // 반복 묶음은 이름을 고쳤어도 같은 일, 과목이 다르면 이름이 같아도 다른 일
+  assert.ok(P.sameTask(task({ title: 'A', rep: { id: 'R' } }), task({ title: 'B', rep: { id: 'R' } })));
+  assert.ok(!P.sameTask(task({ title: 'A', subjectId: 'x' }), task({ title: 'A', subjectId: 'y' })));
+
+  // 여러 날에 같은 일이 남아 있으면 모두 골라 옮겨도 한 줄, 처음 날짜는 가장 이른 날
+  const st3 = scopeState();
+  const o1 = task({ title: '영단어', due: '2026-11-14' }), o2 = task({ title: '영단어', due: Y });
+  st3.tasks.push(o1, o2);
+  const ch3 = P.carryChoices(st3, TODAY);
+  assert.deepStrictEqual(ch3.map((o) => [o.t.id, o.on, o.merge]), [[o2.id, true, false], [o1.id, false, false]]);
+  const p4 = P.carryOver(st3, TODAY, NOW, [o1.id, o2.id]);
+  assert.strictEqual(P.dayTasks(st3.tasks, TODAY).length, 1);
+  assert.strictEqual(P.dayTasks(st3.tasks, TODAY)[0].from, '2026-11-14');
+  P.restoreMoves(st3, p4);
+  assert.deepStrictEqual(st3.tasks.map((x) => x.due), ['2026-11-14', Y]);
+  assert.ok(st3.tasks.every((x) => !('from' in x)));
 });
 
 test('플래너 3.10: 미루기 — 오늘·지난 일을 뒤로 옮기면 처음 날짜, 앞날끼리 옮기거나 되돌리면 없음', () => {
