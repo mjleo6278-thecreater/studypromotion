@@ -411,7 +411,7 @@
     let prev = [];
     store.update((st) => { const p = P.moveTask(st, t.id, key, now()); if (p) prev = [p]; });
     if (!prev.length) return;
-    // 그날에 같은 일이 이미 있으면 한 줄로 합쳐진다 (4.3.1)
+    // 그날에 같은 일이 이미 있으면 한 줄로 합쳐진다 (4.4.1)
     const msg = !key ? '날짜 안 정한 할 일로 옮겼어요' : prev[0].merged ? `${withJosa(key, '에/에')} 같은 할 일이 있어서 한 줄로 합쳤어요` : `${withJosa(key, '으로/로')} 옮겼어요`;
     toast(msg, { action: '되돌리기', onAction: () => store.update((st) => P.restoreMoves(st, prev)) });
   }

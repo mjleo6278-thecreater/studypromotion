@@ -324,6 +324,16 @@
     return FALLBACK;
   }
 
+  /* ---------- 사진 (v4.4) ---------- */
+  const PHOTO_READ = '<read>UNIDAD 5 ¿Qué tiempo hace?\n1. Ojalá que no llueva mañana.\n2. Si hace buen tiempo, iremos a la playa.\n3. Me alegro de que hayas venido.\n4. Aunque esté cansado, seguiré estudiando.\nVocabulario: el paraguas, la nube, el pronóstico, despejado, húmedo, el relámpago</read>\n';
+  const PHOTO_CARDS = [['el paraguas', '우산'], ['la nube', '구름'], ['el pronóstico', '(일기) 예보'], ['despejado', '맑은, 구름 없는'], ['húmedo', '습한, 축축한'], ['el relámpago', '번개']];
+  function PHOTO_REPLY(q) {
+    const note = '(미리 보기에서는 사진을 읽지 못해서, 정해 둔 스페인어 교과서 한 쪽을 읽은 것처럼 답해요.)\n\n';
+    if (/카드/.test(q)) return PHOTO_READ + note + '사진의 단어 6개로 카드를 만들었어요.\n<cards>' + JSON.stringify(PHOTO_CARDS.map(([front, back]) => ({ front, back }))) + '</cards>';
+    if (/힌트/.test(q)) return PHOTO_READ + note + '**풀이 힌트**\n- 4번은 aunque 뒤에 온 동사 esté의 법(직설법인지 접속법인지)을 먼저 보세요.\n- seguir + 현재분사가 어떤 뜻이 되는지 떠올려 보세요.';
+    return PHOTO_READ + note + '**4. Aunque esté cansado, seguiré estudiando.**\n\n**뜻**\n피곤하더라도 계속 공부할 거야.\n\n**구문 풀이**\n- **Aunque esté cansado**: aunque 뒤에 접속법(esté)이 오면 "~하더라도"라는 뜻이에요. 직설법 está를 쓰면 "피곤하지만"(이미 사실)이 돼요.\n- **seguiré estudiando**: seguir(계속하다)의 미래형 + 현재분사 estudiando = "계속 공부할 것이다".';
+  }
+
   /* ---------- 답 만들기 ---------- */
   let used = 0;
   const abort = () => { try { return new DOMException('Aborted', 'AbortError'); } catch (e) { return Object.assign(new Error('Aborted'), { name: 'AbortError' }); } };
@@ -332,7 +342,9 @@
     note: '미리 보기의 AI는 진짜가 아니에요. 정해 둔 예시에만 답해요.',
     async ask(messages, opts) {
       opts = opts || {};
-      const sys = messages[0].content, q = String(messages[messages.length - 1].content || '').trim();
+      const last = messages[messages.length - 1].content;
+      const photo = Array.isArray(last); // 사진을 붙인 질문 (v4.4): [사진, 글]
+      const sys = messages[0].content, q = String(photo ? (last.find((p) => p.type === 'text') || {}).text || '' : last || '').trim();
       // 알림 화면을 볼 수 있게: '한도', '오프라인'이라고 보내면 그때의 알림이 나온다
       const failWith = /^한도/.test(q) ? 'limit' : /^오프라인/.test(q) ? 'offline' : null;
       await wait(450);
@@ -341,7 +353,8 @@
       const canned = CANNED.find(([re]) => re.test(q));
       const kind = canned ? null : classify(q);
       let reply;
-      if (canned) reply = canned[1].join('\n');
+      if (photo) reply = PHOTO_REPLY(q); // 미리 보기의 가짜 AI는 사진을 읽지 못한다: 정해 둔 교과서 한 쪽을 읽은 척한다
+      else if (canned) reply = canned[1].join('\n');
       else if (kind && !sys.includes('[앱 정보]')) reply = '<need_app/>'; // 진짜 AI처럼: 앱 정보가 없으면 달라고 한다
       else if (kind) reply = build(kind, q, readInfo(sys));
       else reply = FALLBACK;

@@ -250,7 +250,7 @@
     if (S.isKey(first) && first <= today && key > first) t.from = first;
     else delete t.from;
   }
-  // 같은 일인가: 둘 다 범위와 이었으면 같은 범위 항목일 때만. 아니면 같은 반복 묶음이거나 이름·과목이 같을 때 (4.3.1)
+  // 같은 일인가: 둘 다 범위와 이었으면 같은 범위 항목일 때만. 아니면 같은 반복 묶음이거나 이름·과목이 같을 때 (4.4.1)
   function sameTask(a, b) {
     if (!a || !b) return false;
     if (a.topicId && b.topicId) return a.topicId === b.topicId;
@@ -261,7 +261,7 @@
   const twinOn = (tasks, t, key) => (S.isKey(key) ? dayTasks(tasks, key).find((x) => x.id !== t.id && !x.done && sameTask(x, t)) || null : null);
   const copy = (o) => JSON.parse(JSON.stringify(o));
   const MERGE_KEYS = ['from', 'part', 'slotId', 'estimateMin', 'topicId'];
-  // 옮긴 할 일 t를 그날 이미 있던 같은 일 keep에 합치고 t는 목록에서 뺀다 (같은 일이 두 줄이 되지 않게, 4.3.1).
+  // 옮긴 할 일 t를 그날 이미 있던 같은 일 keep에 합치고 t는 목록에서 뺀다 (같은 일이 두 줄이 되지 않게, 4.4.1).
   // 처음 날짜는 더 이른 쪽, 세모·장소·예상 시간·범위는 keep에 없을 때만 t 것을 쓰고, t로 잰 공부 시간·타임테이블 일정은 keep으로 옮긴다.
   // before: 옮기기 전 t 사본. 반환 되돌리기용 { into, task, at, keep(keep의 옛 값), sessions, events }
   function absorb(state, t, keep, before) {

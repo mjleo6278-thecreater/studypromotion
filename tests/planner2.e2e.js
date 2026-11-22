@@ -269,7 +269,7 @@ function seed() {
   assert(/어제 못 끝낸 할 일 2개/.test(await page.textContent('.ui-back.in .ui-sheet-head')), '그날 처음 열면 묻는 창: 어제 못 끝낸 일 2개');
   const cy = await page.$$eval('.ui-back.in [data-pl-cy]', (els) => els.map((e) => e.dataset.plCy + (e.classList.contains('on') ? '*' : '')).join(','));
   assert(cy === 'y1*,y2', '오늘도 같은 일(영동T 단어)이 있으면 처음부터 체크를 꺼 둠: ' + cy);
-  assert(/한 줄로 합쳐져요/.test(await page.textContent('.ui-back.in [data-pl-cy="y2"] .pl-cy-twin')) && !(await page.$('.ui-back.in [data-pl-cy="y1"] .pl-cy-twin')), '4.3.1: 오늘에도 있는 일엔 옮기면 한 줄로 합쳐진다고 알림');
+  assert(/한 줄로 합쳐져요/.test(await page.textContent('.ui-back.in [data-pl-cy="y2"] .pl-cy-twin')) && !(await page.$('.ui-back.in [data-pl-cy="y1"] .pl-cy-twin')), '4.4.1: 오늘에도 있는 일엔 옮기면 한 줄로 합쳐진다고 알림');
   const y1Text = await page.textContent('.ui-back.in [data-pl-cy="y1"]');
   assert(/수학/.test(y1Text) && /야자2/.test(y1Text) && /공부 35분/.test(y1Text) && await page.isVisible('.ui-back.in [data-pl-cy="y1"] .pl-cy-mark.t'), '△ 표시·장소·잰 시간도 보여 줌: ' + y1Text);
   assert(/1개 오늘로 옮기기/.test(await page.textContent('.ui-back.in [data-pl-cy-ok]')), '단추에 옮길 수');
@@ -307,7 +307,7 @@ function seed() {
   await sheetGone(page);
   await page.waitForTimeout(150);
   assert((await task(page, 'y1')).due === TODAY && (await task(page, 'y2')).due === YDAY && !!(await page.$('#pl-todo .pl-carry')), "띠의 '오늘로'도 같은 고르는 창 (고르지 않은 일은 띠에 남음)");
-  // 4.3.1: 어제와 오늘에 같은 일(영동T 단어)이 있을 때 어제 것을 옮기면 두 줄이 되지 않고 오늘 줄에 합쳐짐
+  // 4.4.1: 어제와 오늘에 같은 일(영동T 단어)이 있을 때 어제 것을 옮기면 두 줄이 되지 않고 오늘 줄에 합쳐짐
   const wordRows = async () => (await page.$$eval('#pl-list > .pl-item .pl-title', (els) => els.map((e) => e.textContent))).filter((x) => x === '영동T 단어').length;
   assert(await wordRows() === 1, '옮기기 전 오늘 칸의 영동T 단어 1줄');
   await page.tap('#pl-todo [data-pl-carry]');

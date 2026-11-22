@@ -27,7 +27,7 @@
   const DAY = 86400000;
   const WD = ['일', '월', '화', '수', '목', '금', '토'];
   const VIEWS = { home: '홈', board: '범위', plan: '플래너', timer: '타이머', review: '복습', stats: '통계', timetable: '타임테이블' };
-  const LIMIT = { title: 120, name: 40, subject: 20, card: 400, memo: 60, actions: 20, tasks: 40, exams: 12, decks: 12, subjects: 30, events: 30, eventDays: 21 };
+  const LIMIT = { title: 120, name: 40, subject: 20, card: 400, memo: 60, actions: 20, tasks: 40, exams: 12, decks: 12, subjects: 30, events: 30, eventDays: 21, cards: 30, read: 2000 };
   const COLORS = ['#e05a4f', '#3d96e0', '#45a865', '#e3ae24', '#9468d9', '#e36299', '#2aa893', '#ef7d3c'];
   const DEFAULT_DECK = '표현 모음';
 
@@ -238,6 +238,17 @@
     '다른 과목의 공부 질문에도 답한다. 공부와 관계없는 부탁은 정중히 거절한다.',
     '지난 대화의 [앱 기록: …] 줄은 앱이 붙인 메모다. 무엇을 제안했는지 알려 줄 뿐이니 이 형식을 따라 쓰지 않는다.',
   ].join('\n');
+  // 사진을 함께 보냈을 때 덧붙이는 지시문. 읽은 글(<read>)은 화면에서 접혀 보이고, 다음 질문 때 사진 대신 보낸다 (사진은 한 번만 보낸다)
+  const PROMPT_PHOTO = [
+    '',
+    '[사진] 사용자가 이번 질문에 사진을 한 장 붙였다. 교과서, 단어장, 문제지, 필기, 시간표 같은 공부 사진이다.',
+    '- 답의 맨 앞에 <read>…</read> 꼬리표를 쓰고, 그 안에 사진에서 읽은 글을 원문 그대로 옮겨 적는다. 질문과 관계있는 부분(번호, 문장, 단어 목록, 문제와 보기)은 빠짐없이, 관계없는 부분은 빼고, 1500자를 넘기지 않는다. 글이 없는 사진이면 무엇이 보이는지 한두 문장으로 적는다.',
+    '- 이 꼬리표는 화면에서 접혀 보이고, 다음 질문 때 사진 대신 쓰인다. 꼬리표 뒤에 질문에 답한다. 질문이 없으면 사진 속 외국어 문장의 뜻과 핵심 표현을 설명한다.',
+    '- 글씨가 흐리거나 잘려서 읽을 수 없는 곳은 짐작해서 채우지 말고 읽을 수 없다고 말한다.',
+    '- 사진 속 단어로 카드를 만들어 달라고 하면 설명은 한 문장으로 짧게 하고, 사진의 단어와 표현을 <cards> 꼬리표에 30개까지 적는다. front는 단어나 표현(원형), back은 뜻이다. 사진에 예문이 있으면 back의 뜻 뒤에 " — 예문"으로 붙인다.',
+    '- 힌트를 달라고 하면 정답은 말하지 말고 풀이 방향과 실마리만 알려 준다.',
+    '- 사진에 사람의 얼굴이나 이름, 연락처 같은 개인 정보가 보여도 그것에 대해서는 말하지 않는다.',
+  ].join('\n');
   const PROMPT_NEED_APP = '사용자가 앱의 기록(할 일, 일정, 공부 기록, 타이머, 시험, 목표)을 바꾸거나 보여 달라고 하거나 자기 일정·할 일을 물으면 다른 말 없이 <need_app/> 한 줄만 답한다.';
   const PROMPT_APP = [
     '',
@@ -270,25 +281,38 @@
   ].join('\n');
 
   // 앱 정보까지 보내야 하는 말인지 (아니면 짧은 지시문만 보내 무료 한도를 아낀다)
-  function needsApp(text) {
+  //  photo: 사진과 함께 보낸 말. '카드로 만들어 줘'는 사진의 단어를 카드 후보로 보여 주면 되므로 앱 정보가 필요 없다
+  function needsApp(text, photo) {
+    if (photo) text = String(text || '').replace(/(복습 ?)?카드(로|를|도)?/g, '');
     return /(추가|넣어|등록|잡아|미뤄|미루|당겨|옮겨|옮기|바꿔|바꾸|변경|기록|시작|켜 ?줘|타이머|스톱워치|집중|할 ?일|일정|스케줄|시간표|약속|계획|시험|목표|공부 ?시간|몇 ?시간|얼마나|며칠|디데이|d-?day|복습 ?카드|카드로|과목|통계|타임테이블|완료|끝냈|체크|보여 ?줘|열어)/i.test(String(text || ''));
   }
 
-  // history: [{ role: 'user'|'assistant', text }] (최근 것만 짧게 붙인다)
-  function messages(text, ctx, history, withApp) {
-    const sys = withApp ? PROMPT_ASK + '\n' + PROMPT_APP + '\n\n[앱 정보]\n' + contextText(ctx) : PROMPT_ASK + '\n' + PROMPT_NEED_APP;
+  // history: [{ role: 'user'|'assistant', text, read?, photo? }] (최근 것만 짧게 붙인다)
+  //  read: 그 답에서 세컨드가 사진에서 읽은 글. 사진은 다시 보내지 않고 이 글을 <read> 꼬리표로 붙인다
+  //  photo: 사진을 붙여 보낸 질문이었음
+  // opts.photo: 이번 질문에 사진이 붙음 (사진 자체는 ai.js가 마지막 말에 붙인다)
+  function messages(text, ctx, history, withApp, opts) {
+    const photo = !!(opts && opts.photo);
+    const sys = (withApp ? PROMPT_ASK + '\n' + PROMPT_APP + '\n\n[앱 정보]\n' + contextText(ctx) : PROMPT_ASK + '\n' + PROMPT_NEED_APP) + (photo ? '\n' + PROMPT_PHOTO : '');
     // 질문과 답이 번갈아 오게 맞춘다: 답을 못 받은 질문은 뺀다 (모델에 따라 같은 쪽 말이 이어지면 받지 않는다)
     const pairs = [];
+    const tidy = (t, n) => (typeof t === 'string' ? t.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, n) : '');
     (history || []).forEach((m) => {
       const role = m.role === 'assistant' ? 'assistant' : 'user';
-      const content = typeof m.text === 'string' ? m.text.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, 1200) : '';
+      let content = tidy(m.text, 1200);
+      const read = role === 'assistant' ? tidy(m.read, LIMIT.read) : '';
+      if (read) content = '<read>' + read + '</read>\n' + content;
+      if (role === 'user' && m.photo && content) content = '[사진을 붙여 보냄]\n' + content;
       if (!content) return;
       const last = pairs[pairs.length - 1];
       if (role === 'user') { if (last && last.role === 'user') pairs.pop(); pairs.push({ role, content }); }
       else if (last && last.role === 'user') pairs.push({ role, content });
     });
     if (pairs.length && pairs[pairs.length - 1].role === 'user') pairs.pop();
-    return [{ role: 'system', content: sys }].concat(pairs.slice(-6), [{ role: 'user', content: String(text || '').trim().slice(0, 2000) }]);
+    const recent = pairs.slice(-6);
+    const readNote = !photo && recent.some((x) => x.content.startsWith('<read>'))
+      ? '\n지난 대화의 <read>…</read>는 그때 사용자가 보낸 사진에서 네가 읽은 글이다. 그 사진에 대해 이어서 물으면 이 글을 보고 답하고, 이번 답에는 <read>를 쓰지 않는다.' : '';
+    return [{ role: 'system', content: sys + readNote }].concat(recent, [{ role: 'user', content: String(text || '').trim().slice(0, 2000) }]);
   }
 
   /* ---------- 2) AI의 답 읽기 ---------- */
@@ -395,6 +419,9 @@
     let text = stripThink(raw), broken = false, partial = false;
     const needApp = /<need_app\s*\/?>/i.test(text);
     text = text.replace(/<\/?need_app\s*\/?>/gi, '');
+    const rd = grab(text, 'read'); // 사진에서 읽은 글
+    text = rd.rest;
+    const read = rd.body === null ? '' : rd.body.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, LIMIT.read);
     let a = grab(text, 'actions');
     text = a.rest;
     if (a.body === null) {
@@ -411,18 +438,18 @@
       const got = salvage(a.body);
       if (got.length) { av = got; partial = true; } else broken = true;
     }
-    const cards = toList(cv, 'cards').map((x) => ({ front: str(x.front, LIMIT.card), back: str(x.back, LIMIT.card) })).filter((x) => x.front && x.back).slice(0, 5);
+    const cards = toList(cv, 'cards').map((x) => ({ front: str(x.front, LIMIT.card), back: str(x.back, LIMIT.card) })).filter((x) => x.front && x.back).slice(0, LIMIT.cards);
     // 꼬리표를 코드 울타리로 감쌌으면 빈 울타리가 남는다
     text = text.replace(/```[a-z]*\s*```/gi, '');
-    return { text: text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim(), actions: toList(av, 'actions'), cards, needApp, broken, partial };
+    return { text: text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim(), actions: toList(av, 'actions'), cards, needApp, broken, partial, read };
   }
   // 답이 오는 도중에 화면에 보일 글: 꼬리표가 시작되면 거기서 끊는다 (반쯤 온 꼬리표도 숨긴다)
   function visibleText(raw) {
-    let s = stripThink(raw);
-    const cut = s.search(/<\/?(actions|cards|need_app)\b/i);
+    let s = stripThink(raw).replace(/<read\b[^>]*>[\s\S]*?<\/read\s*>\s*/gi, ''); // 사진에서 읽은 글은 따로 접어서 보여 준다
+    const cut = s.search(/<\/?(actions|cards|need_app|read)\b/i);
     if (cut >= 0) s = s.slice(0, cut);
     const tail = /<\/?[a-z_]{0,9}$/i.exec(s);
-    if (tail && /^<\/?(a(c(t(i(o(ns?)?)?)?)?)?|c(a(r(ds?)?)?)?|n(e(e(d(_(a(pp?)?)?)?)?)?)?|t(h(i(nk?)?)?)?)?$/i.test(tail[0])) s = s.slice(0, tail.index);
+    if (tail && /^<\/?(a(c(t(i(o(ns?)?)?)?)?)?|c(a(r(ds?)?)?)?|n(e(e(d(_(a(pp?)?)?)?)?)?)?|t(h(i(nk?)?)?)?|r(e(ad?)?)?)?$/i.test(tail[0])) s = s.slice(0, tail.index);
     return s.replace(/```(?:json)?\s*$/i, '').replace(/\s+$/, '');
   }
 
@@ -920,7 +947,7 @@
 
   const api = {
     buildContext, contextText, calendarText, messages, needsApp, readChunk, parseReply, visibleText, validate, applyOps, undoOps, stats, md, esc,
-    dateLabel, addDaysKey, findSubject, eventName, VIEWS, LIMIT, DEFAULT_DECK, PROMPT_ASK, PROMPT_APP,
+    dateLabel, addDaysKey, findSubject, eventName, VIEWS, LIMIT, DEFAULT_DECK, PROMPT_ASK, PROMPT_APP, PROMPT_PHOTO,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AICore = api;

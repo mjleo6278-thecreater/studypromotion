@@ -3,7 +3,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handle, verifyToken, isOwner, cleanMessages, pieceOf, Counter, forgetKeys, cleanName, cleanScore, maxScore, BOARD_TOP, BOARD_KEEP, BOARD_STORE } from '../worker/src/index.js';
+import { handle, verifyToken, isOwner, cleanMessages, textOf, hasImage, pieceOf, Counter, forgetKeys, cleanName, cleanScore, maxScore, BOARD_TOP, BOARD_KEEP, BOARD_STORE } from '../worker/src/index.js';
 
 const PROJECT = 'demo-project';
 const ORIGIN = 'https://app.example';
@@ -351,7 +351,7 @@ test('구글 열쇠를 못 받아 오면 503 (로그인 탓으로 돌리지 않�
 test('설정이 이상해도 버틴다: 하루 횟수 기본값, 프로젝트가 없으면 아무도 못 들어온다', async () => {
   const w = world({ env: { DAILY_LIMIT: 'abc', MAX_TOKENS: '', MODEL: '' } });
   const r = await w.ask(await token());
-  assert.equal(r.left, 19);
+  assert.equal(r.left, 49);
   assert.equal(w.runs[0].model, '@cf/google/gemma-4-26b-a4b-it');
   assert.equal(w.runs[0].input.max_tokens, 2000);
   forgetKeys();
@@ -386,20 +386,23 @@ test('GET /me: AI 버튼을 보여 줄지, 남은 횟수가 몇 번인지 알려
   const closed = world({ env: { OPEN_TO: 'owner' } });
   assert.deepEqual((await me(closed, null)).json, { open: false, signedIn: false });
   assert.deepEqual((await me(closed, await token())).json, { open: false, signedIn: true });
-  assert.deepEqual((await me(closed, await token({ sub: 'owner-1', email: OWNER }))).json, { open: true, signedIn: true, unlimited: true });
+  assert.deepEqual((await me(closed, await token({ sub: 'owner-1', email: OWNER }))).json, { open: true, signedIn: true, unlimited: true, photo: true });
   assert.equal((await me(closed, 'abc')).status, 401); // 가짜 확인표
   assert.equal((await closed.ask(null, { method: 'GET', path: '/me', origin: 'https://evil.example' })).status, 403);
 
   forgetKeys();
   const open = world();
   assert.deepEqual((await me(open, null)).json, { open: true, signedIn: false });
-  assert.deepEqual((await me(open, await token())).json, { open: true, signedIn: true, unlimited: false, left: 20, limit: 20 });
+  assert.deepEqual((await me(open, await token())).json, { open: true, signedIn: true, unlimited: false, left: 20, limit: 20, photo: false });
   await open.ask(await token());
   await open.ask(await token());
-  assert.deepEqual((await me(open, await token())).json, { open: true, signedIn: true, unlimited: false, left: 18, limit: 20 });
+  assert.deepEqual((await me(open, await token())).json, { open: true, signedIn: true, unlimited: false, left: 18, limit: 20, photo: false });
   assert.equal((await open.ask(await token())).left, 17); // 물어보는 것은 횟수를 쓰지 않는다
-  assert.deepEqual((await me(open, await token({ sub: 'owner-1', email: OWNER }))).json, { open: true, signedIn: true, unlimited: true });
+  assert.deepEqual((await me(open, await token({ sub: 'owner-1', email: OWNER }))).json, { open: true, signedIn: true, unlimited: true, photo: true });
   assert.equal(open.runs.length, 3);
+  forgetKeys();
+  const photo = world({ env: { PHOTO_TO: 'all' } });
+  assert.equal((await me(photo, await token())).json.photo, true);
 });
 
 /* ---------- 새 앱(v 2): 모델이 보내는 줄을 그대로 넘긴다 ---------- */
@@ -637,4 +640,79 @@ test('순위: 주인 계정만 줄을 지울 수 있다', async () => {
   assert.equal(gone.json.total, 0);
   // 다시 올릴 수 있다 (처음처럼 별명이 필요)
   assert.equal((await post(w, a, { s: 3, g: 0, sec: 20 })).json.error, 'name');
+});
+
+/* ---------- 사진 보내기 (v4.4) ---------- */
+const JPG = 'data:image/jpeg;base64,' + '/9j/4AAQSkZJRg'.padEnd(4000, 'A');
+const withPhoto = (text, url) => [{ role: 'system', content: '지시' }, { role: 'user', content: [{ type: 'image_url', image_url: { url: url || JPG } }].concat(text == null ? [] : [{ type: 'text', text }]) }];
+
+test('사진: 마지막 질문에만 한 장, 앞머리와 길이만 본다', () => {
+  const ok = cleanMessages(withPhoto('해석해 줘'));
+  assert.deepEqual(ok[1].content, [{ type: 'image_url', image_url: { url: JPG } }, { type: 'text', text: '해석해 줘' }]);
+  assert.equal(hasImage(ok), true);
+  assert.equal(hasImage(cleanMessages([{ role: 'user', content: '가' }])), false);
+  assert.equal(textOf(ok[1].content), '해석해 줘');
+  assert.equal(textOf('글'), '글');
+  // 글 없이 사진만 / 글이 앞에 와도 된다 / 모르는 값은 버린다
+  assert.deepEqual(cleanMessages(withPhoto(null))[1].content, [{ type: 'image_url', image_url: { url: JPG } }]);
+  assert.notEqual(cleanMessages([{ role: 'user', content: [{ type: 'text', text: '가' }, { type: 'image_url', image_url: { url: JPG, detail: 'high', x: 1 } }] }]), null);
+  assert.deepEqual(cleanMessages([{ role: 'user', content: [{ type: 'image_url', image_url: { url: JPG, x: 1 } }] }])[0].content, [{ type: 'image_url', image_url: { url: JPG } }]);
+  const img = (url) => ({ type: 'image_url', image_url: { url } });
+  const bad = [
+    [{ role: 'user', content: [img(JPG), img(JPG)] }],                                     // 두 장
+    [{ role: 'user', content: [img(JPG)] }, { role: 'assistant', content: '나' }, { role: 'user', content: '다' }], // 지난 말의 사진
+    [{ role: 'system', content: [img(JPG)] }],
+    [{ role: 'user', content: [] }],
+    [{ role: 'user', content: [{ type: 'text', text: '가' }] }],                             // 사진 없는 배열
+    [{ role: 'user', content: [img('https://example.com/a.jpg')] }],                        // 주소로 된 사진은 받지 않는다
+    [{ role: 'user', content: [img('data:image/gif;base64,R0lGOD')] }],
+    [{ role: 'user', content: [img('data:text/html;base64,PGh0bWw+')] }],
+    [{ role: 'user', content: [img(JPG.padEnd(1500001, 'A'))] }],                            // 너무 큼
+    [{ role: 'user', content: [img(JPG), { type: 'audio', x: 1 }] }],
+    [{ role: 'user', content: [img(JPG), { type: 'text', text: '가'.repeat(24001) }] }],     // 글은 그대로 센다
+  ];
+  for (const b of bad) assert.equal(cleanMessages(b), null, JSON.stringify(b).slice(0, 80));
+  assert.notEqual(cleanMessages([{ role: 'user', content: [img(JPG.padEnd(1500000, 'A'))] }]), null);
+});
+
+test('사진: PHOTO_TO가 all이 아니면 주인 계정만 보낼 수 있고, 사진 질문도 한 번으로 센다', async () => {
+  const w = world({ env: { PHOTO_TO: 'owner' } });
+  const friend = await w.ask(await token(), { messages: withPhoto('해석해 줘'), v: 2 });
+  assert.equal(friend.status, 403);
+  assert.deepEqual(friend.json, { error: 'photo' });
+  assert.equal(w.runs.length, 0);
+  assert.equal(w.stores.size, 0); // 횟수를 쓰지 않는다
+  const owner = await w.ask(await token({ sub: 'owner-1', email: OWNER }), { messages: withPhoto('해석해 줘'), v: 2 });
+  assert.equal(owner.status, 200);
+  assert.deepEqual(w.runs[0].input.messages[1].content[0], { type: 'image_url', image_url: { url: JPG } }); // 사진을 그대로 모델에 넘긴다
+  assert.equal(w.runs[0].input.max_tokens, 1200 + 1500); // 읽은 글과 카드 후보를 적을 만큼 답 길이를 더 준다
+  await w.ask(await token({ sub: 'owner-1', email: OWNER }), { v: 2 });
+  assert.equal(w.runs[1].input.max_tokens, 1200); // 글만 보낸 질문은 그대로
+
+  forgetKeys();
+  const all = world({ env: { PHOTO_TO: 'all' } });
+  const r = await all.ask(await token(), { messages: withPhoto('해석해 줘'), v: 2 });
+  assert.equal(r.status, 200);
+  assert.equal(r.headers.get('x-ai-left'), '19');
+  assert.equal(all.runs[0].input.messages[1].content[1].text, '해석해 줘');
+  // 앱 정보를 붙여 다시 묻는 것은 한 번만 센다 (사진이 같으면 같은 질문)
+  const again = await all.ask(await token(), { messages: withPhoto('해석해 줘'), v: 2, again: true });
+  assert.equal(again.headers.get('x-ai-left'), '19');
+  const other = await all.ask(await token(), { messages: withPhoto('해석해 줘', JPG + 'BBBB'), v: 2, again: true });
+  assert.equal(other.headers.get('x-ai-left'), '18'); // 다른 사진은 새 질문
+  // 서버는 사진을 어디에도 남기지 않는다 (횟수 저장소에는 횟수와 짧은 지문만)
+  for (const m of all.stores.values()) for (const v of m.values()) assert.ok(!JSON.stringify(v).includes('/9j/'));
+});
+
+test('사진: 모델이 사진을 받지 못하면 횟수를 돌려주고, 주인에게만 까닭을 알려 준다', async () => {
+  const w = world({ env: { PHOTO_TO: 'all' } });
+  w.answer = () => { throw new Error('AiError: image could not be decoded'); };
+  const r = await w.ask(await token(), { messages: withPhoto('해석해 줘'), v: 2 });
+  assert.equal(r.status, 503);
+  assert.deepEqual(r.json, { error: 'server' });
+  assert.equal(w.runs.length, 3); // full → mid → plain
+  const me = await w.ask(await token(), { method: 'GET', path: '/me' });
+  assert.equal(me.json.left, 20);
+  const owner = await w.ask(await token({ sub: 'owner-1', email: OWNER }), { messages: withPhoto('해석해 줘'), v: 2 });
+  assert.match(owner.json.detail, /could not be decoded/);
 });

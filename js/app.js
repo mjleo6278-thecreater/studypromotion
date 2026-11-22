@@ -1717,7 +1717,7 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '4.3.1';
+  const APP_VERSION = '4.4.1';
   const APP_DATE = '2026년 11월 22일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
