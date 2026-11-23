@@ -130,8 +130,8 @@
         const a = t * 17, rub = 1 - inOut(seg(t, 11.2, 11.5));
         const show = inOut(seg(t, 11.2, 11.5));
         const rl = [-2.2 + Math.cos(a) * 1.1 * rub, 10 + Math.sin(a) * 1.1 * rub, 7.5], rr = [3.2 - Math.cos(a) * 1.1 * rub, 10 - Math.sin(a) * 1.1 * rub, 7.5];
-        p.handL = lerp3(REST_L, lerp3(rl, [-5, 12.5, 8], show), k);
-        p.handR = lerp3(REST_R, lerp3(rr, [6, 12.5, 8], show), k);
+        p.handL = lerp3(REST_L, lerp3(rl, [-5.5, 10.8, 8], show), k);
+        p.handR = lerp3(REST_R, lerp3(rr, [6.5, 10.8, 8], show), k);
         p.eyes = t > 11.3 ? (blink ? 'blink' : 'normal') : 'happy'; p.mouth = t > 11.3 ? 'o' : 'open';
         p.head = [0.22 * show, 0, 0];
         p.sweat = clamp((t - 11.6) * 4);
