@@ -6,7 +6,7 @@
   const { seg, clamp, lerp, lerp3, inOut, rand } = E;
   const easeOut = E.out, back = E.back;
 
-  const INK = '#1c1f26', PAPER = '#fffdf8', TEAL = '#04becd', TEAL_TEXT = '#058a96', CORAL = '#e8505b', MUTED = '#6a6f76';
+  const INK = '#1c1f26', PAPER = '#fffdf8', TEAL = '#04becd', TEAL_TEXT = '#058a96', CORAL = '#e8505b', MUTED = '#4f545b';
   const DUR = 32;
   const SHOT = { title: 0, A: 3.0, B: 8.0, C: 12.6, D: 17.2, E: 19.0, F: 22.2, END: 27.8 };
   const SUBS = [
@@ -76,7 +76,9 @@
       const k = (t - FLIPS[i]) / 0.3;
       if (k >= 0 && k < 1) { flip = k; card = k < 0.5 ? i : i + 1; mode = k < 0.5 ? 'correct' : 'idle'; }
     }
-    return { card, mode, flip, smudges, t };
+    // 거품 자국: 번뜩 뒤 물에 씻겨 2초 동안 사라진다 (정답 글자를 가리지 않게)
+    const fade = 1 - clamp((t - 19.3) / 2);
+    return { card, mode, flip, smudges: fade > 0 ? smudges : [], fade, voice: t >= SHOT.F, t };
   }
 
   // ---------- 캐릭터 움직임 ----------
@@ -122,21 +124,26 @@
         p.head = [0.15 * reach, 0.25 * reach, 0];
       }
       if (t >= 10.6) {
-        // 손 비비기 (몸 앞에서 동그랗게)
+        // 손 비비기 (몸 앞에서 동그랗게) → 11.3부터 거품 가득한 손을 들어 보며 당황
         const k = inOut(seg(t, 10.6, 11.0));
-        p.rotY = lerp(1.15, 0.35, k);
-        const a = t * 17;
-        p.handL = lerp3(REST_L, [-2.2 + Math.cos(a) * 1.1, 10 + Math.sin(a) * 1.1, 7.5], k);
-        p.handR = lerp3(REST_R, [3.2 - Math.cos(a) * 1.1, 10 - Math.sin(a) * 1.1, 7.5], k);
-        p.eyes = t > 11.2 ? 'happy' : p.eyes; p.mouth = 'open';
-        p.bob = Math.abs(Math.sin(t * 8.5)) * 0.4;
+        p.rotY = lerp(1.15, 0.3, k);
+        const a = t * 17, rub = 1 - inOut(seg(t, 11.2, 11.5));
+        const show = inOut(seg(t, 11.2, 11.5));
+        const rl = [-2.2 + Math.cos(a) * 1.1 * rub, 10 + Math.sin(a) * 1.1 * rub, 7.5], rr = [3.2 - Math.cos(a) * 1.1 * rub, 10 - Math.sin(a) * 1.1 * rub, 7.5];
+        p.handL = lerp3(REST_L, lerp3(rl, [-5, 12.5, 8], show), k);
+        p.handR = lerp3(REST_R, lerp3(rr, [6, 12.5, 8], show), k);
+        p.eyes = t > 11.3 ? (blink ? 'blink' : 'normal') : 'happy'; p.mouth = t > 11.3 ? 'o' : 'open';
+        p.head = [0.22 * show, 0, 0];
+        p.sweat = clamp((t - 11.6) * 4);
+        p.bob = Math.abs(Math.sin(t * 8.5)) * 0.4 * rub;
       }
     } else if (t < SHOT.D) {
       // C: 폰 앞으로 깡충 → 눌러 보기 (안 눌림)
       const h = hop(t, 12.6, 0.5, POS_B, POS_C, 3.5);
       p.pos = h.p;
       if (t - 13.1 > 0 && t - 13.1 < 0.14) p.squash = 0.88 + (t - 13.1) * 0.85;
-      p.rotY = lerp(0.35, 1.35, inOut(seg(t, 12.6, 13.1)));
+      // 세 번째 실패(미끄러짐) 뒤 놀라서 보는 사람 쪽으로 돈다
+      p.rotY = lerp(lerp(0.35, 1.35, inOut(seg(t, 12.6, 13.1))), 0.6, inOut(seg(t, 15.7, 16.1)));
       p.eyes = t > 14.6 ? 'worried' : blink ? 'blink' : 'normal';
       p.mouth = t > 14.6 ? 'wavy' : 'closed';
       const FT = 3.7; // 손 가운데에서 손가락 끝까지
@@ -161,11 +168,13 @@
         p.pointR = true;
       }
       p.head = [0.1, 0, 0];
+      p.sweat = clamp((t - 15.7) * 4);
+      if (t > 15.6 && t < 16.4) { p.eyes = 'sparkle'; p.mouth = 'o'; } // 놀라서 동그래진 눈
       if (t > 16.2) { p.squash = 1 - 0.06 * inOut(seg(t, 16.2, 16.8)); p.lean = [0.08 * inOut(seg(t, 16.2, 16.8)), 0]; }
     } else if (t < SHOT.E) {
       // D: 답답 (><, 땀, 부들부들)
       p.pos = POS_C.slice();
-      p.rotY = lerp(1.35, 0.55, inOut(seg(t, 17.2, 17.5)));
+      p.rotY = lerp(0.6, 0.55, inOut(seg(t, 17.2, 17.5)));
       const shaking = t > 17.35 && t < 18.6;
       p.eyes = t > 18.65 ? 'blink' : 'squeeze'; p.mouth = 'wavy';
       p.sweat = clamp((t - 17.3) * 4);
@@ -186,19 +195,25 @@
     } else {
       // F: 말하기 → 정답 / END: 신나서 깡충
       p.pos = POS_C.slice();
-      p.rotY = 0.8;
+      p.rotY = 0.6;
       p.eyes = blink ? 'blink' : 'normal'; p.mouth = 'smile';
-      for (const s of SAYS) for (const sy of s.syl) if (t >= sy && t < sy + 0.13) p.mouth = 'open';
+      p.handR = [8.6, 8, 2];
+      for (const s of SAYS) {
+        const k = t - s.t0;
+        if (k >= 0 && k < 0.65) { p.mouth = Math.floor(k / 0.16) % 2 ? 'o' : 'open'; p.eyes = 'normal'; p.head = [-0.18, 0.12, 0]; p.squash = 1.04; p.handL = [-8.6, 11.5, 3]; p.handR = [8, 9, 4]; }
+      }
       for (const c of CORRECT) {
         const k = t - c;
-        if (k > 0 && k < 0.7) { p.eyes = 'happy'; p.pos[1] = Math.sin(clamp(k / 0.4) * Math.PI) * 2.5; p.handL = [-9.5, 19, -1]; p.handR = [6, 21, -3]; }
+        if (k > 0 && k < 0.7) { p.eyes = 'happy'; p.mouth = 'open'; p.pos[1] = Math.sin(clamp(k / 0.4) * Math.PI) * 2.5; p.handL = [-9.5, 19, 2.5]; p.handR = [7.5, 18, 5.5]; }
       }
       if (t > 26.6) {
-        const k = (t - 26.6) % 0.8;
-        p.pos[1] = Math.sin(clamp(k / 0.5) * Math.PI) * 3; p.eyes = 'happy'; p.mouth = 'open';
-        p.rotY = 0.8 - inOut(seg(t, 26.6, 27.4)) * 0.4;
-        p.handL = [-9, 14 + Math.sin(t * 8) * 3, 0]; p.handR = [10, 14 - Math.sin(t * 8) * 3, 0];
-        if (k > 0.5 && k < 0.6) p.squash = 0.9;
+        // 신나서 깡충 + 왼손 엄지척 (손은 폰에 대지 않는다)
+        const k = (t - 26.6) % 0.9;
+        p.pos[1] = Math.sin(clamp(k / 0.45) * Math.PI) * 2.2; p.eyes = 'happy'; p.mouth = 'open';
+        p.rotY = 0.6 - inOut(seg(t, 26.6, 27.4)) * 0.45;
+        p.handL = [-8.8, 14.5 + Math.sin(t * 5) * 0.6, 4.5]; p.thumbL = true;
+        p.handR = [7.6, 5 + Math.sin(t * 5) * 0.4, 3.5];
+        if (k > 0.45 && k < 0.55) p.squash = 0.92;
       }
     }
     return p;
@@ -210,15 +225,22 @@
   }
   // 손의 거품 양 (0~1)
   function foam(t, which) {
-    if (which === 'R') return clamp((t - 10.1) / 0.2) * 0.45 + clamp((t - 10.7) / 1.5) * 0.55;
-    return clamp((t - 10.7) / 1.5);
+    if (which === 'R') return clamp((t - 10.1) / 0.2) * 0.45 + clamp((t - 10.7) / 0.8) * 0.55;
+    return clamp((t - 10.7) / 0.8);
   }
+  // 거품 덩어리 크기 (거품을 보여 줄 때 크게)
+  const foamScale = (t) => 1 + 0.45 * clamp((t - 11.2) / 0.3) * (1 - clamp((t - 12.6) / 0.6));
 
   // ---------- 카메라 ----------
   function camAt(t, aspect, pose) {
     const portrait = aspect < 1;
-    const sh = portrait ? -0.12 : -0.2;
-    const S = (target, rw, rh, yaw, pitch, extra = {}) => fitCam(target, rw, rh, yaw, pitch, 0.55, aspect, Object.assign({ shiftY: sh }, extra));
+    const sh = portrait ? -0.12 : -0.05;
+    // 가로 화면: 위 단추 줄과 아래 자막 사이에 들어오게 높이 여유를 더 주고, 위로 덜 올린다
+    const S = (target, rw, rh, yaw, pitch, extra = {}) => {
+      const e = Object.assign({ shiftY: sh }, extra);
+      if (!portrait) { rh *= 1.32; if (extra.shiftY != null) e.shiftY = extra.shiftY * 0.35; }
+      return fitCam(target, rw, rh, yaw, pitch, 0.55, aspect, e);
+    };
     const head = Pawn.headTop(pose);
     const headC = [head[0], head[1] - 6, head[2]];
     if (t < SHOT.B) {
@@ -227,18 +249,19 @@
     }
     if (t < SHOT.C) {
       const k = inOut(seg(t, SHOT.B, SHOT.C));
-      return S(lerp3([7, 14, -9], [7.5, 13, -8.5], k), lerp(15, 14, k), 15, lerp(0.3, 0.22, k), 0.26);
+      return S(lerp3([7, 14, -9], [7, 13, -8.5], k), lerp(14.5, 13.5, k), 15, lerp(0.58, 0.5, k), 0.26);
     }
     if (t < SHOT.D) {
       const k = inOut(seg(t, SHOT.C, SHOT.D));
       const pc = screenPoint(SHOT.C, 0.5, 0.5, 0);
       let jx = 0;
       for (const tp of TAPS) { const q = t - tp.t; if (q > 0 && q < 0.25) jx += Math.sin(q * 70) * 0.12 * (1 - q / 0.25); }
-      return S([pc[0] - 0.8 + jx, pc[1] - 0.3, pc[2] + 1], lerp(8.5, 7.8, k), lerp(10, 9.4, k), 0.22, 0.14);
+      const b = inOut(seg(t, 15.75, 16.35));
+      return S(lerp3([pc[0] + 0.4 + jx, pc[1] - 0.3, pc[2] + 1], [12.5, 14.5, -9.5], b), lerp(lerp(8.5, 7.8, k), 16, b), lerp(lerp(10, 9.4, k), 14, b), lerp(0.24, 0.3, b), lerp(0.14, 0.18, b));
     }
     if (t < SHOT.E) {
       let j = 0; if (t > 17.35 && t < 18.6) j = Math.sin(t * 50) * 0.08;
-      return S([headC[0] + j, headC[1] + 0.5, headC[2]], 8.5, 9.5, 0.5, 0.12);
+      return S([headC[0] + j, headC[1] - 1.5, headC[2]], 12, 12, 0.5, 0.12);
     }
     if (t < SHOT.F) {
       const k = t - 19.15;
@@ -249,15 +272,21 @@
     }
     if (t < SHOT.END) {
       const k = inOut(seg(t, SHOT.F, SHOT.END));
-      return S(lerp3([12, 15, -9.5], [11.5, 15, -9.5], k), lerp(13.5, 13, k), 13.5, lerp(0.36, 0.3, k), 0.2);
+      let push = 0;
+      // 말하기 0.6초 전부터 정답 뒤까지 폰 쪽으로 당겨 카드 글자를 크게
+      SAYS.forEach((sy, i) => { const c = CORRECT[i]; push = Math.max(push, inOut(seg(t, sy.t0 - 0.6, sy.t0 - 0.1)) * (1 - inOut(seg(t, c + 0.6, c + 1.0)))); });
+      const pc = screenPoint(SHOT.F, 0.5, 0.5, 0);
+      // 폰 전체(오른쪽 정답 배지까지)가 늘 화면 안에: 머리 뒤쪽은 잘려도 얼굴·입은 보이게
+      const base = lerp3([12, 15.5, -9.5], [11.5, 15.5, -9.5], k);
+      return S(lerp3(base, [pc[0] - 3.5, pc[1] + 0.5, pc[2] + 3], push * 0.6), lerp(lerp(17.5, 17, k), 16, push), 14 * (1 - push * 0.15), lerp(0.32, 0.26, k), 0.2);
     }
     const k = inOut(seg(t, SHOT.END, DUR));
-    return S([11, 16, -9], lerp(15, 17, k), lerp(19, 21, k), lerp(0.3, 0.45, k), 0.3, { shiftY: portrait ? -0.36 : -0.3 });
+    return S([10.5, 14, -8.5], lerp(12.5, 13, k), lerp(14, 15, k), lerp(0.26, 0.36, k), 0.24, { shiftY: portrait ? -0.42 : -0.3 });
   }
 
   // ---------- 입자 ----------
   function water(t, pose, out) {
-    const N = 64, L = SHOWER[1] - 0.5, speed = 60;
+    const N = 34, L = SHOWER[1] - 0.5, speed = 52;
     const head = Pawn.headTop(pose);
     const under = Math.hypot(pose.pos[0] - SHOWER[0], pose.pos[2] - SHOWER[2]) < 4;
     for (let i = 0; i < N; i++) {
@@ -268,7 +297,7 @@
       const y = SHOWER[1] - 0.6 - u * L;
       const onHead = under && Math.hypot(x - head[0], z - head[2]) < 5.2;
       if (onHead && y < head[1] - 0.5) continue;
-      out.push([x - 0.17, y, z - 0.17, x + 0.17, y + 1.8, z + 0.17, i % 3 ? 0xbfe9ff : 0xe6f7ff]);
+      out.push([x - 0.3, y, z - 0.3, x + 0.3, y + 1.3, z + 0.3, i % 3 ? 0x6fc6f2 : 0xa8e0fb]);
     }
     // 튀는 물: 머리 위 (밑에 있을 때) 또는 바닥
     const M = 22;
@@ -280,23 +309,24 @@
       const rr = (under ? 2.5 : 2) * rand(i + 500) + ph * sp;
       const y = baseY + ph * 7 * (1 - ph) * (under ? 1.2 : 0.8);
       const x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
-      out.push([x - 0.2, y, z - 0.2, x + 0.2, y + 0.4, z + 0.2, 0xd7f2ff]);
+      out.push([x - 0.2, y, z - 0.2, x + 0.2, y + 0.4, z + 0.2, 0x9fdcfb]);
     }
   }
   function bubblesOnHand(pose, which, amt, t, out) {
     if (amt <= 0) return;
     const c = Pawn.handWorld(pose, which);
-    const n = Math.round(amt * 14);
+    const n = Math.round(amt * 16);
     for (let j = 0; j < n; j++) {
       const id = j + (which === 'L' ? 0 : 100);
-      const ox = (rand(id) - 0.5) * 3.4, oy = (rand(id + 7) - 0.3) * 3.0, oz = (rand(id + 13) - 0.5) * 3.4;
-      const s = 0.42 + rand(id + 21) * 0.45 + Math.sin(t * 6 + j) * 0.05;
+      const fs = foamScale(t);
+      const ox = (rand(id) - 0.5) * 3.4 * fs, oy = (rand(id + 7) - 0.3) * 3.0 * fs, oz = (rand(id + 13) - 0.5) * 3.4 * fs;
+      const s = (0.42 + rand(id + 21) * 0.45) * fs + Math.sin(t * 6 + j) * 0.05;
       const x = c[0] + ox, y = c[1] + oy, z = c[2] + oz;
-      out.push([x - s, y - s, z - s, x + s, y + s, z + s, j % 4 ? 0xffffff : 0xdff4ff]);
+      out.push([x - s, y - s, z - s, x + s, y + s, z + s, j % 3 ? 0xffffff : 0xd2efff]);
     }
   }
   // 떠오르는 비눗방울: 손 비빌 때 생겨서 위로
-  const FLOATERS = Array.from({ length: 40 }, (_, k) => ({ b: 10.9 + k * 0.2, life: 2.6 + rand(k + 900) * 1.4, w: k % 2 ? 'L' : 'R', s: 0.45 + rand(k + 77) * 0.5 }));
+  const FLOATERS = Array.from({ length: 24 }, (_, k) => ({ b: 10.9 + k * 0.2, life: 2.6 + rand(k + 900) * 1.4, w: k % 2 ? 'L' : 'R', s: 0.45 + rand(k + 77) * 0.5 }));
   function floaters(t, out, pops) {
     for (let k = 0; k < FLOATERS.length; k++) {
       const f = FLOATERS[k];
@@ -315,11 +345,12 @@
     for (let b = 0; b < CORRECT.length; b++) {
       const age = t - CORRECT[b];
       if (age < 0 || age > 1.5) continue;
-      for (let i = 0; i < 26; i++) {
+      for (let i = 0; i < 12; i++) {
         const id = b * 50 + i;
-        const o = screenPoint(CORRECT[b], 0.5, 0.45, 0.5);
-        const a = 6.283 * rand(id + 1000), sp = 6 + rand(id + 1100) * 8;
-        const vx = Math.cos(a) * sp * 0.7, vz = 5 + rand(id + 1200) * 6, vy = 10 + rand(id + 1300) * 9;
+        const side = i % 2 ? 1 : -1;
+        const o = screenPoint(CORRECT[b], side > 0 ? 1.08 : -0.08, 0.15 + 0.5 * rand(id + 990), 0.5);
+        const sp = 5 + rand(id + 1100) * 7;
+        const vx = side * sp, vz = rand(id + 1200) * 2, vy = 9 + rand(id + 1300) * 8;
         const x = o[0] + vx * age, y = o[1] + vy * age - 18 * age * age, z = o[2] + vz * age;
         const s = 0.35;
         out.push([x - s, y - s, z - s, x + s, y + s * 0.6, z + s, COLS[i % COLS.length]]);
@@ -335,27 +366,31 @@
     px.rect(0, 0, W, 6, '#1c1f26');
     px.rect(3, 2, 6, 2, '#ffffff'); px.rect(W - 9, 2, 6, 2, '#ffffff');
     px.text('단어장', 4, 9, 9, INK, { weight: 800 });
+    if (st.voice) { // 말로 하기 켜짐: 위 오른쪽에 마이크 + 빨간 점
+      px.round(W - 15, 8, 12, 11, '#e0f7f9', 2);
+      px.icon('mic', W - 11, 9, TEAL_TEXT);
+      px.rect(W - 5, 9, 2, 2, CORAL);
+    }
     px.rect(4, 21, W - 8, 2, '#e4e2dc'); px.rect(4, 21, Math.round((W - 8) * (0.3 + st.card * 0.2)), 2, TEAL);
     // 카드 (뒤집힐 때 가로로 납작)
     const card = CARDS[st.card];
-    const sq = st.flip ? Math.abs(Math.cos(st.flip * Math.PI)) : 1;
-    const cw = Math.max(2, Math.round((W - 8) * sq)), cx = Math.round((W - cw) / 2);
     const ok = st.mode === 'correct';
+    let off = 0;
+    if (st.flip) off = st.flip < 0.5 ? -Math.round((st.flip / 0.5) * W) : Math.round((1 - (st.flip - 0.5) / 0.5) * W);
+    const cw = W - 8, cx = 4 + off;
     px.panel(cx, 26, cw, 34, { fill: '#ffffff', border: ok ? TEAL : '#cfcbc0', r: 2 });
-    if (sq > 0.6) {
-      px.text(card.word, W / 2, ok ? 31 : 36, 9, INK, { align: 'center' });
-      if (ok) px.text(card.mean, W / 2, 44, 10, TEAL_TEXT, { align: 'center' });
-    }
+    px.text(card.word, cx + cw / 2, ok ? 31 : 36, 9, INK, { align: 'center' });
+    if (ok) px.text(card.mean, cx + cw / 2, 44, 10, TEAL_TEXT, { align: 'center' });
     // 아래: 단추 / 듣는 중 / 정답
     if (st.mode === 'idle') {
       px.round(6, 66, W - 12, 14, TEAL, 2);
       px.text('뜻 보기', W / 2, 68, 9, '#ffffff', { align: 'center' });
     } else if (st.mode === 'listen') {
-      px.round(6, 66, W - 12, 14, '#e0f7f9', 2);
-      px.icon('mic', 10, 69, TEAL_TEXT);
-      for (let i = 0; i < 6; i++) {
-        const h = 2 + Math.round((Math.sin(st.t * 14 + i * 1.3) * 0.5 + 0.5) * 6);
-        px.rect(19 + i * 4, 73 - Math.floor(h / 2), 2, h, TEAL);
+      px.round(6, 64, W - 12, 18, '#e0f7f9', 2);
+      px.icon('mic', 9, 65, TEAL_TEXT, 2);
+      for (let i = 0; i < 5; i++) {
+        const h = 2 + Math.round((Math.sin(st.t * 14 + i * 1.3) * 0.5 + 0.5) * 9);
+        px.rect(21 + i * 4, 73 - Math.floor(h / 2), 2, h, TEAL);
       }
     } else {
       px.round(6, 66, W - 12, 14, TEAL, 2);
@@ -363,6 +398,7 @@
       px.text('정답!', 21, 68, 9, '#ffffff');
     }
     // 거품 자국
+    g.globalAlpha = st.fade;
     for (const [u, v, s] of st.smudges) {
       const x = u * W, y = v * H, r = Math.max(2, s * W);
       g.fillStyle = 'rgba(255,255,255,0.88)';
@@ -372,6 +408,7 @@
       g.fillStyle = 'rgba(255,255,255,0.75)';
       g.beginPath(); g.arc(Math.round(x - r * 0.9), Math.round(y + r * 0.6), r * 0.5, 0, 6.283); g.fill();
     }
+    g.globalAlpha = 1;
     // 화면 반사광 한 줄
     g.fillStyle = 'rgba(255,255,255,0.16)';
     for (let i = 0; i < 10; i++) g.fillRect(W - 14 + i, i * 2, 3, 2);
@@ -390,6 +427,8 @@
       this.head = R.mesh(buildMesh(Sets.showerHead()));
       this.duck = R.mesh(buildMesh(Sets.duck()));
       const cube = new Vox(); cube.set(0, 0, 0, 0xffffff);
+      const blob = new Vox(); blob.disc(0, 7.2, 0x000000);
+      this.blob = R.mesh(buildMesh(blob, { noAO: true }));
       this.cube = R.mesh(buildMesh(cube, { noAO: true }));
       // 폰 화면 텍스처
       const sc = document.createElement('canvas'); sc.width = 48; sc.height = 88;
@@ -418,8 +457,10 @@
       floaters(t, boxes, this.pops);
       confetti(t, boxes);
       const dyn = boxesToArray(boxes);
-      // 김 (반투명)
+      // 김 (반투명) + 발밑 그림자
       const glass = [];
+      const lift = pose.pos[1];
+      glass.push({ mesh: this.blob, m: M4.compose([pose.pos[0], 0.03, pose.pos[2]], [0, 0, 0], [1 - lift * 0.04, 0.05, 1 - lift * 0.04], [0.5, 0, 0.5]), alpha: 0.32 * (1 - lift * 0.08), tint: [0, 0, 0], emit: 1 });
       for (let i = 0; i < 12; i++) {
         const per = 7, k = frac(t / per + rand(i + 600));
         const x = -18 + 34 * rand(i + 610), z = -14 + 16 * rand(i + 620), y = 14 + 18 * rand(i + 630) + k * 14;
@@ -428,7 +469,7 @@
       }
       // 폰 화면
       const ss = screenState(t);
-      const key = ss.card + ss.mode + ss.flip.toFixed(2) + ss.smudges.length + (ss.mode === 'listen' ? Math.floor(t * 12) : '');
+      const key = ss.card + ss.mode + ss.flip.toFixed(2) + ss.smudges.length + ss.fade.toFixed(2) + ss.voice + (ss.mode === 'listen' ? Math.floor(t * 12) : '');
       if (key !== this.scrKey) { drawScreen(this.scrPix, ss); this.scrTex.update(); this.scrKey = key; }
       const planes = [{ quad: this.scrQuad, tex: this.scrTex, m: M4.mul(pm, M4.compose([4, 7, 1.04], [0, 0, 0], [1, 1, 1], [0, 0, 0])), bright: 1 }];
       const cam = camAt(t, st.aspect, pose);
@@ -438,7 +479,7 @@
         cam, items, dyn, glass, planes, dynShadow: false,
         bg: [0.13, 0.12, 0.14],
         light: { dir: global.LIGHT_DIR || [-0.45, 1, 0.85], center: [8, 14, -4], radius: 62, shadow: !global.NO_SHADOW },
-        lightCol: [0.72, 0.68, 0.6], sky: [0.58, 0.61, 0.66], ground: [0.4, 0.36, 0.33],
+        lightCol: [0.86, 0.74, 0.6], sky: [0.5, 0.55, 0.64], ground: [0.36, 0.31, 0.28],
         fogCol: [0.13, 0.12, 0.14], fog: [d + 40, d + 140],
       };
     },
@@ -448,7 +489,7 @@
   // ---------- 화면 위 픽셀 층 ----------
   function layoutSub(px, text, landscape) {
     let lines = text.split('\n');
-    const size = px.w < 190 ? 11 : 12;
+    const size = landscape || px.w < 190 ? 11 : 12;
     const maxW = Math.min(px.w - 12, landscape ? 330 : 210);
     if (landscape) {
       const one = lines.join(' ');
@@ -457,7 +498,7 @@
     const widths = lines.map((l) => px.textWidth(Pix.plain(l), size));
     const w = Math.min(maxW, Math.max(...widths) + 24);
     const lh = size + 5;
-    return { lines, size, w, h: lines.length * lh + 14, lh };
+    return { lines, size, w, h: lines.length * lh + (landscape ? 9 : 14), lh, pad: landscape ? 4 : 7 };
   }
   function drawHud(sc, t, px, st) {
     const W = px.w, H = px.h, landscape = st.aspect > 1.2;
@@ -473,7 +514,13 @@
       px.icon(i % 3 ? 'note' : 'note2', x, y, i % 2 ? TEAL : INK);
     }
     // 펌프 "칙"
-    for (const pt of [9.6, 10.1]) if (t > pt && t < pt + 0.35) { const b = proj([BOTTLE_AT[0] + 0.5, BOTTLE_AT[1] + 17, BOTTLE_AT[2]]); px.text('칙', b[0] + 4, b[1] - 10 - Math.round((t - pt) * 12), 10, INK, { outline: '#ffffff' }); }
+    for (const pt of [9.6, 10.1]) if (t > pt && t < pt + 0.4) { const b = proj([BOTTLE_AT[0] + 0.5, BOTTLE_AT[1] + 17, BOTTLE_AT[2]]); px.text('칙!', Math.min(W - 30, b[0] + 8), b[1] - 14 - Math.round((t - pt) * 14), 14, '#ffffff', { outline: INK }); }
+    // 손 비빌 때 "뽀글뽀글"
+    if (t > 10.75 && t < 11.9) {
+      const hpos = proj(Pawn.handWorld(sc.pose, 'R'));
+      const wob = Math.round(Math.sin(t * 20) * 1.5);
+      px.text('뽀글뽀글', Math.min(W - 70, hpos[0] + 18), hpos[1] - 40 + wob, 14, '#ffffff', { outline: INK });
+    }
     // 비눗방울 터짐
     for (const p of sc.pops || []) {
       const end = Pawn.handWorld(pawnPose(p.f.b), p.f.w);
@@ -487,10 +534,17 @@
       const k = t - tp.t;
       if (k < 0.05 || k > 0.75) continue;
       const s = proj(screenPoint(t, tp.u, tp.v + (tp.slide ? clamp((k - 0.05) / 0.5) * tp.slide : 0)));
-      const sc2 = k < 0.15 ? 4 : 3;
-      px.icon('cross', s[0] + 8, s[1] - 22, '#ffffff', sc2 + 1);
-      px.icon('cross', s[0] + 9, s[1] - 21, CORAL, sc2);
-      if (tp.slide && k > 0.1 && k < 0.7) px.text('미끌', s[0] - 30, s[1] + 8, 10, INK, { outline: '#ffffff' });
+      const sc2 = k < 0.15 ? 7 : 6, cs = 5 * sc2;
+      const xx = Math.max(4, Math.min(W - cs - 6, s[0] + 6)), xy = Math.max(30, s[1] - cs - 30);
+      px.icon('cross', xx - 1, xy - 1, INK, sc2); px.icon('cross', xx + 1, xy + 1, INK, sc2);
+      px.icon('cross', xx + 1, xy - 1, INK, sc2); px.icon('cross', xx - 1, xy + 1, INK, sc2);
+      px.icon('cross', xx, xy, CORAL, sc2);
+      if (tp.slide && k > 0.1 && k < 0.8) {
+        // 미끄러진 자국 선 + "미끌!"
+        const top = proj(screenPoint(t, tp.u, tp.v));
+        for (let j = 0; j < 3; j++) px.rect(top[0] - 14 + j * 4, top[1], 2, Math.max(2, s[1] - top[1]), j === 1 ? '#ffffff' : 'rgba(255,255,255,.7)');
+        px.text('미끌!', s[0] + 26, s[1] - 4, 14, '#ffffff', { outline: INK });
+      }
     }
     // 답답 "끙…"
     if (t > 17.45 && t < 18.7) {
@@ -500,7 +554,7 @@
       px.rect(bx + 3, by + 21, 3, 2, INK); px.rect(bx + 1, by + 23, 2, 2, INK);
     }
     // 번뜩 "!"
-    if (t > 19.15 && t < 21.0) {
+    if (t > 19.15 && t < 19.95) {
       const k = t - 19.15;
       const sc3 = k < 0.12 ? 5 : 4;
       const bx = head[0] - sc3, by = head[1] - 14 - sc3 * 6 - Math.round(Math.sin(Math.min(1, k * 3) * Math.PI) * 4);
@@ -514,25 +568,92 @@
         }
       }
     }
-    // 말풍선
+    // 떠올린 생각: 마이크 (말로 하면 되잖아!)
+    if (t > 19.85 && t < SHOT.F) {
+      const k = t - 19.85, pop = back(clamp(k / 0.25));
+      const r = Math.round(20 * pop);
+      if (r > 2) {
+        const cx = Math.max(r + 6, Math.min(W - r - 6, head[0] + 6)), cy = Math.max(r + 30, head[1] - r - 18);
+        // 생각 꼬리 (작은 동그라미 두 개)
+        px.round(head[0] - 6, head[1] - 9, 6, 6, INK, 2); px.round(head[0] - 5, head[1] - 8, 4, 4, '#ffffff', 1);
+        px.round(head[0] - 1, head[1] - 17, 8, 8, INK, 2); px.round(head[0], head[1] - 16, 6, 6, '#ffffff', 2);
+        px.panel(cx - r, cy - r, r * 2, r * 2, { fill: '#ffffff', border: INK, shadow: 'rgba(0,0,0,.35)', r: 3 });
+        if (pop > 0.8) {
+          const ms = 3;
+          px.icon('mic', cx - 2 * ms, cy - 4 * ms - 1, TEAL_TEXT, ms);
+          const wv = Math.floor(t * 4) % 2;
+          px.icon('wave', cx + 3 * ms + wv, cy - 4 * ms + 2, TEAL, 2);
+          px.icon('waveL', cx - 3 * ms - 6 - wv, cy - 4 * ms + 2, TEAL, 2);
+        }
+      }
+    }
+    // 말풍선: 얼굴 옆(폰 반대쪽)에, 꼬리는 입을 가리킨다. 입에서 폰 쪽으로 소리 물결
+    const pose = sc.pose;
+    const hc = Pawn.headTop(pose); hc[1] -= 6.2;
+    const cam = sc.cam;
+    let fx = cam.target[0] - cam.eye[0], fz = cam.target[2] - cam.eye[2];
+    const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
+    const right = [-fz, 0, fx];
+    const fwd = [Math.sin(pose.rotY), 0, Math.cos(pose.rotY)];
+    const mouthW = [hc[0] + fwd[0] * 5.5, hc[1] - 2.2, hc[2] + fwd[2] * 5.5];
+    const mouth = proj(mouthW);
+    const headL = proj([hc[0] - right[0] * 7, hc[1], hc[2] - right[2] * 7]);
     for (const s of SAYS) {
       if (t < s.t0 || t > s.t1) continue;
       const pop = clamp((t - s.t0) / 0.12);
-      const bw = Math.round((px.textWidth(s.text, 14) + 16) * (0.6 + 0.4 * pop)), bh = 24;
-      const bx = Math.min(W - bw - 4, Math.max(4, head[0] - bw - 4)), by = Math.max(30, head[1] - bh - 14);
+      const tw = px.textWidth(s.text, 14);
+      const bw = Math.round((tw + 16) * (0.6 + 0.4 * pop)), bh = 24;
+      const headT = proj(Pawn.headTop(pose));
+      const side = headL[0] - bw - 10 >= 4;
+      const bx = side ? headL[0] - bw - 10 : Math.max(4, Math.min(W - bw - 4, headT[0] - Math.round(bw * 0.8)));
+      const by = side ? Math.max(28, Math.min(H - 80, mouth[1] - bh - 6)) : Math.max(28, headT[1] - bh - 8);
       px.panel(bx, by, bw, bh, { fill: '#ffffff', border: INK, shadow: 'rgba(0,0,0,.35)' });
       if (pop >= 1) px.text(s.text, bx + bw / 2, by + 4, 14, INK, { align: 'center' });
-      for (let i = 0; i < 4; i++) px.rect(bx + bw - 10 + i * 2, by + bh - 1 + i, 3, 1, INK);
+      // 꼬리: 상자 오른쪽 아래에서 입 쪽으로
+      if (side) {
+        const tx0 = bx + bw - 2, ty0 = by + bh - 6;
+        const steps = Math.max(2, Math.min(10, Math.round((mouth[0] - tx0) / 3)));
+        for (let i = 0; i < steps; i++) px.rect(tx0 + i * 3, ty0 + Math.round(((mouth[1] - ty0) * i) / steps), 3, 2, INK);
+      } else {
+        for (let i = 0; i < 4; i++) px.rect(bx + Math.round(bw * 0.7) + i * 2, by + bh - 1 + i, 3, 1, INK);
+      }
+      // 소리 물결: 입 → 폰
+      const k = t - s.t0, ci = CORRECT[SAYS.indexOf(s)], span = ci - s.t0;
+      if (k < span) {
+        const ph = proj(screenPoint(t, 0.3, 0.86, 0.5));
+        for (let i = 0; i < 3; i++) {
+          // 물결 3개가 차례로 입 → 폰 마이크 칸. 마지막 물결이 닿는 순간 정답
+          const q = clamp((k - i * 0.12) / (span - 0.24));
+          if (q <= 0 || q >= 1) continue;
+          const e = 0.12 + q * 0.88;
+          const x = Math.round(mouth[0] + (ph[0] - mouth[0]) * e), y = Math.round(mouth[1] + (ph[1] - mouth[1]) * e);
+          const ws = q > 0.6 ? 3 : 2;
+          px.icon('wave', x + 1, y - 3 * ws + 1, '#ffffff', ws);
+          px.icon('wave', x, y - 3 * ws, TEAL_TEXT, ws);
+        }
+      }
+    }
+    // 정답: 폰 위에 큰 체크
+    for (const c of CORRECT) {
+      const k = t - c;
+      if (k < 0 || k > 0.65) continue;
+      const ph = proj(screenPoint(t, 1.2, -0.04, 0.5));
+      const sc4 = k < 0.08 ? 1 : 2;
+      const r = 9 + sc4;
+      px.round(ph[0] - r, ph[1] - r, r * 2, r * 2, INK, 3);
+      px.round(ph[0] - r + 1, ph[1] - r + 1, r * 2 - 2, r * 2 - 2, TEAL, 3);
+      px.icon('check', ph[0] - Math.round(3.5 * sc4), ph[1] - 3 * sc4, '#ffffff', sc4);
     }
     // 정답 반짝이
     for (const c of CORRECT) {
       const k = t - c;
-      if (k < 0 || k > 0.9) continue;
-      const s = proj(screenPoint(c, 0.5, 0.35));
-      for (let i = 0; i < 5; i++) {
-        const a = i * 1.26 + 0.4, r = 14 + k * 30;
-        px.sparkle(s[0] + Math.cos(a) * r, s[1] + Math.sin(a) * r * 0.8, Math.max(1, 3 - Math.round(k * 3)), i % 2 ? '#ffd23f' : '#ffffff');
-      }
+      if (k < 0.15 || k > 1.0) continue;
+      const q = (k - 0.15) / 0.85;
+      const pts = [[-0.25, 0.1], [-0.3, 0.55], [-0.22, 0.95], [1.25, 0.45], [1.28, 0.85], [0.5, 1.12]];
+      pts.forEach(([u, v], i) => {
+        const s = proj(screenPoint(c, u + (u < 0.5 ? -q * 0.25 : u > 0.9 ? q * 0.25 : 0), v + (v > 1 ? q * 0.1 : 0), 0.5));
+        px.sparkle(s[0], s[1], Math.max(1, 3 - Math.round(q * 2.5)), i % 2 ? '#ffd23f' : '#ffffff');
+      });
     }
 
     // 시각 표시 (첫 장면)
@@ -548,13 +669,15 @@
         if (t < s.t0 || t > s.t1) continue;
         const L = layoutSub(px, s.text, landscape);
         const appear = clamp((t - s.t0) / 0.15);
-        const x = Math.round((W - L.w) / 2), y = H - L.h - 12 + Math.round((1 - appear) * 6);
+        const x = Math.round((W - L.w) / 2), y = H - L.h - (landscape ? 6 : 12) + Math.round((1 - appear) * 6);
         px.panel(x, y, L.w, L.h, { fill: PAPER, border: INK, shadow: 'rgba(0,0,0,.4)', sy: 2 });
-        px.icon('pawn', x + 5, y + 4, TEAL);
+        px.round(x + 6, y - 5, 12, 11, INK, 2);
+        px.round(x + 7, y - 4, 10, 9, TEAL, 2);
+        px.icon('pawn', x + 9, y - 4, '#ffffff');
         let shown = Math.floor((t - s.t0) * CPS) + 1;
         L.lines.forEach((line, i) => {
           const n = Pix.plain(line).length;
-          px.rich(line, W / 2, y + 7 + i * L.lh, L.size, { base: INK, hl: TEAL_TEXT, hl2: CORAL }, { align: 'center', chars: shown });
+          px.rich(line, W / 2, y + L.pad + i * L.lh, L.size, { base: INK, hl: TEAL_TEXT, hl2: CORAL }, { align: 'center', chars: shown });
           shown -= n;
         });
       }

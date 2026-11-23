@@ -72,12 +72,12 @@
         this.buttons.push({ x, y: by, w: bw, h: 20, i, label: ex.label });
       });
       px.text('표정', W / 2, by - 14, 10, '#9aa0a8', { align: 'center', weight: 700 });
-      syncHits(this.buttons, px, (b) => { this.expr = b.i; this.exprAt = st.t; });
+      syncHits(this.buttons, px, (b) => { this.expr = b.i; this.exprAt = st.t; }, st);
     },
   };
 
   // 픽셀 단추 위에 투명한 진짜 단추를 얹는다 (누르기·읽기 프로그램용)
-  function syncHits(buttons, px, onTap) {
+  function syncHits(buttons, px, onTap, st) {
     const box = document.getElementById('hits');
     while (box.children.length < buttons.length) {
       const b = document.createElement('button'); b.className = 'hit'; box.appendChild(b);
@@ -85,7 +85,7 @@
     buttons.forEach((bt, i) => {
       const el = box.children[i];
       const pad = 4;
-      Object.assign(el.style, { left: bt.x * px.px - pad + 'px', top: bt.y * px.px - pad + 'px', width: bt.w * px.px + pad * 2 + 'px', height: bt.h * px.px + pad * 2 + 'px' });
+      Object.assign(el.style, { left: bt.x * px.px - pad + (st.offX || 0) + 'px', top: bt.y * px.px - pad + (st.offY || 0) + 'px', width: bt.w * px.px + pad * 2 + 'px', height: bt.h * px.px + pad * 2 + 'px' });
       el.setAttribute('aria-label', '표정: ' + bt.label);
       el.onclick = () => onTap(bt);
     });

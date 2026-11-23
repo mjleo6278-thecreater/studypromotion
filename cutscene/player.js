@@ -27,8 +27,8 @@
       const el = hits.children[i];
       const w = Math.max(44, bt.w * P), h = Math.max(44, bt.h * P);
       const cx = (bt.x + bt.w / 2) * P, cy = (bt.y + bt.h / 2) * P;
-      const left = Math.max(0, Math.min(innerWidth - w, cx - w / 2));
-      el.style.cssText = `left:${left}px;top:${Math.max(0, cy - h / 2)}px;width:${w}px;height:${h}px`;
+      const left = Math.max(0, Math.min(st.cssW - w, cx - w / 2)) + st.offX;
+      el.style.cssText = `left:${left}px;top:${Math.max(0, cy - h / 2) + st.offY}px;width:${w}px;height:${h}px`;
       el.dataset.id = bt.id;
       el.setAttribute('aria-label', bt.label);
     });
@@ -80,7 +80,7 @@
     if (e.key === 'Escape' && st.playing) go(scene.SHOT.END);
   });
 
-  const ready = document.fonts && document.fonts.load ? Promise.all([document.fonts.load('800 16px "Pretendard Variable"', '샤워하다 생긴 기능'), document.fonts.ready]).catch(() => {}) : Promise.resolve();
+  const ready = document.fonts && document.fonts.load ? Promise.all([document.fonts.load('800 16px "Pretendard Variable"', '샤워하다 생긴 기능' + scene.SUBS.map((s) => s.text || '').join('')), document.fonts.ready]).catch(() => {}) : Promise.resolve();
   ready.then(() => {
     if (scene.waiting) idle = requestAnimationFrame(waitLoop);
     else { $('start').hidden = true; draw(0); }

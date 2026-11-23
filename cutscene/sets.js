@@ -5,7 +5,7 @@
 
   const COL = {
     sqLight: 0xefeae0, sqDark: 0xb9c7c5, sqRim: 0x8d9a98,
-    tile: 0xd7eef0, tileAlt: 0xc6e6ea, grout: 0xa9c9cd, floor: 0xe9e4da, floorAlt: 0xdcd6ca, floorGrout: 0xb8b1a3,
+    tile: 0xe0906f, tileAlt: 0xd5846a, grout: 0xb36a52, band: 0xfff0dd, floor: 0xbcb1a5, floorAlt: 0xafa397, floorGrout: 0x8c8075,
     trim: 0xf7f7f4, chrome: 0xb9c2c8, chromeDark: 0x7f8a92, chromeLight: 0xe4eaee,
     phone: 0x2a2e36, phoneEdge: 0x3c414b, caseTeal: 0x04becd,
     bottle: 0xffb3c1, bottleDark: 0xf28fa6, pump: 0xffffff, label: 0xfff3f6,
@@ -68,7 +68,7 @@
   }
 
   // 욕실: 뒷벽 z = -back-1, 왼벽 x = -left-1, 바닥 y = -1
-  const BATH = { left: 27, right: 42, back: 16, front: 28, height: 58, tile: 4 };
+  const BATH = { left: 27, right: 66, back: 16, front: 52, height: 58, tile: 4 };
   function bathroom() {
     const v = new Vox({ jitter: 0.06 });
     const { left, right, back, front, height, tile } = BATH;
@@ -86,13 +86,13 @@
     for (let x = -left - 1; x <= right; x++) for (let y = 0; y < height; y++) {
       const g = (x + left) % tile === 0 || y % tile === 0;
       const alt = (Math.floor((x + left) / tile) + Math.floor(y / tile)) % 2;
-      v.set(x, y, -back - 1, y === band ? 0x7fd8de : g ? COL.grout : alt ? COL.tileAlt : COL.tile);
+      v.set(x, y, -back - 1, y === band ? COL.band : g ? COL.grout : alt ? COL.tileAlt : COL.tile);
     }
     // 왼벽
     for (let z = -back; z <= front; z++) for (let y = 0; y < height; y++) {
       const g = (z + back) % tile === 0 || y % tile === 0;
       const alt = (Math.floor((z + back) / tile) + Math.floor(y / tile)) % 2;
-      v.set(-left - 1, y, z, y === band ? 0x7fd8de : g ? COL.grout : alt ? COL.tileAlt : COL.tile);
+      v.set(-left - 1, y, z, y === band ? COL.band : g ? COL.grout : alt ? COL.tileAlt : COL.tile);
     }
     // 벽 아래 띠 (흰 몰딩)
     for (let x = -left; x <= right; x++) v.set(x, 0, -back, COL.trim);
@@ -108,9 +108,9 @@
     v.box(-2, 23, -back + 1, 0, 23, -back + 2, COL.chrome);
     // 수건걸이 + 수건 (왼벽)
     v.box(-left, 34, -6, -left, 34, 12, COL.rail);
-    v.box(-left + 1, 20, -4, -left + 1, 34, 9, 0x9ad9df);
-    v.box(-left + 1, 20, -4, -left + 1, 20, 9, 0x7fc6cd);
-    for (let z = -4; z <= 9; z += 3) v.box(-left + 2, 21, z, -left + 2, 33, z, 0xb3e3e7);
+    v.box(-left + 1, 20, -4, -left + 1, 34, 9, 0x2fb5c2);
+    v.box(-left + 1, 20, -4, -left + 1, 20, 9, 0x1f97a3);
+    for (let z = -4; z <= 9; z += 3) v.box(-left + 2, 21, z, -left + 2, 33, z, 0x5fcbd5);
     // 욕실 깔개
     v.box(-16, 0, 14, -2, 0, 24, (x, y, z) => ((x + z) % 3 === 0 ? COL.matDark : COL.mat));
     return v;

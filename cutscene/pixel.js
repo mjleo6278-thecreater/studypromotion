@@ -24,6 +24,8 @@
     spark: ['..#..', '..#..', '##.##', '..#..', '..#..'],
     heart: ['.#.#.', '#####', '#####', '.###.', '..#..'],
     hand: ['.#.#.', '.#.#.', '#####', '#####', '.###.'],
+    wave: ['#..', '.#.', '..#', '..#', '..#', '.#.', '#..'],
+    waveL: ['..#', '.#.', '#..', '#..', '#..', '.#.', '..#'],
   };
 
   class Pix {
@@ -32,6 +34,8 @@
       this.ctx = canvas.getContext('2d');
       this.cache = new Map();
       this.px = 2; this.w = 1; this.h = 1;
+      // 글꼴 조각이 늦게 들어오면(처음 쓰는 글자) 대신 글꼴로 만든 글자 그림을 버리고 다시 만든다
+      if (global.document && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => this.cache.clear());
     }
     resize(cssW, cssH) {
       const minSide = Math.min(cssW, cssH);

@@ -253,7 +253,7 @@ void main(){ vec4 c = texture2D(uTex, vUV); gl_FragColor = vec4(c.rgb * uBright,
       this.main = compile(gl, VS_MAIN, FS_MAIN);
       this.depth = compile(gl, VS_DEPTH, FS_DEPTH);
       this.tex = compile(gl, VS_TEX, FS_TEX);
-      this.shadowSize = Math.min(opts.shadowSize || 1536, gl.getParameter(gl.MAX_TEXTURE_SIZE));
+      this.shadowSize = Math.min(opts.shadowSize || 2048, gl.getParameter(gl.MAX_TEXTURE_SIZE));
       this._makeShadow();
       this.dyn = gl.createBuffer();
       this.stats = { calls: 0, tris: 0 };

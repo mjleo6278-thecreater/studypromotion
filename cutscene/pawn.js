@@ -5,7 +5,7 @@
 
   const C = {
     ivory: 0xf6f1e6, base: 0xd9d1bf, rim: 0xc8bfac,
-    teal: 0x04becd, tealDark: 0x0398a5,
+    teal: 0x04becd, tealDark: 0x0398a5, mitt: 0x22b8c6, mittDark: 0x1597a3,
     eye: 0x1c1f26, shine: 0xffffff, blush: 0xff9aa2, mouth: 0x5b2f33, tongue: 0xff7f8a,
     sweat: 0x8fd8ff,
   };
@@ -26,9 +26,9 @@
   }
 
   // 머리: 둥근 네모(초타원체). 가운데 칸이 (0,0,0)
-  const HR = { x: 5.4, y: 5.2, p: 3.4 };
+  const HR = { x: 5.4, y: 5.2, p: 4.2 };
   function headVox() {
-    const v = new Vox({ jitter: 0.015 });
+    const v = new Vox({ jitter: 0 });
     for (let x = -6; x <= 6; x++) for (let y = -6; y <= 6; y++) for (let z = -6; z <= 6; z++) {
       const f = Math.pow(Math.abs(x) / HR.x, HR.p) + Math.pow(Math.abs(y) / HR.y, HR.p) + Math.pow(Math.abs(z) / HR.x, HR.p);
       if (f <= 1) v.set(x, y, z, C.ivory);
@@ -59,7 +59,8 @@
     sparkle: [...eye2x3(-3, [[0, 1], [1, 0]]), ...eye2x3(2, [[0, 1], [1, 0]]), [-3, 2, K], [-2, 2, K], [2, 2, K], [3, 2, K]],
     blink: [[-3, 0, K], [-2, 0, K], [2, 0, K], [3, 0, K]],
     happy: [[-4, 0, K], [-3, 1, K], [-2, 0, K], [2, 0, K], [3, 1, K], [4, 0, K]],
-    squeeze: [[-4, 3, K], [-3, 2, K], [-2, 1, K], [-3, 0, K], [-4, -1, K], [4, 3, K], [3, 2, K], [2, 1, K], [3, 0, K], [4, -1, K]], // > <
+    // > < (3줄, 위에 눈썹 자리를 남긴다)
+    squeeze: [[-4, 2, K], [-3, 1, K], [-2, 0, K], [-3, -1, K], [-4, -2, K], [4, 2, K], [3, 1, K], [2, 0, K], [3, -1, K], [4, -2, K]],
     worried: [[-3, 0, K], [-2, 0, K], [-3, 1, K], [-2, 1, K], [-2, 2, K], [2, 0, K], [3, 0, K], [2, 1, K], [3, 1, K], [2, 2, K]],
   };
   const M = C.mouth;
@@ -69,12 +70,14 @@
     open: [[-1, -2, M], [0, -2, M], [1, -2, M], [0, -3, C.tongue]],
     o: [[0, -2, M], [0, -3, M]],
     wavy: [[-2, -3, M], [-1, -2, M], [0, -3, M], [1, -2, M], [2, -3, M]],
+    flat: [[-1, -2, M], [0, -2, M], [1, -2, M]],
   };
   const BLUSH = [[-5, -1, C.blush], [-4, -1, C.blush], [4, -1, C.blush], [5, -1, C.blush]];
 
   function handVox() {
     const v = new Vox({ jitter: 0.03 });
-    v.box(0, 0, 0, 2, 2, 2, C.ivory);
+    v.box(0, 0, 0, 2, 2, 2, C.mitt);
+    v.box(0, 0, 0, 2, 0, 2, C.mittDark);
     return v;
   }
 
@@ -90,9 +93,10 @@
     const head = headVox();
     const P = {
       body: R.mesh(buildMesh(bodyVox(), { ao: 0.8 })),
-      head: R.mesh(buildMesh(head, { ao: 0.6 })),
+      head: R.mesh(buildMesh(head, { ao: 0.45 })),
       hand: R.mesh(buildMesh(handVox())),
-      point: R.mesh(buildMesh(handVox().box(1, 1, 3, 1, 1, 4, C.ivory))),
+      point: R.mesh(buildMesh(handVox().box(1, 1, 3, 1, 1, 4, C.mitt))),
+      thumb: R.mesh(buildMesh(handVox().box(1, 3, 1, 1, 4, 1, C.mitt))),
       sweat: R.mesh(buildMesh(sweatVox(), { noAO: true })),
       eyes: {}, mouths: {},
       blush: R.mesh(decal(head, BLUSH, 0.12)),
@@ -129,9 +133,9 @@
       const sm = M4.mul(hm, M4.compose([6.4, 3.2 - (1 - s.sweat) * 2, 2.6], [0, 0, 0.3], [0.8 * s.sweat, 0.8 * s.sweat, 0.8], [0.5, 0.5, 0.5]));
       out.push({ mesh: P.sweat, m: sm, shadow: false, emit: 0.35 });
     }
-    for (const [hp, hr, pt] of [[s.handL, s.handRotL, false], [s.handR, s.handRotR, s.pointR]]) {
+    for (const [hp, hr, pt, th] of [[s.handL, s.handRotL, false, s.thumbL], [s.handR, s.handRotR, s.pointR, false]]) {
       if (!hp) continue;
-      out.push({ mesh: pt ? P.point : P.hand, m: M4.mul(root, M4.compose(hp, hr, [1, 1, 1], [1.5, 1.5, 1.5])), tint });
+      out.push({ mesh: pt ? P.point : th ? P.thumb : P.hand, m: M4.mul(root, M4.compose(hp, hr, [1, 1, 1], [1.5, 1.5, 1.5])), tint });
     }
     return out;
   }

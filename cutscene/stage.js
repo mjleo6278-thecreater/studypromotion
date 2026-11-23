@@ -26,7 +26,9 @@
       addEventListener('resize', () => { cancelAnimationFrame(pending); pending = requestAnimationFrame(() => { this.resize(); this.renderAt(this.t); }); });
     }
     resize() {
-      const w = innerWidth, h = innerHeight;
+      const box = this.glCanvas.getBoundingClientRect();
+      const w = Math.max(1, Math.round(box.width || innerWidth)), h = Math.max(1, Math.round(box.height || innerHeight));
+      this.offX = box.left || 0; this.offY = box.top || 0;
       const dpr = Math.min(this.maxDpr, devicePixelRatio || 1);
       this.glCanvas.width = Math.round(w * dpr); this.glCanvas.height = Math.round(h * dpr);
       this.cssW = w; this.cssH = h; this.aspect = w / h;
