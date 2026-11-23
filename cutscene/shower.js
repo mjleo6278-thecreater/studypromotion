@@ -146,7 +146,7 @@
       p.rotY = lerp(lerp(0.35, 1.35, inOut(seg(t, 12.6, 13.1))), 0.6, inOut(seg(t, 15.7, 16.1)));
       p.eyes = t > 14.6 ? 'worried' : blink ? 'blink' : 'normal';
       p.mouth = t > 14.6 ? 'wavy' : 'closed';
-      const FT = 3.7; // 손 가운데에서 손가락 끝까지
+      const FT = 3.5 * Pawn.HAND_S + 0.2; // 손 가운데에서 손가락 끝까지
       const ready = screenPoint(t, 0.5, 0.7, FT + 3);
       let target = ready, reach = inOut(seg(t, 13.1, 13.4)) * (1 - inOut(seg(t, 16.0, 16.5)));
       for (const tp of TAPS) {
@@ -522,11 +522,14 @@
       px.text('뽀글뽀글', Math.min(W - 70, hpos[0] + 18), hpos[1] - 40 + wob, 14, '#ffffff', { outline: INK });
     }
     // 비눗방울 터짐
+    const ht = Pawn.headTop(sc.pose), faceC = proj([ht[0], ht[1] - 6.5, ht[2]]), faceR = Math.abs(faceC[1] - head[1]) * 1.1;
     for (const p of sc.pops || []) {
       const end = Pawn.handWorld(pawnPose(p.f.b), p.f.w);
       const age = p.f.life;
       const w3 = [end[0] + Math.sin(age * 2 + p.k) * 1.5 + (rand(p.k + 5) - 0.5) * 4 * age, end[1] + age * 3.2, end[2] + Math.cos(age * 1.7 + p.k) * 1.2 + 1.5 * age];
       const s = proj(w3);
+      // 얼굴 위에서 터지면 표정을 가리니 그리지 않는다
+      if (Math.abs(s[0] - faceC[0]) < faceR && Math.abs(s[1] - faceC[1]) < faceR) continue;
       px.sparkle(s[0], s[1], 1 + Math.round(p.age * 8), '#ffffff');
     }
     // 눌렀는데 안 됨: 빨간 X

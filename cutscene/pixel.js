@@ -37,9 +37,11 @@
       // 글꼴 조각이 늦게 들어오면(처음 쓰는 글자) 대신 글꼴로 만든 글자 그림을 버리고 다시 만든다
       if (global.document && document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => this.cache.clear());
     }
-    resize(cssW, cssH) {
+    // 픽셀 한 칸 = CSS 2px(큰 화면 3px)에 가깝되, 기기 픽셀로는 딱 정수가 되게 (2.75배 폰에서도 칸 크기가 고르게)
+    resize(cssW, cssH, dpr = 1) {
       const minSide = Math.min(cssW, cssH);
-      this.px = minSide >= 700 ? 3 : 2;
+      const want = minSide >= 700 ? 3 : 2;
+      this.px = Math.max(1, Math.round(want * dpr)) / dpr;
       this.w = Math.ceil(cssW / this.px);
       this.h = Math.ceil(cssH / this.px);
       this.cv.width = this.w; this.cv.height = this.h;

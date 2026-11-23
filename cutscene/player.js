@@ -5,7 +5,8 @@
   const $ = (id) => document.getElementById(id);
   let st;
   try {
-    st = new Stage({ gl: $('gl'), hud: $('hud'), scene });
+    // ?still(시험·영상 뽑기)일 때만 그린 그림을 남겨 둔다. 폰에서 재생할 때는 남기지 않아야 빠르다.
+    st = new Stage({ gl: $('gl'), hud: $('hud'), scene, preserve: /[?&]still/.test(location.search) });
   } catch (e) {
     $('nogl').style.display = 'grid';
     $('start').remove();
@@ -28,9 +29,10 @@
       const w = Math.max(44, bt.w * P), h = Math.max(44, bt.h * P);
       const cx = (bt.x + bt.w / 2) * P, cy = (bt.y + bt.h / 2) * P;
       const left = Math.max(0, Math.min(st.cssW - w, cx - w / 2)) + st.offX;
-      el.style.cssText = `left:${left}px;top:${Math.max(0, cy - h / 2) + st.offY}px;width:${w}px;height:${h}px`;
-      el.dataset.id = bt.id;
-      el.setAttribute('aria-label', bt.label);
+      const css = `left:${left}px;top:${Math.max(0, cy - h / 2) + st.offY}px;width:${w}px;height:${h}px`;
+      // 바뀐 것만 고친다 (매 프레임 스타일을 다시 쓰면 폰에서 프레임이 떨어진다)
+      if (el._css !== css) { el.style.cssText = css; el._css = css; }
+      if (el.dataset.id !== bt.id) { el.dataset.id = bt.id; el.setAttribute('aria-label', bt.label); }
     });
   }
   function onHit(e) {

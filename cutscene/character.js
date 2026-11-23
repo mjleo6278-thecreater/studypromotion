@@ -91,7 +91,7 @@
     });
   }
 
-  const st = new Stage({ gl: document.getElementById('gl'), hud: document.getElementById('hud'), scene });
+  const st = new Stage({ gl: document.getElementById('gl'), hud: document.getElementById('hud'), scene, preserve: /[?&]still/.test(location.search) });
   // 끌어서 돌리기
   const glc = document.getElementById('gl');
   glc.addEventListener('pointerdown', (e) => { scene.drag = { x: e.clientX, a: scene.angle != null ? scene.angle : st.t * 0.6 }; glc.setPointerCapture(e.pointerId); });
