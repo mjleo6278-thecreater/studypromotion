@@ -307,7 +307,7 @@ void main(){ vec4 c = texture2D(uTex, vUV); gl_FragColor = vec4(c.rgb * uBright,
       gl.enableVertexAttribArray(prog.a.aCol); gl.vertexAttribPointer(prog.a.aCol, 3, gl.FLOAT, false, F, 24);
       gl.enableVertexAttribArray(prog.a.aAo); gl.vertexAttribPointer(prog.a.aAo, 1, gl.FLOAT, false, F, 36);
     }
-    // frame = { cam:{eye,target,fov,shiftY}, light:{dir,center,radius}, bg, sky, ground, lightCol, fog, items:[{mesh,m,tint,add,alpha,shadow,emit}], dyn:[floats], glass:[...], planes:[{quad,tex,m,alpha,bright}] }
+    // frame = { cam:{eye,target,fov,shiftY}, light:{dir,center,radius}, bg, sky, ground, lightCol, fog, items:[{mesh,m,tint,add,alpha,shadow,recv,emit}], dyn:[floats], glass:[...], planes:[{quad,tex,m,alpha,bright}] }
     render(frame) {
       const gl = this.gl, cv = this.canvas;
       const W = cv.width, H = cv.height;
@@ -376,6 +376,7 @@ void main(){ vec4 c = texture2D(uTex, vUV); gl_FragColor = vec4(c.rgb * uBright,
         gl.uniform4f(P.u.uTint, t[0], t[1], t[2], it.alpha == null ? 1 : it.alpha);
         gl.uniform3fv(P.u.uAdd, it.add || [0, 0, 0]);
         gl.uniform1f(P.u.uEmit, it.emit || 0);
+        gl.uniform1f(P.u.uShadowOn, shadowOn && it.recv !== false ? 1 : 0); // recv: false = 그림자를 받지 않음 (캐릭터 얼굴)
         gl.drawArrays(gl.TRIANGLES, 0, it.mesh.count);
         this.stats.calls++; this.stats.tris += it.mesh.count / 3;
       };
