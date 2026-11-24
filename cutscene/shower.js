@@ -687,10 +687,10 @@
     }
     // 끝 화면
     if (t >= SHOT.END) drawEnd(t, px, st);
-    // 위쪽 줄: 진행(체스 8칸) · 소리 · 건너뛰기
-    drawTop(t, px, st);
     // 제목 카드 + 체스판 무늬로 걷히기
     if (t < SHOT.A) drawTitle(t, px);
+    // 위쪽 줄: 진행(체스 8칸) · 소리 · 건너뛰기(앱 안에서 시작 전·끝에는 닫기). 제목 카드 위에도 보이게 맨 위에
+    drawTop(t, px, st);
     // 번뜩 흰 번쩍
     if (t > 19.15 && t < 19.32) { px.ctx.globalAlpha = 0.55 * (1 - (t - 19.15) / 0.17); px.rect(0, 0, W, H, '#ffffff'); px.ctx.globalAlpha = 1; }
   }
@@ -736,8 +736,15 @@
     px.panel(6, 4, 20, 18, { fill: 'rgba(28,31,38,.85)', border: '#ffffff', r: 2 });
     px.icon(ui.muted ? 'soundOff' : 'soundOn', 12, 9, '#ffffff');
     scene.buttons.push({ id: 'sound', x: 6, y: 4, w: 20, h: 18, label: ui.muted ? '소리 켜기' : '소리 끄기' });
-    // 건너뛰기 (끝 화면에서는 숨김)
-    if (t < SHOT.END) {
+    // 앱 안에서 열었을 때: 시작 전과 끝 화면에서는 '닫기'
+    if (ui.embed && (scene.waiting || t >= SHOT.END)) {
+      const tw = px.textWidth('닫기', 10), bw = 6 + tw + 5 + 5 + 6;
+      px.panel(W - bw - 6, 4, bw, 18, { fill: 'rgba(28,31,38,.85)', border: '#ffffff', r: 2 });
+      px.text('닫기', W - bw - 6 + 6, 7, 10, '#ffffff');
+      px.icon('cross', W - 6 - 6 - 5, 10, '#ffffff');
+      scene.buttons.push({ id: 'close', x: W - bw - 6, y: 4, w: bw, h: 18, label: '닫기' });
+    } else if (t < SHOT.END) {
+      // 건너뛰기 (끝 화면에서는 숨김)
       const bw = 58;
       px.panel(W - bw - 6, 4, bw, 18, { fill: 'rgba(28,31,38,.85)', border: '#ffffff', r: 2 });
       px.text('건너뛰기', W - bw - 6 + 6, 7, 10, '#ffffff');
@@ -748,20 +755,35 @@
 
   function drawEnd(t, px, st) {
     const W = px.w, H = px.h;
+    const ui = scene.ui || {};
     const k = back(clamp((t - SHOT.END - 0.1) / 0.45));
-    const cw = Math.min(W - 16, 200), ch = 104;
+    const two = !!ui.tryOn; // 앱 안: '말로 복습 해 보기' + '다시 보기'
+    const cw = Math.min(W - 16, 200), ch = two ? 132 : 104;
     const x = Math.round((W - cw) / 2), y = Math.round(H - ch - 14 + (1 - k) * (ch + 20));
     px.panel(x, y, cw, ch, { fill: PAPER, border: INK, shadow: 'rgba(0,0,0,.45)', sy: 3 });
     px.round(x + 10, y + 10, 40, 14, TEAL, 2);
     px.text('새 기능', x + 30, y + 12, 10, '#ffffff', { align: 'center' });
     px.text('그래서 만들었어요', x + 56, y + 12, 10, MUTED, { weight: 700 });
-    px.text('말로 외우는 단어장', x + cw / 2, y + 32, 16, INK, { align: 'center' });
+    px.text('말로 복습', x + cw / 2, y + 32, 16, INK, { align: 'center' });
     px.text('뜻을 소리 내어 말하면 넘어가요', x + cw / 2, y + 54, 10, MUTED, { align: 'center', weight: 700 });
-    const bw = 76, bx = Math.round(x + (cw - bw) / 2), by = y + ch - 30;
-    px.panel(bx, by, bw, 20, { fill: INK, border: INK, shadow: 'rgba(0,0,0,.3)' });
-    px.icon('replay', bx + 10, by + 6, '#ffffff');
-    px.text('다시 보기', bx + 22, by + 4, 10, '#ffffff');
-    if (k > 0.9) scene.buttons.push({ id: 'replay', x: bx, y: by, w: bw, h: 20, label: '다시 보기' });
+    // 단추: 아이콘 + 글자를 가운데에
+    const button = (id, label, icon, bx, by, bw, primary) => {
+      px.panel(bx, by, bw, 20, primary ? { fill: INK, border: INK, shadow: 'rgba(0,0,0,.3)' } : { fill: PAPER, border: INK });
+      const [iw, ih] = px.iconSize(icon);
+      const cw2 = iw + 5 + px.textWidth(label, 10);
+      const ix = Math.round(bx + (bw - cw2) / 2);
+      px.icon(icon, ix, by + Math.round((20 - ih) / 2), primary ? TEAL : INK);
+      px.text(label, ix + iw + 5, by + 4, 10, primary ? '#ffffff' : INK);
+      if (k > 0.9) scene.buttons.push({ id, x: bx, y: by, w: bw, h: 20, label });
+    };
+    if (two) {
+      const bw = cw - 24, bx = x + 12;
+      button('try', '말로 복습 해 보기', 'mic', bx, y + ch - 56, bw, true);
+      button('replay', '다시 보기', 'replay', bx, y + ch - 30, bw, false);
+    } else {
+      const bw = 76;
+      button('replay', '다시 보기', 'replay', Math.round(x + (cw - bw) / 2), y + ch - 30, bw, true);
+    }
     // 반짝이
     for (let i = 0; i < 6; i++) {
       const ph = frac(t * 0.8 + i / 6);

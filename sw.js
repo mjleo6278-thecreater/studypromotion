@@ -4,7 +4,7 @@
  *   앱이 새로고침된다(쓰는 중이면 '새 버전' 안내 띠). 그래서 배포할 때마다 CACHE 버전을 꼭 올린다.
  *   (tools/build.js가 배포본의 CACHE 이름 끝에 파일 내용 해시를 붙여, 깜빡해도 새 파일이 전달되게 한다.)
  */
-const CACHE = 'studypromotion-v76';
+const CACHE = 'studypromotion-v77';
 const ASSETS = [
   './',
   './index.html',
@@ -40,6 +40,17 @@ const ASSETS = [
   './js/group.js',
   './js/groupchat.js',
   './js/chatattach.js',
+  './js/story.js',
+  // 업데이트 이야기(컷씬). 목록은 cutscene/index.html의 스크립트와 같아야 한다 (tools/build.js가 확인)
+  './cutscene/index.html',
+  './cutscene/engine.js',
+  './cutscene/pixel.js',
+  './cutscene/pawn.js',
+  './cutscene/sets.js',
+  './cutscene/stage.js',
+  './cutscene/audio.js',
+  './cutscene/shower.js',
+  './cutscene/player.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png',
@@ -83,7 +94,8 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
   // 앱 열기(페이지): 저장해 둔 index.html을 바로 — 없을 때만 네트워크
-  if (req.mode === 'navigate') {
+  // (업데이트 이야기 cutscene/index.html은 앱 안 iframe으로 열리는 따로 된 페이지라 아래 '나머지 앱 파일'로 처리)
+  if (req.mode === 'navigate' && !/\/cutscene\//.test(url.pathname)) {
     e.respondWith(
       caches.match('./index.html', { cacheName: CACHE })
         .then((hit) => hit || fetchAndKeep(req, CACHE))
