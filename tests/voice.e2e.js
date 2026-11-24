@@ -73,7 +73,7 @@ function fakeSpeech(opts) {
   const browser = await chromium.launch();
   const errors = [];
   async function open(o = {}) {
-    const ctx = await browser.newContext(Object.assign({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, colorScheme: o.dark ? 'dark' : 'light' }, o.ctx || {}));
+    const ctx = await browser.newContext(Object.assign({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, colorScheme: o.dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 }, o.ctx || {}));
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => m.type() === 'error' && !/favicon/.test(m.text()) && errors.push(m.text()));
