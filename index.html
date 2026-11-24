@@ -758,12 +758,12 @@
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-timer"/></svg>타이머·스톱워치와 폰 잠금 모드</summary>
           <ul>
             <li><b>집중 타이머</b>: 집중(기본 25분)과 휴식(기본 5분)을 번갈아 해요. 시작 전에 25·50·90분(휴식은 5·10·15분)을 바로 고르거나, <b>직접</b>을 눌러 원하는 분을 적을 수 있어요(집중은 180분, 휴식은 60분까지). 시간이 끝나면 소리와 알림으로 알려 주고, 집중한 시간은 과목별로 기록돼요.</li>
-            <li><b>스톱워치</b>: 타이머 화면 위에서 ‘스톱워치’를 고르면 과목을 눌러 공부 시간을 재요. 오늘 공부한 시간과 과목별 시간이 1초마다 쌓이고, 재는 중에 다른 과목을 누르면 지금까지를 기록하고 바로 바꿔요. 멈추면 공부 기록과 통계에 들어가요(1분이 안 되면 빼요). 재는 중에는 홈 ‘오늘 공부’에도 바로 더해지고, 아래 타이머 탭에 점이 떠요. 앱을 닫아도 계속 재고, 자정을 넘기면 날마다 나눠서 기록해요. 같은 시간이 두 번 쌓이지 않게 집중 타이머·잠금 모드와는 하나만 켤 수 있어요.</li>
+            <li><b>스톱워치</b>: 타이머 화면 위에서 ‘스톱워치’를 고르면 과목을 눌러 공부 시간을 재요. 오늘 공부한 시간과 과목별 시간이 1초마다 쌓이고, 재는 중에 다른 과목을 누르면 지금까지를 기록하고 바로 바꿔요. 멈추면 공부 기록과 통계에 들어가요(1분이 안 되면 빼요). 재는 중에는 홈 ‘오늘 공부’에도 바로 더해지고, 아래 타이머 탭에 점이 떠요. 앱을 닫아도 계속 재고, 자정을 넘기면 날마다 나눠서 기록해요. 같은 시간이 두 번 쌓이지 않게 집중 타이머와는 하나만 켤 수 있어요. 재는 중에 폰 잠금 모드를 켜면 스톱워치는 멈추지 않고 이어서 재요(잠금 시간은 따로 기록하지 않아요).</li>
             <li><b>집중이 끝나면</b> 이어서 무엇을 할지 골라요: 스톱워치 켜고 계속 공부하기, 휴식 타이머 시작하기, 같은 타이머 다시 시작, 그냥 끄기. 고르기 전에는 아무것도 저절로 시작하지 않아요.</li>
             <li>범위의 ⋯ 메뉴나 홈의 <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼에서 시작하면 무엇을 공부했는지도 함께 남고, 집중이 끝나면 그 범위를 끝냈는지 물어본 뒤 체크해 줘요.</li>
             <li>앱을 닫거나 다른 앱에 다녀와도 타이머는 계속 돌아요. 다시 열면 남은 시간부터 이어지고, 닫혀 있는 동안 끝났다면 그 시간까지 기록해요. 타이머가 도는 동안은 화면이 꺼지지 않아요(계정·설정에서 끌 수 있어요).</li>
             <li>학원·독서실·인강처럼 타이머 없이 공부했다면 <b>＋ 타이머 없이 공부한 시간 기록하기</b>로 날짜와 시간을 직접 남겨요.</li>
-            <li><b>폰 잠금 모드</b>: 30분~2시간 중에 고르거나 ‘직접’을 눌러 10시간까지 원하는 시간을 적고, 그 시간 동안 잠금 화면만 보여요. 다른 앱으로 나간 시간은 공부 시간에서 빠지고, 그만두려면 3초 동안 길게 눌러야 해요.</li>
+            <li><b>폰 잠금 모드</b>: 30분~2시간 중에 고르거나 ‘직접’을 눌러 10시간까지 원하는 시간을 적고, 확인 창에서 과목을 고르면 그 시간 동안 잠금 화면만 보여요. 다른 앱으로 나간 시간은 공부 시간에서 빠지고(스톱워치를 켜 둔 채 잠갔으면 스톱워치에서 빠져요), 그만두려면 3초 동안 길게 눌러야 해요.</li>
           </ul>
         </details>
         <details>
@@ -857,6 +857,12 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="4.5.1" data-date="2026년 11월 24일">
+            <ul class="news">
+              <li><b>잠글 때 과목 고르기</b>: 폰 잠금 확인 창에서 바로 과목을 골라요. 위 ‘과목’ 칸을 먼저 바꾸지 않아도 되고, 스톱워치가 재는 중이면 그 과목이 먼저 골라져 있어요</li>
+              <li><b>잠가도 스톱워치는 그대로</b>: 재고 있던 스톱워치를 멈추지 않고 잠금 화면에서도 이어서 재요. 공부 시간은 스톱워치로 한 번만 기록되고, 다른 앱에 나가 있던 시간은 빠져요. 잠금이 끝나도 스톱워치는 계속 돌아요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="4.5" data-date="2026년 11월 24일">
             <ul class="news">
               <li><b>말로 복습</b>: 덱 화면의 ‘말로 복습’을 누르면 카드를 소리 내어 읽어 주고, 뜻을 말하면 채점해서 다음 카드로 넘어가요. 시작한 뒤에는 화면을 누르지 않아도 돼서 샤워하거나 걸으면서도 복습할 수 있어요</li>
@@ -1127,6 +1133,7 @@
     <svg class="lock-icon" viewBox="0 0 100 100" aria-hidden="true"><path d="M50 80 C40 74 28 73 18 75 L18 47 C28 45 40 46 50 52 C60 46 72 45 82 47 L82 75 C72 73 60 74 50 80 Z" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/><path d="M50 52 L50 80" stroke="#fff" stroke-width="5" stroke-linecap="round"/><path d="M31 40 L28 20 L40 29 L50 15 L60 29 L72 20 L69 40 Z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/></svg>
     <div class="lock-time" id="lock-time">00:00</div>
     <div class="lock-sub" id="lock-sub"></div>
+    <div class="lock-sw" id="lock-sw" hidden></div>
     <div class="lock-msg" id="lock-msg">지금은 공부 시간이에요.</div>
     <div class="lock-leaves" id="lock-leaves"></div>
     <button class="lock-quit" id="lock-quit" type="button"><i class="fill"></i><span>3초 길게 눌러 포기하기</span></button>
@@ -1395,6 +1402,7 @@
   <div class="ask-backdrop" id="ask" hidden>
     <div class="ask-box" role="alertdialog" aria-modal="true" aria-labelledby="ask-msg">
       <p id="ask-msg"></p>
+      <div id="ask-extra" hidden></div>
       <div class="ask-actions"><button class="btn" id="ask-cancel">취소</button><button class="btn" id="ask-alt" hidden></button><button class="btn primary" id="ask-ok">확인</button></div>
     </div>
   </div>

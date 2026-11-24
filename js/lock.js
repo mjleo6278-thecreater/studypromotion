@@ -15,7 +15,16 @@
     const ms = Math.max(0, end - lock.startAt - (lock.awayMs || 0));
     return Math.floor(ms / 60000);
   }
-  const lib = { studiedMinutes };
+  // 스톱워치를 켜 둔 채 잠갔는데 잠금이 끝나기 전에 스톱워치가 먼저 멈췄을 때(다른 창 등):
+  // 스톱워치가 기록한 끝(from) 뒤부터 잠금이 끝날 때까지만 센다. 나가 있던 시간은 그 구간 길이만큼 나눠서 뺀다
+  function tailMinutes(lock, at, from) {
+    const end = Math.min(at, lock.endAt);
+    const start = Math.max(lock.startAt, from || 0);
+    if (!(end > start)) return 0;
+    const away = (lock.awayMs || 0) * (end - start) / Math.max(1, end - lock.startAt);
+    return Math.floor(Math.max(0, end - start - away) / 60000);
+  }
+  const lib = { studiedMinutes, tailMinutes };
   if (typeof module !== 'undefined' && module.exports) { module.exports = lib; return; }
 
   const App = root.App;
@@ -23,7 +32,8 @@
   const { store, toast, ask, $, $$ } = App;
 
   const MSGS = ['지금은 공부 시간이에요.', '한 칸씩 전진 중이에요.', '폰은 내려놓고, 책을 펴요.', '끝나면 스스로를 칭찬해 줘요.', '집중한 만큼 승급해요.'];
-  let lock = null; // { startAt, endAt, minutes, subjectId, leaves, awayMs, hiddenAt }
+  let lock = null; // { startAt, endAt, minutes, subjectId, leaves, awayMs, hiddenAt, sw }
+  // sw: 스톱워치를 켜 둔 채 잠갔다. 공부 시간은 스톱워치가 재고(잠금은 따로 기록하지 않음), 나가 있던 시간은 스톱워치에서 뺀다
   let tick = null;
   let wakeLock = null;
 
@@ -92,20 +102,94 @@
   });
   renderLockChips();
 
+  // 잠글 과목 고르기: 확인 창 안에 과목 칩을 넣는다 (스톱워치가 재는 중이면 그 과목, 아니면 위 ‘과목’ 칸이 먼저 골라져 있다)
+  //  swSid: 재는 중인 스톱워치 과목('' = 과목 없이, null = 스톱워치 안 켬)  tm: 집중 타이머가 진행 중이면 'focus'
+  function lockAskBody(pick, swSid, tm) {
+    const subs = store.get().subjects || [];
+    const box = document.createElement('div');
+    box.className = 'lock-ask';
+    const name = (id) => { const s = id && App.subjectById(id); return s ? s.name : '과목 없음'; };
+    const chip = (id, label, color) => `<button type="button" class="chip lock-subj-chip" role="radio" data-lsub="${App.esc(id)}">`
+      + `<i class="sel-dot${color ? '' : ' none'}"${color ? ` style="background:${App.esc(color)}"` : ''}></i><span>${App.esc(label)}</span></button>`;
+    box.innerHTML = (subs.length
+      ? `<p class="lock-ask-label" id="lock-subj-label">과목</p><div class="lock-subj" role="radiogroup" aria-labelledby="lock-subj-label">`
+        + subs.map((x) => chip(x.id, x.name, x.color)).join('') + chip('', '과목 없음', '') + '</div>'
+      : '')
+      + '<p class="lock-ask-note" id="lock-ask-note"></p>';
+    const note = box.querySelector('#lock-ask-note');
+    const paint = () => {
+      box.querySelectorAll('[data-lsub]').forEach((b) => {
+        const on = b.dataset.lsub === pick;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-checked', String(on));
+        b.tabIndex = on ? 0 : -1;
+      });
+      const lines = [];
+      if (swSid != null) {
+        lines.push('재고 있던 스톱워치는 멈추지 않고 이어서 재요. 다른 앱에 나가 있던 시간은 빠져요.');
+        if (pick !== swSid) {
+          const SW = window.Stopwatch, live = SW && SW.live ? SW.live() : null;
+          const m = live ? Math.floor((live.to - live.from) / 60000) : 0;
+          const ro = (id) => name(id) + (id ? Stats.josa(name(id), '으로/로') : '으로');
+          lines.push(`지금까지 잰 ${m >= 1 ? Stats.formatMinutes(m) : '시간'}은 ${ro(swSid)} 기록하고, ${ro(pick)} 이어서 재요.`);
+        }
+      }
+      if (tm === 'focus') lines.push('진행 중인 집중 타이머는 멈추고 지금까지를 기록해요.');
+      lines.push('중간에 그만두려면 3초 길게 눌러야 해요.');
+      note.textContent = lines.join('\n');
+    };
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-lsub]');
+      if (!b) return;
+      pick = b.dataset.lsub;
+      paint();
+    });
+    // 화살표로 옆 과목 (라디오 묶음처럼)
+    box.addEventListener('keydown', (e) => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+      const list = [...box.querySelectorAll('[data-lsub]')];
+      const i = list.indexOf(document.activeElement);
+      if (i < 0) return;
+      e.preventDefault();
+      const n = list[(i + (e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? list.length - 1 : 1)) % list.length];
+      pick = n.dataset.lsub;
+      paint();
+      n.focus();
+    });
+    paint();
+    return { box, picked: () => pick };
+  }
+
+  let asking = false;
   $('#lock-start').addEventListener('click', async () => {
+    if (lock || asking) return;
     commitLockEdit(); // 분을 적다가 바로 ‘잠금 시작’을 눌러도 적은 시간으로
     const mins = chosen;
     const sel = $('#timer-subject');
-    const subName = sel && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : '';
-    // 잠금 시간과 스톱워치·집중 타이머가 같은 시간을 두 번 기록하지 않게, 돌던 것은 멈추고 지금까지를 기록
-    const swOn = !!(window.Stopwatch && window.Stopwatch.running());
+    const SW = window.Stopwatch;
+    const live = SW && SW.live ? SW.live() : null;
+    const valid = (id) => (id && App.subjectById(id) ? id : '');
+    // 스톱워치가 재는 중이면 멈추지 않고 그대로 둔다 (잠금 시간은 스톱워치가 재므로 같은 시간이 두 번 쌓이지 않게 잠금은 따로 기록하지 않는다)
+    // 집중 타이머는 끝나는 소리가 잠금 중에 울리지 않게 지금까지를 기록하고 멈춘다
+    const swSid = live ? valid(live.subjectId) : null;
     const tm = App.timerBusy ? App.timerBusy() : null;
-    const note = (swOn ? '\n재고 있던 스톱워치는 멈추고 지금까지를 기록해요.' : '') + (tm === 'focus' ? '\n진행 중인 집중 타이머는 멈추고 지금까지를 기록해요.' : '');
-    if (!(await ask(`${Stats.formatMinutes(mins)} 동안 잠글까요?${subName ? `\n과목: ${subName}` : ''}${note}\n\n중간에 그만두려면 3초 길게 눌러야 해요.`, { ok: '잠그기' }))) return;
-    if (swOn) await window.Stopwatch.stop();
+    const body = lockAskBody(live ? swSid : valid(sel && sel.value), swSid, tm);
+    asking = true;
+    let yes;
+    try { yes = await ask(`${Stats.formatMinutes(mins)} 동안 잠글까요?`, { ok: '잠그기', extra: body.box }); } finally { asking = false; }
+    if (!yes || lock) return;
+    const sid = valid(body.picked());
+    let swOn = !!(SW && SW.running());
+    // 다른 과목을 골랐으면 스톱워치도 지금까지를 기록하고 그 과목으로 이어서 잰다
+    if (swOn && SW.switchSubject) { await SW.switchSubject(sid); swOn = SW.running(); }
     if (App.timerBusy && App.timerBusy()) App.stopTimer();
+    // 위 ‘과목’ 칸도 고른 과목으로 (다음에 잠그거나 집중 타이머를 켤 때 그대로)
+    if (sel && sel.value !== sid) { sel.value = sid; sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (lock) return;
     const t = Date.now();
-    lock = { startAt: t, endAt: t + mins * 60000, minutes: mins, subjectId: (sel && sel.value) || null, subjectName: subName, leaves: 0, awayMs: 0, hiddenAt: null };
+    const subj = sid ? App.subjectById(sid) : null;
+    lock = { startAt: t, endAt: t + mins * 60000, minutes: mins, subjectId: sid || null, subjectName: subj ? subj.name : '', leaves: 0, awayMs: 0, hiddenAt: null };
+    if (swOn) lock.sw = true;
     write();
     show(true);
   });
@@ -125,6 +209,7 @@
     keepAwake();
     history.pushState({ lock: 1 }, '', location.href);
     $('#lock-sub').textContent = `${lock.subjectName ? lock.subjectName + ' · ' : ''}${Stats.formatMinutes(lock.minutes)} 잠금`;
+    $('#lock-sw').hidden = true;
     $('#lock-msg').textContent = MSGS[Math.floor(Math.random() * MSGS.length)];
     clearInterval(tick);
     tick = setInterval(update, 500);
@@ -136,6 +221,11 @@
     const left = Math.max(0, Math.ceil((lock.endAt - Date.now()) / 1000));
     $('#lock-time').textContent = clock(left);
     $('#lock-leaves').textContent = lock.leaves ? `다른 앱으로 나간 횟수 ${lock.leaves}번 · ${Stats.formatMinutes(Math.round(lock.awayMs / 60000))}` : '';
+    // 같이 재는 스톱워치: 이번에 잰 시간 (나가 있던 시간을 뺀 만큼)
+    const live = lock.sw && window.Stopwatch && window.Stopwatch.live ? window.Stopwatch.live() : null;
+    const swEl = $('#lock-sw');
+    swEl.hidden = !live;
+    if (live) swEl.textContent = `스톱워치 ${clock(Math.max(0, Math.floor((live.to - live.from) / 1000)))} · 계속 재는 중`;
     if (left <= 0) finish(true);
   }
 
@@ -149,18 +239,53 @@
 
   function finish(completed) {
     const at = Date.now();
-    const minutes = studiedMinutes(lock, at);
     const done = lock;
     lock = null;
     write();
     hide();
+    const SW = window.Stopwatch;
+    // 다른 앱에 나가 있는 동안 잠금 시간이 끝났으면 그 시간도 나가 있던 시간으로 (스톱워치와 같이 잠갔으면 스톱워치에서도 뺀다)
+    if (done.hiddenAt) {
+      const ms = Math.max(0, Math.min(at, done.endAt) - done.hiddenAt);
+      done.awayMs = (done.awayMs || 0) + ms;
+      done.hiddenAt = null;
+      if (done.sw && ms > 0 && SW && SW.dropAway) SW.dropAway(ms);
+    }
+    const swKeeps = !!(done.sw && SW && SW.running());
+    let minutes = 0;
+    if (!done.sw) minutes = studiedMinutes(done, at);
+    else if (!swKeeps) {
+      // 스톱워치가 먼저 멈췄으면 스톱워치가 기록한 뒤의 잠금 시간만 (겹치는 시간은 다시 넣지 않는다)
+      const from = store.get().sessions.reduce((m, x) => (x.kind === 'stopwatch' && x.endedAt >= done.startAt && x.endedAt <= at ? Math.max(m, x.endedAt) : m), done.startAt);
+      minutes = tailMinutes(done, at, from);
+    }
     // 시작 시각으로 정한 id: 탭 두 개에서 같은 잠금이 끝나도 한 번만 기록
     const id = 'lock-' + done.startAt;
     if (minutes > 0 && !store.get().sessions.some((x) => x.id === id)) {
       store.update((st) => st.sessions.push({ id, subjectId: done.subjectId, minutes, endedAt: Math.min(at, done.endAt), label: completed ? '잠금 모드 완료' : '잠금 모드 (중단)', lock: true, leaves: done.leaves }));
     }
     try { if (completed && navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) { /* 무시 */ }
+    if (swKeeps) {
+      // 스톱워치는 그대로 돈다: 타이머 화면에서 바로 보이게 스톱워치 쪽을 연다
+      if (SW.showTab) SW.showTab('sw');
+      toast(completed ? '잠금 완료! 스톱워치는 계속 재고 있어요' : '잠금을 그만뒀어요. 스톱워치는 계속 재고 있어요');
+      return;
+    }
     toast(completed ? `잠금 완료! ${Stats.formatMinutes(minutes)} 공부를 기록했어요` : `잠금을 그만뒀어요. ${Stats.formatMinutes(minutes)}만 기록했어요`);
+  }
+
+  // 나가 있던 시간을 잠금에 더한다. 스톱워치와 같이 잠갔으면 스톱워치에서도 뺀다 (스톱워치는 이 파일보다 늦게 읽히므로 준비된 뒤에)
+  function addAway(ms) {
+    lock.awayMs += ms;
+    lock.hiddenAt = null;
+    write();
+    if (!lock.sw || !(ms > 0)) return;
+    const drop = () => { if (window.Stopwatch && window.Stopwatch.dropAway) window.Stopwatch.dropAway(ms); };
+    if (window.Stopwatch) drop(); else later(drop);
+  }
+  function later(fn) {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
+    else setTimeout(fn, 0);
   }
 
   // 다른 앱으로 나가면 기록
@@ -172,10 +297,8 @@
       write();
     } else {
       if (lock.hiddenAt) {
-        lock.awayMs += Math.max(0, Math.min(Date.now(), lock.endAt) - lock.hiddenAt);
-        lock.hiddenAt = null;
-        write();
-        $('#lock-msg').textContent = '돌아왔네요. 나가 있던 시간은 공부 시간에서 빠져요.';
+        addAway(Math.max(0, Math.min(Date.now(), lock.endAt) - lock.hiddenAt));
+        $('#lock-msg').textContent = lock.sw ? '돌아왔네요. 나가 있던 시간은 스톱워치에서 빠져요.' : '돌아왔네요. 나가 있던 시간은 공부 시간에서 빠져요.';
       }
       keepAwake();
       update();
@@ -212,17 +335,9 @@
   const saved = read();
   if (saved && saved.endAt) {
     lock = saved;
-    if (lock.hiddenAt) { // 앱이 닫혀 있던 시간도 나가 있던 시간으로 친다
-      lock.awayMs += Math.max(0, Math.min(Date.now(), lock.endAt) - lock.hiddenAt);
-      lock.hiddenAt = null;
-      write();
-    }
-    if (Date.now() >= lock.endAt) {
-      // 동기화 등 다른 스크립트가 다 준비된 뒤 기록
-      const done = () => { if (lock) finish(true); };
-      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', done, { once: true });
-      else setTimeout(done, 0);
-    } else show(false);
+    if (lock.hiddenAt) addAway(Math.max(0, Math.min(Date.now(), lock.endAt) - lock.hiddenAt)); // 앱이 닫혀 있던 시간도 나가 있던 시간으로 친다
+    if (Date.now() >= lock.endAt) later(() => { if (lock) finish(true); }); // 동기화·스톱워치 등 다른 스크립트가 다 준비된 뒤 기록
+    else show(false);
   }
 
   // 다른 탭(창)에서 잠금을 시작하거나 끝내면 이 탭도 맞춘다

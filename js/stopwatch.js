@@ -155,7 +155,7 @@
   }
 
   async function stop() {
-    if (!sw.running || busy) return;
+    if (!sw.running || busy || lockedWith()) return;
     const sid = sw.subjectId, label = sw.label, taskId = sw.taskId, topicId = sw.topicId;
     const sec = await finishRun(now());
     sw = idle(sid);
@@ -189,6 +189,24 @@
   }
 
   function toggle() { return sw.running ? stop() : start(nextSubject()); }
+
+  /* ---------- 폰 잠금과 같이 재기 (js/lock.js) ---------- */
+  // 스톱워치를 켜 둔 채 잠그면 스톱워치가 잠금 시간까지 이어서 잰다. 잠금이 끝날 때까지는 멈출 수 없다
+  const lockedWith = () => !!(window.Lock && window.Lock.state && window.Lock.state.sw);
+  // 잠그면서 다른 과목을 골랐을 때: 지금까지를 기록하고 그 과목으로 이어서 (같은 과목이면 그대로)
+  function switchSubject(id) {
+    id = id || '';
+    const cur = sw.subjectId && subjectOf(sw.subjectId) ? sw.subjectId : ''; // 지운 과목으로 재는 중이면 ‘과목 없이’와 같다
+    return sw.running && cur !== id ? switchTo(id) : Promise.resolve();
+  }
+  // 잠금 중 다른 앱에 나가 있던 시간: 잠금 규칙대로 공부 시간에서 뺀다 (시작 시각을 그만큼 늦춘다)
+  function dropAway(ms) {
+    if (!sw.running || !(ms > 0)) return;
+    sw.startAt = Math.min(now(), sw.startAt + ms);
+    save();
+    begin();
+    render();
+  }
 
   /* ---------- 흐르는 시간 ---------- */
   let tick = null, lastShown = -1;
@@ -477,7 +495,7 @@
   // 지금 재고 있는 구간 (타임테이블이 실시간으로 그린다). 재는 중이 아니면 null
   const live = () => (sw.running ? { from: sw.startAt, to: now(), subjectId: sw.subjectId && subjectOf(sw.subjectId) ? sw.subjectId : null, label: sw.label, taskId: sw.taskId || null } : null);
 
-  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: curTab, showTab, render, todayMinutes, live, startFlow, startPlan };
+  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: curTab, showTab, render, todayMinutes, live, startFlow, startPlan, switchSubject, dropAway };
   if (sw.running) begin();
   render();
 })();
