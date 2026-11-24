@@ -678,7 +678,7 @@ test('AI에게 꺼 둔 기능 이름을 알려 준다 (없으면 그 줄이 없�
   const st = sample();
   st.settings.layout = { off: ['review', 'stopwatch', 'home-tt', 'ai'] };
   const text = AI.contextText(AI.buildContext(st, NOW));
-  assert.match(text, /꺼 둔 기능: 복습, 스톱워치\. /);
+  assert.match(text, /꺼 둔 기능: 복습, 스톱워치, 말로 복습\. /);
   assert.ok(!text.includes('타임테이블') && !text.includes('세컨드'), '홈 칸과 AI 자신은 말하지 않음');
 });
 

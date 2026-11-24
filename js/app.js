@@ -123,6 +123,7 @@
       view = 'home';
     }
     const prev = currentView;
+    if (view !== 'review' && window.Voice) window.Voice.stop(true); // 다른 탭으로 가면 말로 복습은 조용히 끝낸다
     currentView = view;
     const navView = view === 'layout' ? 'account' : view; // 기능과 탭 편집은 계정·설정 안의 화면
     $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
@@ -180,6 +181,7 @@
       if (btn) btn.click(); else dlg.hidden = true;
       return true;
     }
+    if (currentView === 'review' && window.Voice && window.Voice.active()) { window.Voice.stop(); return true; } // 말로 복습 → 결과(또는 덱 화면)
     if (currentView === 'review' && openDeckId) { $('#deck-back').click(); return true; }
     if (currentView === 'board' && window.Board && window.Board.full) { window.Board.setMode('list'); return true; } // 전체 화면 화이트보드 → 목록으로
     return false;
@@ -1017,6 +1019,7 @@
     $('#deck-home').hidden = name !== 'home';
     $('#deck-detail').hidden = name !== 'detail';
     $('#study').hidden = name !== 'study';
+    $('#voice-study').hidden = name !== 'voice'; // 말로 복습 (js/voice.js)
   }
 
   function renderDecks() {
@@ -1039,6 +1042,7 @@
     $('#deck-title').textContent = d.name;
     $('#deck-summary').textContent = `카드 ${cards.length}장 · 오늘 복습할 카드 ${due}장`;
     $('#deck-study').disabled = due === 0;
+    $('#deck-voice').disabled = cards.length === 0; // 말로 복습: 오늘 복습할 카드가 없어도 '듣기만'은 된다
     // 고치는 중인 카드는 다시 그려도 입력한 글자와 커서를 유지
     const form = $('#card-list .card-edit');
     const draft = form && form.dataset.cardEdit === editingCardId ? { front: form.front.value, back: form.back.value, focus: document.activeElement && form.contains(document.activeElement) ? document.activeElement.name : null } : null;
@@ -1244,7 +1248,7 @@
   });
 
   document.addEventListener('keydown', (e) => {
-    if (currentView !== 'review' || $('#study').hidden) return;
+    if (currentView !== 'review' || $('#study').hidden) return; // 말로 복습(#voice-study)은 js/voice.js가 받는다
     if (e.target.matches('input, textarea, select')) return;
     if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); flip(); }
     const map = { 1: 'again', 2: 'hard', 3: 'good', 4: 'easy' };
@@ -1717,8 +1721,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '4.4.1';
-  const APP_DATE = '2026년 11월 22일';
+  const APP_VERSION = '4.5';
+  const APP_DATE = '2026년 11월 24일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
@@ -1862,7 +1866,7 @@
     else if (currentView === 'board' && window.Board) window.Board.render();
   }
 
-  store.subscribe(() => { if ($('#study').hidden || currentView !== 'review') render(); });
+  store.subscribe(() => { if (($('#study').hidden && $('#voice-study').hidden) || currentView !== 'review') render(); });
 
   // 오늘 공부 시간이 하루 목표를 넘는 순간 한 번 축하 (하루에 한 번만)
   const GOAL_KEY = 'studypromotion.goalDay';
@@ -2031,6 +2035,8 @@
   window.App = { store, focusOn, pawnTrack, ic, $, $$, esc, toast, ask, choose, uid, go, now, render, subjectById, todayKey, openShare, askTopicDone, openDeck,
     // 지금 돌고 있는 집중 타이머가 타임테이블에 칠할 구간 (끝나면 이대로 기록된다)
     timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), end: timer.endAt, subjectId: timer.subjectId || null, label: timer.label || null, taskId: timer.taskId || null } : null),
+    // 복습 화면 (말로 복습 js/voice.js가 쓴다)
+    review: { deckId: () => openDeckId, pane: showReviewPane, detail: renderDeckDetail, cards: deckCards },
     openLog, dropCredit, setTaskDone, setTaskMark, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
