@@ -433,11 +433,11 @@
       const blob = new Vox(); blob.disc(0, 7.2, 0x000000);
       this.blob = R.mesh(buildMesh(blob, { noAO: true }));
       this.cube = R.mesh(buildMesh(cube, { noAO: true }));
-      // 폰 화면 텍스처
-      const sc = document.createElement('canvas'); sc.width = 48; sc.height = 88;
-      this.scrPix = new Pix(sc); this.scrPix.w = 48; this.scrPix.h = 88; this.scrPix.ctx.imageSmoothingEnabled = false;
-      this.scrTex = R.texture(sc);
-      this.scrQuad = R.quad(6.4, 12);
+      // 폰 화면 텍스처: 48×88칸을 칸당 10픽셀로 (가까이 찍어도 글자가 선명하게). 밉맵을 쓰려고 512×1024 캔버스의 왼쪽 위만 쓴다
+      const SK = 10, sc = document.createElement('canvas'); sc.width = 512; sc.height = 1024;
+      this.scrPix = new Pix(sc); this.scrPix.fixed(48, 88, SK);
+      this.scrTex = R.texture(sc, { smooth: true });
+      this.scrQuad = R.quad(6.4, 12, (48 * SK - 0.5) / 512, (88 * SK - 0.5) / 1024);
       this.scrKey = '';
     },
     frame(t, st) {
