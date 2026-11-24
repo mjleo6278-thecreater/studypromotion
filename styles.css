@@ -3313,3 +3313,14 @@ body.gc-showing .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)
   .vr-actions .btn { min-height: 44px; }
   #view-review:has(#voice-study:not([hidden])) > h1 { display: none; } /* 제목을 빼서 카드와 듣는 중 표시가 한 화면에 */
 }
+/* 가로 화면: 왼쪽 카드, 오른쪽 듣는 중 표시와 단추 (스크롤 없이 한 화면) */
+@media (max-height: 520px) and (min-width: 640px) {
+  #voice-study:not([hidden]) { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto auto auto auto 1fr; column-gap: 14px; align-items: start; } /* 남는 높이는 마지막 빈 줄이 받는다 */
+  #vr-back { grid-column: 1; grid-row: 1; justify-self: start; }
+  #vr-meta { grid-column: 2; grid-row: 1; align-self: center; text-align: right; margin: 0; }
+  #vr-card { grid-column: 1; grid-row: 2 / span 4; min-height: 0; height: 100%; }
+  #vr-status { grid-column: 2; grid-row: 2; margin-top: 0; }
+  #vr-cmds { grid-column: 2; grid-row: 3; justify-content: flex-start; }
+  #vr-actions { grid-column: 2; grid-row: 4; }
+  #vr-done { grid-column: 1 / -1; grid-row: 2; }
+}

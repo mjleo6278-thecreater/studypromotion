@@ -45,6 +45,7 @@ function fakeSpeech(opts) {
     start() {
       if (this.active) throw new Error('InvalidStateError');
       this.active = true; V.starts++; V.listening = this; V.lastLang = this.lang;
+      if (V.stall) return; // 켜지지 않는 인식기 (일부 아이폰)
       setTimeout(() => { if (!this.active) return; if (this.onstart) this.onstart({}); if (this.onaudiostart) this.onaudiostart({}); if (V.next !== undefined) { const x = V.next; V.next = undefined; setTimeout(() => this._say(x), 10); } }, 5);
     }
     _end() { this.active = false; if (V.listening === this) V.listening = null; if (this.onend) this.onend({}); }
@@ -259,6 +260,23 @@ function fakeSpeech(opts) {
   await page.tap('.tab[data-view="review"]');
   assert(await page.isHidden('#voice-study'), '복습 탭으로 돌아오면 덱 화면');
 
+  /* ===== 10-2) 잡음 한 글자는 답으로 치지 않음 · 켜지지 않는 인식기 ===== */
+  await page.evaluate(() => App.openDeck('en'));
+  await page.tap('#deck-voice');
+  await page.waitForSelector('.ui-back.in .ui-voice');
+  await page.tap('[data-vs-start]');
+  const n10 = (await page.evaluate(() => App.store.get().reviewLog)).length;
+  await say(page, ['어']);
+  await listening(page);
+  assert((await page.evaluate(() => App.store.get().reviewLog)).length === n10 && !(await page.$('#vr-card.bad')), '물소리 같은 한 글자는 틀림으로 치지 않고 다시 들음');
+  await page.evaluate(() => { __voice.stall = true; __voice.listening.abort(); });
+  await statusIs(page, 'err', 12000);
+  assert(/음성 인식이 자꾸 멈춰요/.test(await page.textContent('#vr-say')) && await page.isVisible('[data-vr="listen"]'), '인식기가 켜지지 않으면 알려 주고 듣기만을 권함');
+  await page.evaluate(() => { __voice.stall = false; });
+  await page.tap('#vr-back');
+  await page.waitForFunction(() => document.querySelector('#voice-study').hidden || !document.querySelector('#vr-done').hidden);
+  if (await page.isVisible('#vr-done')) await page.tap('[data-vr="back"]');
+
   /* ===== 11) 마이크 오류 → 듣기만으로 바꾸기 ===== */
   await page.evaluate(() => App.openDeck('en'));
   await page.tap('#deck-voice');
@@ -334,9 +352,17 @@ function fakeSpeech(opts) {
   await page.waitForSelector('.ui-back.in .ui-voice');
   await page.tap('[data-vs-start]');
   await listening(page);
-  const fit = await page.evaluate(() => { const r = document.querySelector('#vr-actions').getBoundingClientRect(); return r.bottom <= innerHeight + 400 && document.querySelector('#vr-card').getBoundingClientRect().height < 260; });
-  assert(fit, '가로 화면: 카드가 낮아짐');
+  const fit = await page.evaluate(() => {
+    const a = document.querySelector('#vr-actions').getBoundingClientRect(), c = document.querySelector('#vr-card').getBoundingClientRect(), st = document.querySelector('#vr-status').getBoundingClientRect();
+    return { ok: a.bottom <= innerHeight && c.bottom <= innerHeight && st.left >= c.right && document.documentElement.scrollWidth <= innerWidth, a: Math.round(a.bottom), c: Math.round(c.bottom) };
+  });
+  assert(fit.ok, `가로 화면: 왼쪽 카드 · 오른쪽 듣는 중과 단추, 스크롤 없이 다 보임 (단추 아래 ${fit.a}, 카드 아래 ${fit.c})`);
   await shot(page, 'v10-landscape.png');
+  await say(page, answerFor[await front(page)]);
+  await page.waitForSelector('#vr-card.ok');
+  const fit2 = await page.evaluate(() => { const c = document.querySelector('#vr-card').getBoundingClientRect(); return Math.round(c.bottom) <= innerHeight; });
+  assert(fit2, '가로 화면: 정답·들은 말이 나와도 카드가 화면 안');
+  await shot(page, 'v11-landscape-ok.png');
   await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
   await statusIs(page, 'pause');
   assert(/다른 화면에 다녀와서/.test(await page.textContent('#vr-say')), '다른 앱으로 가면 멈춤');

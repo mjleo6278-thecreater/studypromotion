@@ -207,6 +207,8 @@
         actions([['pause', '잠깐 멈춤'], ['reveal', '정답 보기']]);
         await say(V.speakText(c[qSide()]), langOf('q'));
         if (!alive(run)) return;
+        await wait(150, run); // 읽은 소리 끝자락을 듣지 않게 조금 쉬고 듣는다
+        if (!alive(run)) return;
       }
       read = S.cfg.read;
       status('listen', '듣고 있어요', S.cfg.mode === 'word' ? `${V.langName(langOf('a'))} 단어를 말해 보세요` : '뜻을 말해 보세요');
@@ -222,10 +224,16 @@
         repeated = true;
         continue;
       }
-      silent = 0;
       const j = V.judge(h.alts, c[aSide()], langOf('a'));
       if (j.ok) return right(c, j, repeated, run);
       const cmd = V.command(h.alts, langOf('a'));
+      // 물소리 같은 잡음이 한 글자로 잡힌 것은 답으로 치지 않고 다시 듣는다 (되풀이되면 조용할 때처럼 멈춤)
+      if (!cmd && h.alts.every((a) => V.norm(a, langOf('a')).replace(/ /g, '').length <= 1)) {
+        if (++silent >= 2) return 'pause';
+        read = false;
+        continue;
+      }
+      silent = 0;
       if (cmd === 'repeat') { repeated = true; read = true; continue; }
       if (cmd === 'stop') return 'stop';
       if (cmd === 'pause') return 'pause';
@@ -489,7 +497,7 @@
       const R = Rec();
       if (!R || !S) return resolve({ alts: [], error: 'service-not-allowed' });
       if (S.pending) { const cmd = S.pending; S.pending = null; return resolve({ alts: [], cmd }); }
-      let done = false, rec = null, interim = '', lastStart = 0, quick = 0;
+      let done = false, rec = null, interim = '', lastStart = 0, quick = 0, on = false; // on: 지금 인식기가 켜졌나
       const t0 = Date.now();
       let deadline = t0 + ms;
       const ringEl = $('#vr-ring');
@@ -498,7 +506,8 @@
         if (!S || S.run !== run) return finish({ alts: [] });
         const left = deadline - Date.now();
         if (ring) paintRing(left, ms);
-        if (left <= 0) finish({ alts: interim ? [interim] : [] });
+        // 지금 인식기가 1.5초 넘게 켜지지 않은 채 시간이 다 됐으면 고장 (일부 아이폰 홈 화면 앱, 마이크를 다른 앱이 잡음)
+        if (left <= 0) finish(interim ? { alts: [interim] } : on || Date.now() - lastStart < 1500 ? { alts: [] } : { alts: [], error: 'unstable' });
       }, 100);
       if (ring) paintRing(ms, ms);
       function finish(r) {
@@ -524,6 +533,7 @@
           rec.continuous = false;
         } catch (e) { return finish({ alts: [], error: 'start' }); }
         lastStart = Date.now();
+        on = false;
         rec.onresult = (e) => {
           let fin = null;
           interim = '';
@@ -533,10 +543,12 @@
             else interim += res[0].transcript;
           }
           interim = interim.trim();
+          on = true;
           if (interim) { heardLive(interim); later(); }
           if (fin && fin.length) finish({ alts: fin });
         };
         rec.onspeechstart = later;
+        rec.onstart = rec.onaudiostart = () => { on = true; };
         rec.onerror = (e) => { if (FATAL.includes(e.error)) finish({ alts: [], error: e.error }); };
         rec.onend = () => {
           if (done) return;
