@@ -146,7 +146,7 @@
       p.rotY = lerp(lerp(0.35, 1.35, inOut(seg(t, 12.6, 13.1))), 0.6, inOut(seg(t, 15.7, 16.1)));
       p.eyes = t > 14.6 ? 'worried' : blink ? 'blink' : 'normal';
       p.mouth = t > 14.6 ? 'wavy' : 'closed';
-      const FT = 3.5 * Pawn.HAND_S + 0.2; // 손 가운데에서 손가락 끝까지
+      const FT = Pawn.FINGER + 0.2; // 손 가운데에서 손가락 끝까지
       const ready = screenPoint(t, 0.5, 0.7, FT + 3);
       let target = ready, reach = inOut(seg(t, 13.1, 13.4)) * (1 - inOut(seg(t, 16.0, 16.5)));
       for (const tp of TAPS) {
