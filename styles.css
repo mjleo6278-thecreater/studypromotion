@@ -3214,3 +3214,102 @@ body.gc-showing .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)
 .gx-view-wait { position: absolute; left: 50%; top: 50%; z-index: 1; transform: translate(-50%, -50%); margin: 0; padding: 8px 14px; border-radius: 999px; background: rgba(0, 0, 0, .6); font-size: 13.5px; white-space: nowrap; }
 .gx-view-wait[hidden], .gx-view-cap[hidden] { display: none; }
 @media print { .gx-view { display: none !important; } }
+
+/* ===== 말로 복습 (v4.5, js/voice.js) ===== */
+/* 덱 화면: 복습 시작 · 말로 복습 · 덱 삭제 */
+#deck-detail .panel-head { flex-wrap: wrap; gap: 10px; }
+.deck-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.deck-actions .btn { display: inline-flex; align-items: center; gap: 6px; }
+.deck-actions .ic { width: 17px; height: 17px; }
+
+/* 시작 창 */
+.ui-voice .ui-sheet-body { padding: 0 8px 0; }
+.ui-voice .vs-lead { margin: 0 12px 6px; font-size: 14px; line-height: 1.55; color: var(--muted); word-break: keep-all; }
+.ui-voice .vs-warn { margin: 4px 12px 6px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger); font-size: 13px; line-height: 1.5; word-break: keep-all; }
+.ui-voice .ui-group { margin: 0; }
+.ui-voice .vs-dir span small { display: block; font-size: 12.5px; color: var(--muted); font-weight: 400; margin-top: 1px; }
+.ui-voice .vs-dir .ui-check { visibility: hidden; }
+.ui-voice .vs-dir.on .ui-check { visibility: visible; color: var(--accent); }
+.ui-voice .vs-langs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 2px 12px 4px; }
+.ui-voice .vs-langs label { font-size: 12px; color: var(--muted); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.ui-voice .vs-row { justify-content: space-between; flex-wrap: nowrap; gap: 12px; padding: 10px 12px; font-size: 15px; }
+.ui-voice .vs-row small { display: block; font-size: 12.5px; color: var(--muted); }
+.ui-voice .vs-chips { display: flex; gap: 6px; padding: 2px 12px 6px; }
+.ui-voice .vs-chips .chip { padding: 6px 14px; font-size: 14px; }
+.ui-voice .vs-note { margin: 6px 12px 0; padding: 10px 12px; border-radius: 12px; background: var(--bg); font-size: 12.5px; line-height: 1.55; color: var(--muted); word-break: keep-all; }
+.ui-voice .vs-foot { position: sticky; bottom: 0; padding: 12px 4px; background: var(--surface); }
+.ui-voice .vs-foot .btn { width: 100%; justify-content: center; min-height: 50px; font-size: 16px; display: inline-flex; align-items: center; gap: 8px; }
+.ui-voice .vs-foot .ic { width: 19px; height: 19px; }
+.ui-back:not(.pop) .ui-voice { max-height: min(88vh, 760px); }
+
+/* 말로 복습 화면: 멀리서도 보이게 크게 */
+#voice-study .vr-card { min-height: 300px; cursor: default; position: relative; gap: 12px; padding: 34px 20px 26px; transition: border-color .2s, box-shadow .2s; }
+#voice-study .flash-front { font-size: clamp(34px, 10.5vw, 46px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; }
+#voice-study .flash-back { font-size: 21px; font-weight: 600; color: var(--text); padding-top: 14px; }
+#voice-study .flash-back mark { background: var(--accent-soft); color: var(--accent-text, var(--accent)); border-radius: 6px; padding: 0 4px; }
+.vr-lang { position: absolute; top: 12px; left: 12px; right: 12px; text-align: center; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.vr-heard { font-size: 19px; color: var(--muted); overflow-wrap: anywhere; }
+.vr-heard b { color: var(--text); font-weight: 700; }
+.vr-verdict { display: inline-flex; align-items: center; gap: 6px; font-size: 16px; font-weight: 800; padding: 6px 14px; border-radius: 999px; }
+.vr-verdict .ic { width: 18px; height: 18px; stroke-width: 2.6; }
+.vr-card.ok { border-color: var(--ok); box-shadow: 0 0 0 3px var(--accent-soft); }
+.vr-card.ok .vr-verdict { background: var(--accent-soft); color: var(--accent-text, var(--accent)); }
+.vr-card.bad { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 16%, transparent); }
+.vr-card.bad .vr-verdict { background: color-mix(in srgb, var(--danger) 13%, transparent); color: var(--danger); }
+.vr-card.bad .vr-heard b { text-decoration: line-through; text-decoration-color: var(--danger); text-decoration-thickness: 2px; }
+
+/* 지금 하는 일 (읽는 중 · 듣는 중 · 멈춤) */
+.vr-status { display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.vr-dot { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; flex: none; background: var(--bg); color: var(--muted); position: relative; }
+.vr-dot .ic { width: 22px; height: 22px; }
+.vr-status.listen .vr-dot { background: var(--accent); color: #fff; }
+.vr-status.listen .vr-dot::before { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--accent); opacity: .35; animation: vr-pulse 1.4s ease-out infinite; }
+@keyframes vr-pulse { 0% { transform: scale(.9); opacity: .5; } 100% { transform: scale(1.15); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .vr-status.listen .vr-dot::before { animation: none; } }
+.vr-status.ok .vr-dot { background: var(--accent-soft); color: var(--accent-text, var(--accent)); }
+.vr-status.bad .vr-dot, .vr-status.err .vr-dot { background: color-mix(in srgb, var(--danger) 13%, transparent); color: var(--danger); }
+.vr-status.pause .vr-dot { background: var(--ink, var(--text)); color: var(--ink-text, var(--bg)); }
+.vr-say { flex: 1; min-width: 0; }
+.vr-say b { display: block; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.vr-say span { display: block; font-size: 13px; color: var(--muted); line-height: 1.45; word-break: keep-all; }
+.vr-ring { width: 40px; height: 40px; border-radius: 50%; flex: none; display: grid; place-items: center; background: conic-gradient(var(--accent) calc(var(--p, 1) * 360deg), var(--line) 0); }
+.vr-ring b { width: 32px; height: 32px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* 말로 할 수 있는 것 */
+.vr-cmds { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.vr-cmds b { font-weight: 700; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px 11px; }
+.vr-cmds b small { font-weight: 400; color: var(--muted); font-size: 12px; margin-left: 4px; }
+
+/* 젖은 손으로도 누르기 쉬운 큰 단추 */
+.vr-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.vr-actions .btn { min-height: 52px; justify-content: center; font-size: 15px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; }
+.vr-actions .ic { width: 18px; height: 18px; }
+.vr-actions .btn:only-child { grid-column: 1 / -1; }
+
+/* 끝 화면 */
+.vr-done { margin-top: 0; }
+.vr-done-sub { margin: 4px 0 0; }
+.vr-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 12px; }
+.vr-sum div { background: var(--bg); border-radius: 12px; padding: 10px 4px; }
+.vr-sum b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+.vr-sum span { font-size: 12.5px; color: var(--muted); }
+.vr-sum .ok b { color: var(--accent-text, var(--accent)); }
+.vr-sum .bad b { color: var(--danger); }
+.vr-miss-head { text-align: left; padding: 0 2px 6px; margin: 0; }
+.vr-miss { text-align: left; border: 1px solid var(--line); border-radius: 12px; margin: 0 0 14px; padding: 4px 12px; list-style: none; }
+.vr-miss li { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.vr-miss li:first-child { border-top: 0; }
+.vr-miss li span { color: var(--muted); text-align: right; }
+.vr-done-btns { display: grid; gap: 8px; }
+.vr-done-btns .btn { min-height: 48px; justify-content: center; }
+
+/* 가로 화면 (높이가 낮을 때): 카드를 줄이고 단추를 옆으로 */
+@media (max-height: 520px) {
+  #voice-study .vr-card { min-height: 0; padding: 30px 16px 16px; gap: 8px; }
+  #voice-study .flash-front { font-size: 30px; }
+  #voice-study .flash-back { font-size: 18px; padding-top: 8px; }
+  .vr-status { margin-top: 8px; padding: 8px 12px; }
+  .vr-dot { width: 36px; height: 36px; }
+  .vr-actions .btn { min-height: 44px; }
+  #view-review:has(#voice-study:not([hidden])) > h1 { display: none; } /* 제목을 빼서 카드와 듣는 중 표시가 한 화면에 */
+}

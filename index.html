@@ -92,6 +92,9 @@
     <symbol id="i-link" viewBox="0 0 24 24"><path d="M10.4 13.6a3.9 3.9 0 0 0 5.5 0l2.9-2.9a3.9 3.9 0 0 0-5.5-5.5l-1.2 1.2"/><path d="M13.6 10.4a3.9 3.9 0 0 0-5.5 0l-2.9 2.9a3.9 3.9 0 0 0 5.5 5.5l1.2-1.2"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.2v13.6M5.2 12h13.6"/></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m20.5 15.5-4.8-4.8-8.2 8.8"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3.4" width="6" height="11.2" rx="3"/><path d="M5.8 11.2a6.2 6.2 0 0 0 12.4 0"/><path d="M12 17.4v3.2"/></symbol>
+    <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4.4 9.4h3.4l4.6-3.9v13l-4.6-3.9H4.4z"/><path d="M15.6 9.3a3.9 3.9 0 0 1 0 5.4"/><path d="M18.2 6.8a7.4 7.4 0 0 1 0 10.4"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 6v12M15 6v12" stroke-width="2.6"/></symbol>
     <symbol id="i-camera" viewBox="0 0 24 24"><path d="M4 8.2h3.2l1.9-2.7h5.8l1.9 2.7H20v11H4z"/><circle cx="12" cy="13.4" r="3.4"/></symbol>
   </svg>
   <header class="topbar">
@@ -389,7 +392,7 @@
         <button class="btn link" id="deck-back">← 덱 목록</button>
         <div class="panel">
           <div class="panel-head"><h2 id="deck-title"></h2>
-            <div><button class="btn primary" id="deck-study">복습 시작</button> <button class="btn danger" id="deck-delete">덱 삭제</button></div></div>
+            <div class="deck-actions"><button class="btn primary" id="deck-study"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>복습 시작</button><button class="btn" id="deck-voice" type="button" data-feature="voice"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>말로 복습</button><button class="btn danger" id="deck-delete">덱 삭제</button></div></div>
           <p class="muted" id="deck-summary"></p>
           <form class="form-grid two" id="card-form">
             <input id="c-front" placeholder="앞면 (질문)" required>
@@ -425,6 +428,27 @@
           <p class="muted" id="study-done-text"></p>
           <button class="btn primary" id="study-finish">덱으로 돌아가기</button>
         </div>
+      </div>
+
+      <!-- 말로 복습 (js/voice.js): 읽어 주기 → 답 듣기 → 채점 → 다음 카드 -->
+      <div id="voice-study" hidden>
+        <button class="btn link" id="vr-back" type="button">← 그만하기</button>
+        <div class="study-meta muted" id="vr-meta"></div>
+        <div class="flash vr-card" id="vr-card">
+          <div class="vr-lang" id="vr-lang"></div>
+          <div class="flash-front" id="vr-front"></div>
+          <div class="flash-back" id="vr-ans" hidden></div>
+          <div class="vr-heard" id="vr-heard" hidden></div>
+          <div class="vr-verdict" id="vr-verdict" hidden></div>
+        </div>
+        <div class="vr-status" id="vr-status" role="status" aria-live="polite">
+          <span class="vr-dot"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></span>
+          <span class="vr-say"><b id="vr-say"></b><span id="vr-sub"></span></span>
+          <span class="vr-ring" id="vr-ring" hidden><b></b></span>
+        </div>
+        <div class="vr-cmds" id="vr-cmds"></div>
+        <div class="vr-actions" id="vr-actions"></div>
+        <div class="panel done-panel vr-done" id="vr-done" hidden></div>
       </div>
     </section>
 
@@ -745,6 +769,7 @@
         <details>
           <summary><svg class="sum-ico" aria-hidden="true"><use href="#i-review"/></svg>복습 (플래시카드)</summary>
           <p>덱을 만들고 앞면(질문)과 뒷면(정답)을 적어요. 복습할 때 ‘다시·어려움·보통·쉬움’으로 답하면, 잊어버릴 때쯤 다시 보여 주는 <b>간격 반복</b>으로 오래 기억하게 도와줘요. ‘apple - 사과’처럼 여러 장을 한 번에 넣을 수도 있어요. 잘못 적은 카드는 옆의 ✎로 고쳐요.</p>
+          <p><b>말로 복습</b>: 덱 화면의 <b>말로 복습</b>을 누르고 말할 쪽(뜻 말하기·단어 말하기)과 카드 언어를 고르면, 카드를 소리 내어 읽어 주고 내가 말한 답을 채점해서 다음 카드로 넘어가요. 시작한 뒤에는 화면을 누르지 않아도 되고, 화면도 꺼지지 않아요. ‘몰라’·‘다시’·‘맞았어’(잘못 알아들었을 때)·‘그만’이라고 말로 할 수도 있어요. 맞히면 ‘보통’, 다시 듣고 맞히면 ‘어려움’, 틀리면 ‘다시’로 간격 반복에 들어가요. 음성 인식은 안드로이드 크롬에서 잘 되고 인터넷이 있어야 해요. 말소리는 폰의 음성 인식이 글자로 바꾸고, 앱은 녹음을 남기지 않아요. 음성 인식이 안 되는 브라우저에서는 <b>듣기만</b>으로 단어와 뜻을 읽어 줘요(채점은 안 해요).</p>
           <p><b>사진으로 카드 만들기</b>: 단어장 사진을 Claude 같은 AI에게 보내고 스터디 프로모션 카드 링크로 만들어 달라고 하세요. 받은 링크를 누르면 앱이 열리면서 넣을 카드와 덱을 보여 주고, 확인하면 들어가요. 같은 덱에 이미 있는 카드는 빼고 넣어요.</p>
         </details>
         <details>
@@ -789,7 +814,7 @@
           <p>쓰지 않는 기능은 끄고, 탭과 홈 화면을 원하는 차례로 놓을 수 있어요. <a href="#layout" data-go="layout">계정·설정 › 기능과 탭 편집</a>에서 바꿔요. 바꾸면 바로 적용돼요.</p>
           <ul>
             <li><b>켜고 끄기</b>: 스위치를 누르면 돼요. 탭을 끄면 탭 막대와 홈 화면에서 빠지지만 그동안의 기록은 지워지지 않아서, 다시 켜면 그대로 있어요. 홈 탭과 오늘 요약은 늘 켜져 있어요.</li>
-            <li><b>타이머 안 기능</b>: 집중 타이머, 스톱워치, 폰 잠금 모드를 따로 끌 수 있어요. 둘 중 하나는 켜 둬야 해요. 스톱워치를 끄면 홈의 ‘공부 시작하기’가 집중 타이머로 시작하고, 집중 타이머를 끄면 범위의 <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼이 스톱워치로 시작해요. 오른쪽 아래 세컨드 버튼도 끌 수 있어요.</li>
+            <li><b>타이머 안 기능</b>: 집중 타이머, 스톱워치, 폰 잠금 모드를 따로 끌 수 있어요. 둘 중 하나는 켜 둬야 해요. 스톱워치를 끄면 홈의 ‘공부 시작하기’가 집중 타이머로 시작하고, 집중 타이머를 끄면 범위의 <svg class="ic" aria-hidden="true"><use href="#i-play"/></svg> 버튼이 스톱워치로 시작해요. 복습 안의 <b>말로 복습</b>과 오른쪽 아래 세컨드 버튼도 끌 수 있어요.</li>
             <li><b>순서 바꾸기</b>: 줄을 꾹 누르거나 왼쪽 손잡이를 잡고 위아래로 끌어 놓아요. 탭 목록 맨 위가 탭 막대 맨 왼쪽(PC에서는 위 탭 막대 맨 앞)이에요. 홈 화면 칸도 같은 방법으로 옮기고, 스위치로 숨겨요. 범위 탭이나 계획 탭을 끄면 그 탭에 딸린 홈 칸도 함께 안 보여요.</li>
             <li>바꾼 배치는 계정에 같이 저장돼서 로그인한 폰과 PC에서 똑같이 보이고, 백업 파일에도 들어가요. <b>처음 배치로 되돌리기</b>를 누르면 처음 모습으로 돌아가요.</li>
           </ul>
@@ -832,6 +857,13 @@
         <div class="ver-tabs" id="ver-tabs" role="tablist" aria-label="버전 고르기"></div>
         <!-- 새 버전을 내면 맨 위에 <section class="ver">를 하나 더 넣는다 (data-ver 버전, data-date 나온 날) -->
         <div id="about-news">
+          <section class="ver" data-ver="4.5" data-date="2026년 11월 24일">
+            <ul class="news">
+              <li><b>말로 복습</b>: 덱 화면의 ‘말로 복습’을 누르면 카드를 소리 내어 읽어 주고, 뜻을 말하면 채점해서 다음 카드로 넘어가요. 시작한 뒤에는 화면을 누르지 않아도 돼서 샤워하거나 걸으면서도 복습할 수 있어요</li>
+              <li><b>너그러운 채점</b>: 뜻이 여러 개면 하나만 말해도 되고, 품사와 괄호 속 말은 빼도 되고, ‘확보해’처럼 끝말이 달라도 맞아요. 잘못 알아들었으면 ‘맞았어’라고 말하면 돼요</li>
+              <li><b>단어 말하기 · 듣기만</b>: 뜻을 보고 영어·스페인어 단어를 말하며 발음도 연습하고, 음성 인식이 안 되는 곳에서는 단어와 뜻을 읽어 주기만 해요</li>
+            </ul>
+          </section>
           <section class="ver" data-ver="4.4.1" data-date="2026년 11월 22일">
             <ul class="news">
               <li><b>같은 할 일이 두 줄로 겹치던 문제</b>: 두 날에 같은 할 일을 넣어 두고 어제 못 끝낸 일을 오늘로(또는 다른 날로) 옮기면 같은 할 일이 두 줄이 되던 문제를 고쳤어요. 이제 그날에 같은 할 일이 있으면 한 줄로 합쳐지고, ‘어제부터’ 표시와 세모·장소·잰 공부 시간도 그 줄로 함께 옮겨져요</li>
@@ -1369,6 +1401,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="js/srs.js"></script>
+  <script src="js/voicecore.js"></script>
   <script src="js/stats.js"></script>
   <script src="js/schedule.js"></script>
   <script src="js/store.js"></script>
@@ -1379,6 +1412,7 @@
   <script src="js/ui.js"></script>
   <script src="js/cardlink.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/voice.js"></script>
   <script src="js/layout.js"></script>
   <script src="js/backup.js"></script>
   <script src="js/egg.js"></script>
