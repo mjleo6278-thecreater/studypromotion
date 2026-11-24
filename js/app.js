@@ -169,6 +169,7 @@
      화면을 옮길 때는 지금처럼 맨 위 칸의 주소만 바꾸므로 방문 기록이 쌓이지 않는다. */
   // 맨 위에 열려 있는 창(확인 창·선택 시트·메뉴·입력 창·열어 둔 덱)을 하나 닫는다. 닫을 게 있었으면 true
   function closeTopOverlay() {
+    if (window.Story && window.Story.back()) return true; // 업데이트 이야기(화면 전체, js/story.js)
     const askDlg = $('#ask');
     if (!askDlg.hidden) { if (!askDlg.dataset.mustChoose) $('#ask-cancel').click(); return true; }
     if (window.Bounce && window.Bounce.back()) return true; // 이스터에그 게임 (사진 자르기 → 게임 순서로 닫힘)
@@ -1911,7 +1912,7 @@
     let swReg = null;
     let hadController = !!navigator.serviceWorker.controller;
     let reloading = false;
-    const busyNow = () => timer.running || !!(window.Lock && window.Lock.state) || !$('#ask').hidden ||
+    const busyNow = () => timer.running || !!(window.Lock && window.Lock.state) || !$('#ask').hidden || !!(window.Story && window.Story.isOpen) ||
       (document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName));
     const applyUpdate = () => {
       if (reloading) return;

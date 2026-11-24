@@ -31,6 +31,18 @@ for (const f of fs.readdirSync(path.join(root, 'icons'))) files.push('icons/' + 
 for (const f of fs.readdirSync(path.join(root, 'fonts/pretendard'), { recursive: true })) {
   if (fs.statSync(path.join(root, 'fonts/pretendard', f)).isFile()) files.push('fonts/pretendard/' + f);
 }
+// 업데이트 이야기(컷씬): 앱이 iframe으로 여는 cutscene/index.html과 그 페이지가 부르는 스크립트만 (캐릭터 시험 페이지·설명서는 빼고)
+files.push(...cutsceneFiles());
+function cutsceneFiles() {
+  const page = read('cutscene/index.html');
+  const list = ['cutscene/index.html'];
+  for (const m of page.matchAll(/<script src="([\w.]+\.js)"><\/script>/g)) list.push('cutscene/' + m[1]);
+  if (list.length < 5) throw new Error('cutscene/index.html에서 스크립트를 찾지 못했습니다');
+  // 서비스 워커가 미리 받아 두는 목록(ASSETS)에도 모두 있어야 오프라인에서 열린다
+  const sw = read('sw.js');
+  for (const f of list) if (!sw.includes(`'./${f}'`)) throw new Error(`sw.js ASSETS에 ./${f}가 없습니다`);
+  return list;
+}
 for (const f of files) {
   const to = path.join(dist, 'web', f);
   fs.mkdirSync(path.dirname(to), { recursive: true });

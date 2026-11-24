@@ -1684,6 +1684,19 @@ input[type="search"]::-webkit-search-cancel-button {
 .ver[hidden] { display: none; }
 .ver-when { margin: 12px 0 0; font-size: 14px; }
 .ver .news { margin-top: 6px; }
+/* 업데이트 소식의 '업데이트 이야기 보기' (js/story.js가 컷씬이 있는 웹 배포본에서만 보이게 한다) */
+.ver-story { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 10px 0 2px; }
+.ver-story[hidden] { display: none; }
+.ver-story .btn { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; }
+.ver-story .ic { width: 1em; height: 1em; vertical-align: 0; }
+/* 업데이트 이야기(컷씬): 화면 전체 iframe. 폰의 위·아래 시스템 막대는 바깥에서 비워 둔다 (iframe 안에서는 그 여백 값이 0) */
+.story { position: fixed; inset: 0; z-index: 1040; background: #16181d; opacity: 0; transition: opacity .22s ease;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.story.in { opacity: 1; }
+.story.out { opacity: 0; pointer-events: none; }
+.story iframe { display: block; width: 100%; height: 100%; border: 0; background: #16181d; }
+html.story-on, html.story-on body { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .story { transition: none; } }
 
 /* ===== v2.10: 공부 시작하기의 ‘할 일’ ‘범위’ 묶음 제목 ===== */
 .ch-head { margin: 0; }
