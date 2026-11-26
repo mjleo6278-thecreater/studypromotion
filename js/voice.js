@@ -346,14 +346,15 @@
     let fix = null;
     // 잘못 알아들었으면 '맞았어': 뚱 하자마자 마이크를 켠다 (정답을 읽는 동안엔 못 들으니 정답은 그다음에 읽는다).
     // 몰라·정답 보기로 넘긴 카드는 묻지 않음
+    // 단어 말하기(영어·스페인어로 듣는 중)여도 '맞았어'는 한국어로 하니 한국어로 듣는다
     if (heard) {
-      status('listen', `잘못 알아들었으면 ‘${V.commandWords(a).right}’`, '지금 바로 말하면 돼요');
-      cmds('fix');
+      status('listen', '잘못 알아들었으면 ‘맞았어’', '지금 바로 말하면 돼요');
+      cmds('');
       await wait(200, run); // 뚱 소리가 마이크에 들어가지 않을 만큼만
       if (!alive(run)) return;
-      const h = await hear(4000, a, run, true);
+      const h = await hear(4000, 'ko-KR', run, true);
       if (!alive(run)) return;
-      fix = h.cmd || (h.alts.length ? (V.saysRight(h.alts, a) ? 'right' : V.command(h.alts, a)) : null);
+      fix = h.cmd || (h.alts.length ? (V.saysRight(h.alts, 'ko-KR') ? 'right' : V.command(h.alts, a)) : null);
     }
     if (!['right', 'skip', 'stop', 'pause'].includes(fix)) {
       status('bad', `“정답은 ${ans}”`, '이 카드는 몇 장 뒤에 다시 나와요');
@@ -790,7 +791,6 @@
     const chip = (word, mean) => `<b>${esc(word)}${!ko && mean ? `<small>${esc(mean)}</small>` : ''}</b>`;
     el.hidden = false;
     if (kind === 'ask') el.innerHTML = '말로 할 수 있어요 ' + chip(w.pass, '몰라') + chip(w.repeat, '다시') + chip(w.stop, '그만') + (S.undo ? chip(w.right + ' (앞 카드)', '맞았어') : '');
-    else if (kind === 'fix') el.innerHTML = '잘못 알아들었으면 ' + chip(w.right, '맞았어') + ' 라고 말해요';
     else if (kind === 'late') el.innerHTML = '놓쳤으면 다음 카드에서 ' + chip(w.right, '맞았어') + ' 라고 해도 고쳐져요';
     else if (kind === 'pause') el.innerHTML = '말로 할 수 있어요 ' + chip(w.resume, '계속') + chip(w.stop, '그만');
   }
