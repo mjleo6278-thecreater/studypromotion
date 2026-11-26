@@ -1032,7 +1032,63 @@
       return `<li class="deck" data-deck="${esc(d.id)}"><div><div class="deck-name">${esc(d.name)}</div><div class="muted" style="font-size:13px">카드 ${cards.length}장</div></div>
         <span class="badge${due ? '' : ' zero'}">${due ? `복습 ${due}장` : '복습 완료'}</span></li>`;
     }).join('') : '<li class="empty">덱이 없어요. 아래에서 첫 덱을 만들어 보세요.</li>';
+    renderPacks();
   }
+
+  /* ---------- 만들어 둔 공식 덱 (js/formulas.js) ----------
+   * 받으면 덱에 pack: 'area', 카드에 fig: 'area/q-line'이 붙는다 (그림은 그릴 때마다 js/formulas.js가 만든다). 계정 동기화는 다른 덱과 같다.
+   * '한눈에 보기'(인포그래픽)는 받기 전에도 볼 수 있다. 같은 덱을 다시 받으면 지운 카드만 다시 넣는다. */
+  const Formulas = () => window.Formulas || null;
+  function packDeck(id) { return store.get().decks.find((d) => d.pack === id) || null; }
+  function renderPacks() {
+    const F = Formulas(), box = $('#pack-list');
+    if (!F || !box) return;
+    box.innerHTML = Object.values(F.PACKS).map((p) => {
+      const d = packDeck(p.id);
+      const first = p.cards.find((c) => F.FIGS[c.key]);
+      return `<li class="pack-row" data-pack="${esc(p.id)}">${first ? F.figSVG(first.key, { cls: 'mf-thumb', label: p.name }) : ''}` +
+        `<div class="pack-info"><b>${esc(p.name)}</b><small>${esc(p.blurb)}${d ? ' · 받았어요' : ''}</small></div>` +
+        `<span class="pack-btns"><button class="btn sm" type="button" data-pack-poster>${ic('image')}한눈에 보기</button>` +
+        (d ? '<button class="btn sm" type="button" data-pack-open>덱 열기</button>' : `<button class="btn primary sm" type="button" data-pack-add>${ic('plus')}받기</button>`) + '</span></li>';
+    }).join('');
+  }
+  function addPack(id) {
+    const F = Formulas(), p = F && F.PACKS[id];
+    if (!p) return;
+    const t = now();
+    const old = packDeck(id);
+    const deckId = old ? old.id : uid();
+    let added = 0;
+    store.update((st) => {
+      if (!st.decks.some((d) => d.id === deckId)) st.decks.push({ id: deckId, name: p.name, pack: id, createdAt: t });
+      const have = new Set(st.cards.filter((c) => c.deckId === deckId && c.fig).map((c) => c.fig));
+      p.cards.forEach((c) => {
+        const fig = id + '/' + c.key;
+        if (have.has(fig)) return;
+        st.cards.push(SRS.newCard({ id: uid(), deckId, front: c.front, back: c.back, fig, createdAt: t }, t));
+        added++;
+      });
+    });
+    toast(added ? `‘${p.name}’ 카드 ${added}장을 받았어요` : '이미 모든 카드가 있어요');
+    openDeck(deckId);
+  }
+  function openPoster(id) {
+    const F = Formulas(), p = F && F.PACKS[id];
+    if (!p || !window.UI) return;
+    const foot = packDeck(id) ? '' : `<div class="mf-p-foot"><button class="btn primary" type="button" data-pack-add>${ic('plus')}카드 ${p.cards.length}장 덱으로 받기</button></div>`;
+    window.UI.openSheet({
+      title: '한눈에 보기', cls: 'mf-poster-sheet', body: F.poster(id) + foot, focusSel: '[data-ui-close]',
+      onClick: (e, close) => { if (e.target.closest('[data-pack-add]')) { close(); addPack(id); } },
+    });
+  }
+  $('#pack-list').addEventListener('click', (e) => {
+    const row = e.target.closest('[data-pack]');
+    if (!row) return;
+    const id = row.dataset.pack;
+    if (e.target.closest('[data-pack-poster]')) openPoster(id);
+    else if (e.target.closest('[data-pack-open]')) { const d = packDeck(id); if (d) openDeck(d.id); }
+    else if (e.target.closest('[data-pack-add]')) addPack(id);
+  });
 
   function renderDeckDetail() {
     const d = store.get().decks.find((x) => x.id === openDeckId);
@@ -1044,6 +1100,9 @@
     $('#deck-summary').textContent = `카드 ${cards.length}장 · 오늘 복습할 카드 ${due}장`;
     $('#deck-study').disabled = due === 0;
     $('#deck-voice').disabled = cards.length === 0; // 말로 복습: 오늘 복습할 카드가 없어도 '듣기만'은 된다
+    $('#deck-voice').hidden = cards.length > 0 && cards.every((c) => c.fig); // 그림 카드(공식 덱)는 말로 복습에서 뺀다 (js/voice.js)
+    const F = Formulas();
+    $('#deck-poster').hidden = !(d.pack && F && F.PACKS[d.pack]);
     // 고치는 중인 카드는 다시 그려도 입력한 글자와 커서를 유지
     const form = $('#card-list .card-edit');
     const draft = form && form.dataset.cardEdit === editingCardId ? { front: form.front.value, back: form.back.value, focus: document.activeElement && form.contains(document.activeElement) ? document.activeElement.name : null } : null;
@@ -1057,7 +1116,7 @@
           <span class="card-edit-actions"><button class="btn sm" type="button" data-card-cancel>취소</button><button class="btn primary sm" type="submit">저장</button></span></form></li>`;
       }
       const next = SRS.isDue(c, t) ? '복습 대기' : `${Stats.dateKey(c.due).slice(5).replace('-', '/')} 복습`;
-      return `<li class="card-row" data-card="${esc(c.id)}"><span>${esc(c.front)}</span><span class="muted-text">${esc(c.back)}</span><span class="muted">${next}</span><button class="icon-btn card-edit-btn" aria-label="카드 고치기" title="고치기">${ic('edit')}</button><button class="icon-btn card-del" aria-label="카드 삭제" title="삭제">${ic('x')}</button></li>`;
+      return `<li class="card-row${c.fig ? ' has-fig' : ''}" data-card="${esc(c.id)}">${F && c.fig ? F.thumb(c) : ''}<span>${esc(c.front)}</span><span class="muted-text">${esc(c.back)}</span><span class="muted">${next}</span><button class="icon-btn card-edit-btn" aria-label="카드 고치기" title="고치기">${ic('edit')}</button><button class="icon-btn card-del" aria-label="카드 삭제" title="삭제">${ic('x')}</button></li>`;
     }).join('') || '<li class="empty">카드를 추가해 보세요.</li>';
     if (draft && draft.focus) { const el = $('#card-list .card-edit [name="' + draft.focus + '"]'); if (el) el.focus(); }
   }
@@ -1083,6 +1142,7 @@
     $('#c-front').focus();
   });
 
+  $('#deck-poster').addEventListener('click', () => { const d = store.get().decks.find((x) => x.id === openDeckId); if (d && d.pack) openPoster(d.pack); });
   $('#deck-back').addEventListener('click', () => { openDeckId = null; editingCardId = null; showReviewPane('home'); renderDecks(); });
   // 복습 화면에서 덱 하나를 연다 (id가 없으면 덱 목록). 링크로 카드를 가져온 뒤 그 덱을 보여 줄 때 쓴다
   function openDeck(id) {
@@ -1200,8 +1260,10 @@
       return;
     }
     $('#study-meta').textContent = `남은 카드 ${queue.length}장 · 복습 ${reviewedCount}회`;
-    $('#flash-front').textContent = c.front;
-    $('#flash-back').textContent = c.back;
+    const F = Formulas(), rich = F && F.face(c, 'front');
+    $('#flash').classList.toggle('mf', !!rich);
+    if (rich) { $('#flash-front').innerHTML = rich; $('#flash-back').innerHTML = F.face(c, 'back'); }
+    else { $('#flash-front').textContent = c.front; $('#flash-back').textContent = c.back; }
     $('#flash-back').hidden = true;
     $('#flash-hint').hidden = false;
     $('#flash').focus();
@@ -1213,6 +1275,8 @@
     $('#flash-back').hidden = false;
     $('#flash-hint').hidden = true;
     $('#grades').hidden = false;
+    // 그림 카드는 길어서 폰에서 채점 단추가 화면 밖에 있을 수 있다
+    if ($('#flash').classList.contains('mf') && $('#grades').scrollIntoView) $('#grades').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     const t = now();
     $$('#grades [data-grade]').forEach((b) => { b.querySelector('small').textContent = SRS.previewLabel(c, b.dataset.grade, t); });
   }

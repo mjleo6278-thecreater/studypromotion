@@ -3337,3 +3337,109 @@ body.gc-showing .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)
   #vr-actions { grid-column: 2; grid-row: 4; }
   #vr-done { grid-column: 1 / -1; grid-row: 2; }
 }
+
+/* 공식 카드 (v4.6, js/formulas.js): 그림이 있는 플래시카드 · 한눈에 보기 인포그래픽 · 만들어 둔 공식 덱
+ * 그림(SVG)의 색은 여기서만 정한다: 함수 = 글자색, 직선 = 진한 포인트색, 넓이 = 포인트색 26%. 다크 모드·테마 색이 그대로 따라온다. */
+.mf-fig { display: block; width: 100%; height: auto; overflow: visible; }
+.mf-fig text { font-family: inherit; }
+.mf-area { fill: var(--accent); fill-opacity: .26; stroke: none; }
+.mf-area.s1 { fill-opacity: .55; }
+.mf-curve { fill: none; stroke: var(--text); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.mf-line { fill: none; stroke: var(--accent-text); stroke-width: 1.7; stroke-linecap: round; }
+.mf-dash { fill: none; stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.mf-base { stroke: var(--line); stroke-width: 1.2; }
+.mf-dot { fill: var(--surface); stroke: var(--text); stroke-width: 1.6; }
+.mf-mk { fill: var(--muted); font-size: 13px; font-style: italic; font-weight: 600; }
+.mf-mk.sm { font-size: 10.5px; font-style: normal; }
+.mf-lb { fill: var(--accent-text); font-size: 15px; font-weight: 800; font-style: italic; }
+.mf-lb.sm { font-size: 12.5px; }
+.mf-lb.note { fill: var(--muted); font-size: 10px; font-weight: 600; font-style: normal; }
+/* 작은 그림(카드 목록·덱 받기 줄): 글자는 빼고 선 굵기는 화면 기준 */
+.mf-thumb { width: 56px; flex: none; border-radius: 8px; background: var(--bg); padding: 2px; }
+.mf-thumb text, .mf-thumb .mf-dash, .mf-thumb .mf-dot { display: none; }
+.mf-thumb path { vector-effect: non-scaling-stroke; }
+.mf-thumb .mf-curve { stroke-width: 1.6; }
+.mf-thumb .mf-line { stroke-width: 1.2; }
+
+/* 수식: 분수는 위아래로 쌓고, 지수는 작게 위로 */
+.mf-math { display: inline-block; text-align: center; font-size: 26px; font-weight: 650; line-height: 1.2; color: var(--text); white-space: nowrap; font-variant-numeric: lining-nums; }
+.mf-math i { font-style: italic; padding-right: .04em; }
+.mf-math sup, .mf-math sub { font-size: .6em; line-height: 0; position: relative; vertical-align: baseline; }
+.mf-math sup { top: -.62em; margin-left: .05em; }
+.mf-math sub { top: .28em; }
+.mf-frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 .12em; }
+.mf-frac > span { padding: .05em .22em; line-height: 1.25; }
+.mf-frac > span:first-child { border-bottom: 1.6px solid currentColor; }
+.mf-int { display: inline-flex; align-items: center; vertical-align: middle; margin-right: .15em; }
+.mf-int > b { font-size: 1.5em; font-weight: 400; line-height: 1; }
+.mf-lim { display: inline-flex; flex-direction: column; justify-content: space-between; height: 2.1em; font-size: .55em; line-height: 1; margin-left: .05em; font-style: italic; }
+.mf-math.plain { white-space: pre-wrap; font-size: 22px; }
+
+/* 복습 화면의 그림 카드 */
+.flash.mf { padding: 16px 16px 20px; gap: 10px; justify-content: flex-start; }
+.flash.mf .flash-front { font-size: 19px; white-space: normal; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.flash.mf .flash-back { white-space: normal; padding-top: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.flash.mf .flash-back .mf-math { color: var(--accent-text); }
+.flash.mf .mf-math { font-size: clamp(20px, 6.6vw, 26px); }
+.mf-chip { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--bg); border-radius: 999px; padding: 3px 10px; margin-bottom: 2px; }
+.mf-card-fig { width: min(100%, 330px); margin: 2px auto 6px; }
+.mf-q { font-size: 19px; font-weight: 700; line-height: 1.4; word-break: keep-all; }
+.mf-sub { font-size: 14px; color: var(--muted); font-weight: 500; line-height: 1.45; word-break: keep-all; }
+.mf-qmath { font-size: 22px; margin-top: 8px; }
+.mf-note { font-size: 13.5px; color: var(--muted); font-weight: 500; line-height: 1.5; word-break: keep-all; max-width: 30em; }
+.card-row > .mf-thumb { width: 48px; }
+/* 그림 카드 줄: 그림 | 앞면(두 줄까지) 위 · 뒷면 아래 | 복습일 · 고치기 · 지우기 */
+.card-row.has-fig { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto auto; column-gap: 10px; row-gap: 2px; align-items: center; }
+.card-row.has-fig > .mf-thumb { grid-row: 1 / 3; }
+.card-row.has-fig > span:nth-of-type(1) { grid-column: 2; grid-row: 1; font-size: 13.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card-row.has-fig > span:nth-of-type(2) { grid-column: 2; grid-row: 2; font-size: 13px; }
+.card-row.has-fig > span:nth-of-type(3) { grid-column: 3; grid-row: 1 / 3; }
+.card-row.has-fig > .card-edit-btn { grid-column: 4; grid-row: 1 / 3; }
+.card-row.has-fig > .card-del { grid-column: 5; grid-row: 1 / 3; }
+
+/* 덱 목록: 만들어 둔 공식 덱 */
+.pack-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pack-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.pack-row .mf-thumb { width: 64px; }
+.pack-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pack-info b { font-weight: 700; }
+.pack-info small { color: var(--muted); font-size: 12.5px; line-height: 1.4; word-break: keep-all; }
+.pack-btns { display: flex; gap: 6px; flex: none; }
+@media (max-width: 400px) { .pack-row { flex-wrap: wrap; } .pack-btns { width: 100%; } .pack-btns .btn { flex: 1; justify-content: center; } }
+
+/* 한눈에 보기 (인포그래픽) 시트 */
+.ui-sheet.mf-poster-sheet { max-height: 92vh; }
+.ui-back:not(.pop) .ui-sheet.mf-poster-sheet { max-width: 600px; }
+.mf-poster { padding: 2px 8px 10px; }
+.mf-p-head h2 { font-size: 22px; font-weight: 800; letter-spacing: -.02em; margin: 0; }
+.mf-p-head p { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.5; }
+.mf-p-head p b { color: var(--text); font-style: italic; }
+.mf-p-sec { margin-top: 18px; }
+.mf-p-sec h3 { display: flex; align-items: baseline; gap: 10px; font-size: 17px; font-weight: 800; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 2px solid var(--accent); }
+.mf-p-sec h3 small { font-size: 14px; color: var(--accent-text); font-weight: 650; }
+.mf-p-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+/* 홀수 개면 마지막 칸은 한 줄을 다 쓰고 그림 · 글을 옆으로 */
+.mf-p-grid > .mf-p-tile:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+.mf-p-grid > .mf-p-tile:last-child:nth-child(odd) .mf-fig { width: calc(50% - 5px); flex: none; }
+.mf-p-grid > .mf-p-tile:last-child:nth-child(odd) figcaption { flex: 1; }
+.mf-p-tile { margin: 0; border: 1px solid var(--line); border-radius: 12px; padding: 6px 6px 10px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; }
+.mf-p-tile .mf-mk { font-size: 15px; }
+.mf-p-tile .mf-mk.sm { font-size: 12px; }
+.mf-p-tile .mf-lb { font-size: 18px; }
+.mf-p-tile .mf-lb.sm { font-size: 15px; }
+.mf-p-tile .mf-lb.note { font-size: 12px; }
+.mf-p-tile figcaption { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.mf-p-tile b { font-size: 13px; font-weight: 700; word-break: keep-all; }
+.mf-p-tile .mf-math { font-size: 16px; color: var(--accent-text); }
+.mf-p-root { background: var(--accent-soft); border-radius: 14px; padding: 12px 14px 14px; display: flex; flex-direction: column; align-items: center; }
+.mf-p-root h3 { border-bottom: 0; padding-bottom: 0; align-self: stretch; }
+.mf-p-root h3 small { color: var(--muted); }
+.mf-p-root > .mf-math { font-size: 20px; }
+.mf-p-root > .mf-qmath { margin-top: 0; }
+.mf-p-tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 12px; }
+.mf-p-tbl th { font-size: 12px; color: var(--muted); font-weight: 600; }
+.mf-p-tbl th, .mf-p-tbl td { padding: 5px 4px; border-bottom: 1px solid var(--line); text-align: center; }
+.mf-p-tbl .mf-frac { font-size: 13px; font-weight: 650; color: var(--accent-text); }
+.mf-p-tip { font-size: 13px; color: var(--muted); margin: 10px 0 0; line-height: 1.5; text-align: center; word-break: keep-all; }
+.mf-p-foot { position: sticky; bottom: -12px; padding: 10px 8px 12px; background: linear-gradient(transparent, var(--surface) 30%); display: flex; justify-content: center; }
+.mf-p-foot .btn { min-height: 46px; padding: 0 20px; }

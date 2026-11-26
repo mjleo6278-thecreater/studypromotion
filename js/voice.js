@@ -23,7 +23,7 @@
 
   /* ---------- 덱 설정 ---------- */
   const deckOf = (id) => store.get().decks.find((d) => d.id === id) || null;
-  const cardsOf = (id) => store.get().cards.filter((c) => c.deckId === id);
+  const cardsOf = (id) => store.get().cards.filter((c) => c.deckId === id && !c.fig); // 그림 카드(공식 덱, js/formulas.js)는 읽어 줄 수 없어 뺀다
   const dueOf = (id) => { const t = A.now(); return cardsOf(id).filter((c) => SRS.isDue(c, t)); };
   function cfgOf(deck) {
     const g = V.guessPair(cardsOf(deck.id), deck.name);

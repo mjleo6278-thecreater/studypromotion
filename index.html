@@ -386,13 +386,18 @@
             <button class="btn" type="submit">덱 만들기</button>
           </form>
         </div>
+        <!-- 만들어 둔 공식 덱 (js/formulas.js): 그림 카드 덱 받기 · 한눈에 보기 -->
+        <div class="panel" id="pack-panel" data-feature="packs">
+          <div class="panel-head"><h2>만들어 둔 공식 덱</h2></div>
+          <ul class="pack-list" id="pack-list"></ul>
+        </div>
       </div>
 
       <div id="deck-detail" hidden>
         <button class="btn link" id="deck-back">← 덱 목록</button>
         <div class="panel">
           <div class="panel-head"><h2 id="deck-title"></h2>
-            <div class="deck-actions"><button class="btn primary" id="deck-study"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>복습 시작</button><button class="btn" id="deck-voice" type="button" data-feature="voice"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>말로 복습</button><button class="btn danger" id="deck-delete">덱 삭제</button></div></div>
+            <div class="deck-actions"><button class="btn primary" id="deck-study"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>복습 시작</button><button class="btn" id="deck-poster" type="button" hidden><svg class="ic" aria-hidden="true"><use href="#i-image"/></svg>한눈에 보기</button><button class="btn" id="deck-voice" type="button" data-feature="voice"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>말로 복습</button><button class="btn danger" id="deck-delete">덱 삭제</button></div></div>
           <p class="muted" id="deck-summary"></p>
           <form class="form-grid two" id="card-form">
             <input id="c-front" placeholder="앞면 (질문)" required>
@@ -1412,6 +1417,7 @@
   <script src="js/share.js"></script>
   <script src="js/ui.js"></script>
   <script src="js/cardlink.js"></script>
+  <script src="js/formulas.js"></script>
   <script src="js/app.js"></script>
   <script src="js/voice.js"></script>
   <script src="js/story.js"></script>

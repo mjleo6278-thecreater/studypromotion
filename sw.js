@@ -22,6 +22,7 @@ const ASSETS = [
   './js/share.js',
   './js/ui.js',
   './js/cardlink.js',
+  './js/formulas.js',
   './js/app.js',
   './js/voice.js',
   './js/layout.js',
