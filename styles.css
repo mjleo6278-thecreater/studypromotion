@@ -3443,3 +3443,8 @@ body.gc-showing .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)
 .mf-p-tip { font-size: 13px; color: var(--muted); margin: 10px 0 0; line-height: 1.5; text-align: center; word-break: keep-all; }
 .mf-p-foot { position: sticky; bottom: -12px; padding: 10px 8px 12px; background: linear-gradient(transparent, var(--surface) 30%); display: flex; justify-content: center; }
 .mf-p-foot .btn { min-height: 46px; padding: 0 20px; }
+/* 가로 화면(높이가 낮을 때): 그림을 줄여 문제와 공식이 덜 밀려나게 */
+@media (max-height: 520px) {
+  .mf-card-fig { width: min(100%, 250px); margin-bottom: 2px; }
+  .flash.mf { padding-top: 12px; }
+}

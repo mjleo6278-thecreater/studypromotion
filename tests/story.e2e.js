@@ -53,6 +53,11 @@ const SHOTS = process.env.SHOTS;
     return f;
   };
   const hit = (f, id) => f.click(`.hit[data-id="${id}"]`);
+  // 업데이트 소식의 ‘업데이트 이야기 보기’: 4.5.1·4.6이 나온 뒤로는 4.5 탭을 골라야 보인다
+  const tapStory = async (page) => {
+    if (!(await page.isVisible('[data-story="shower-1"]'))) await page.click('#ver-tabs [data-ver-tab="4.5"]');
+    await page.click('[data-story="shower-1"]');
+  };
 
   // 1) 새로 설치한 사람: 저절로 안 뜸
   {
@@ -65,6 +70,7 @@ const SHOTS = process.env.SHOTS;
     assert(!(await page.$('.story')), '새로 설치 뒤 다시 열어도 안 뜸');
     // 업데이트 소식 4.5 칸의 단추로는 볼 수 있다
     await page.evaluate(() => App.go('about'));
+    await page.click('#ver-tabs [data-ver-tab="4.5"]'); // 4.5.1·4.6이 나온 뒤로는 4.5 탭을 골라야 보인다
     await page.waitForSelector('[data-ver="4.5"] .ver-story:not([hidden]) [data-story="shower-1"]');
     assert(true, '업데이트 소식 4.5 칸에 업데이트 이야기 보기 단추');
     await page.evaluate(() => document.querySelector('#news-panel').scrollIntoView({ block: 'start' }));
@@ -72,7 +78,7 @@ const SHOTS = process.env.SHOTS;
     await ctx.close();
   }
 
-  // 2) 업데이트한 사람(4.4.1 → 4.5): 처음 열 때 한 번
+  // 2) 업데이트한 사람(4.4.1 → 4.5, 건너뛰고 4.6으로 와도): 처음 열 때 한 번
   {
     const { ctx, page } = await open({ prev: '4.4.1' });
     const f = await frameOf(page);
@@ -105,6 +111,13 @@ const SHOTS = process.env.SHOTS;
     assert(!(await page.$('.story')), '한 번 본 뒤에는 다시 열어도 안 뜸');
     await ctx.close();
   }
+  // 2-1) 이미 4.5에서 열어 본 사람이 그 뒤 버전으로 올라오면: 다시 뜨지 않음 (4.5에서 못 봤어도 그 버전 이야기는 그 버전에서만)
+  if (await (async () => { const { ctx, page } = await open(); const v = await page.evaluate(() => App.version); await ctx.close(); return v !== '4.5'; })()) {
+    const { ctx, page } = await open({ prev: '4.5' });
+    await page.waitForTimeout(2500);
+    assert(!(await page.$('.story')), '4.5에서 열어 본 사람은 새 버전에서 다시 뜨지 않음');
+    await ctx.close();
+  }
 
   // 3) 끝 화면 '말로 복습 해 보기' → 오늘 복습할 카드가 가장 많은 덱의 말로 복습 시작 창
   {
@@ -117,7 +130,7 @@ const SHOTS = process.env.SHOTS;
           .concat([['distress', '고통'], ['secure', '확보하다'], ['referent', '지시 대상']].map(([f, b], i) => SRS.newCard({ id: 'e' + i, deckId: 'many', front: f, back: b, createdAt: t }, t)));
       });
     });
-    await page.click('[data-story="shower-1"]');
+    await tapStory(page);
     let f = await frameOf(page);
     await f.evaluate(() => window.Cutscene.renderAt(31));
     await hit(f, 'try');
@@ -129,13 +142,13 @@ const SHOTS = process.env.SHOTS;
     await page.waitForTimeout(400);
     // 뒤로 가기로 닫힘 (앱은 그대로)
     await page.evaluate(() => App.go('about'));
-    await page.click('[data-story="shower-1"]');
+    await tapStory(page);
     await frameOf(page);
     await page.goBack();
     await page.waitForFunction(() => !document.querySelector('.story'), null, { timeout: 3000 });
     assert(await page.evaluate(() => App.view === 'about'), '폰의 뒤로 가기: 이야기만 닫히고 앱은 그 화면 그대로');
     // Esc로 닫힘 (iframe 안에 초점이 있어도)
-    await page.click('[data-story="shower-1"]');
+    await tapStory(page);
     f = await frameOf(page);
     await f.focus('#start');
     await page.keyboard.press('Escape');
@@ -144,7 +157,7 @@ const SHOTS = process.env.SHOTS;
     // 말로 복습을 끈 사람: 끝 화면에 '말로 복습 해 보기' 없음
     await page.evaluate(() => Features.set('voice', false));
     await page.evaluate(() => App.go('about'));
-    await page.click('[data-story="shower-1"]');
+    await tapStory(page);
     f = await frameOf(page);
     assert(/try=0/.test(f.url()), '말로 복습을 끄면 try=0');
     const b = (await f.evaluate(() => window.Cutscene.renderAt(31))).buttons;
@@ -161,7 +174,7 @@ const SHOTS = process.env.SHOTS;
     await page.reload();
     await page.waitForFunction(() => window.App && window.Story);
     await page.evaluate(() => App.go('about'));
-    await page.click('[data-story="shower-1"]');
+    await tapStory(page);
     f = await frameOf(page);
     const stats = await f.evaluate(() => window.Cutscene.renderAt(10).stats);
     assert(stats && stats.calls > 20 && stats.tris > 1000, '오프라인에서도 이야기가 그려짐 (그리기 ' + JSON.stringify(stats) + ')');

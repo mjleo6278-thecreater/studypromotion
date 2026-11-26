@@ -1040,16 +1040,24 @@
    * '한눈에 보기'(인포그래픽)는 받기 전에도 볼 수 있다. 같은 덱을 다시 받으면 지운 카드만 다시 넣는다. */
   const Formulas = () => window.Formulas || null;
   function packDeck(id) { return store.get().decks.find((d) => d.pack === id) || null; }
+  // 받은 덱에서 지운 카드 수 (받기를 다시 누르면 이것만 다시 넣는다)
+  function packMissing(id) {
+    const F = Formulas(), p = F && F.PACKS[id], d = packDeck(id);
+    if (!p || !d) return p ? p.cards.length : 0;
+    const have = new Set(store.get().cards.filter((c) => c.deckId === d.id && c.fig).map((c) => c.fig));
+    return p.cards.filter((c) => !have.has(id + '/' + c.key)).length;
+  }
   function renderPacks() {
     const F = Formulas(), box = $('#pack-list');
     if (!F || !box) return;
     box.innerHTML = Object.values(F.PACKS).map((p) => {
-      const d = packDeck(p.id);
+      const d = packDeck(p.id), miss = packMissing(p.id);
       const first = p.cards.find((c) => F.FIGS[c.key]);
       return `<li class="pack-row" data-pack="${esc(p.id)}">${first ? F.figSVG(first.key, { cls: 'mf-thumb', label: p.name }) : ''}` +
         `<div class="pack-info"><b>${esc(p.name)}</b><small>${esc(p.blurb)}${d ? ' · 받았어요' : ''}</small></div>` +
         `<span class="pack-btns"><button class="btn sm" type="button" data-pack-poster>${ic('image')}한눈에 보기</button>` +
-        (d ? '<button class="btn sm" type="button" data-pack-open>덱 열기</button>' : `<button class="btn primary sm" type="button" data-pack-add>${ic('plus')}받기</button>`) + '</span></li>';
+        (d ? '<button class="btn sm" type="button" data-pack-open>덱 열기</button>' : '') +
+        (!d ? `<button class="btn primary sm" type="button" data-pack-add>${ic('plus')}받기</button>` : miss ? `<button class="btn sm" type="button" data-pack-add>${ic('plus')}빠진 ${miss}장 받기</button>` : '') + '</span></li>';
     }).join('');
   }
   function addPack(id) {
@@ -1075,7 +1083,8 @@
   function openPoster(id) {
     const F = Formulas(), p = F && F.PACKS[id];
     if (!p || !window.UI) return;
-    const foot = packDeck(id) ? '' : `<div class="mf-p-foot"><button class="btn primary" type="button" data-pack-add>${ic('plus')}카드 ${p.cards.length}장 덱으로 받기</button></div>`;
+    const miss = packMissing(id);
+    const foot = !miss ? '' : `<div class="mf-p-foot"><button class="btn primary" type="button" data-pack-add>${ic('plus')}${packDeck(id) ? `빠진 카드 ${miss}장 받기` : `카드 ${p.cards.length}장 덱으로 받기`}</button></div>`;
     window.UI.openSheet({
       title: '한눈에 보기', cls: 'mf-poster-sheet', body: F.poster(id) + foot, focusSel: '[data-ui-close]',
       onClick: (e, close) => { if (e.target.closest('[data-pack-add]')) { close(); addPack(id); } },
@@ -1786,8 +1795,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '4.5';
-  const APP_DATE = '2026년 11월 24일';
+  const APP_VERSION = '4.6';
+  const APP_DATE = '2026년 11월 26일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
