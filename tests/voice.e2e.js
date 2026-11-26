@@ -75,8 +75,8 @@ function fakeSpeech(opts) {
   async function open(o = {}) {
     const ctx = await browser.newContext(Object.assign({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, colorScheme: o.dark ? 'dark' : 'light', deviceScaleFactor: SHOTS ? 2 : 1 }, o.ctx || {}));
     const page = await ctx.newPage();
-    page.on('pageerror', (e) => errors.push(e.message));
-    page.on('console', (m) => m.type() === 'error' && !/favicon/.test(m.text()) && errors.push(m.text()));
+    page.on('pageerror', (e) => { errors.push(e.message); if (process.env.DEBUG) console.log('PAGEERR', e.message, e.stack); });
+    page.on('console', (m) => { if (process.env.DEBUG && m.type() === 'error') console.log('CONSOLE', m.text()); m.type() === 'error' && !/favicon/.test(m.text()) && errors.push(m.text()); });
     await page.addInitScript(fakeSpeech, { noHear: !!o.noHear, noSpeak: !!o.noSpeak });
     await page.addInitScript((mic) => { try { localStorage.setItem('studypromotion.welcomeClosed', '1'); if (mic) localStorage.setItem('studypromotion.voiceMic', '1'); } catch (e) { /* 무시 */ } }, !!o.mic);
     await page.goto(base + '#review');
@@ -166,19 +166,25 @@ function fakeSpeech(opts) {
   await say(page, ['사과']);
   await page.waitForSelector('#vr-card.bad');
   assert(/들은 말 “사과”/.test(await page.textContent('#vr-heard')) && /아쉬워요/.test(await page.textContent('#vr-verdict')), '틀리면 들은 말과 아쉬워요');
-  assert(/정답은/.test(await page.textContent('#vr-say')), '정답을 보여 줌');
+  assert(await page.isVisible('#vr-ans') && (await page.textContent('#vr-ans')).length > 1, '정답을 보여 줌');
+  const t4 = Date.now();
+  await page.waitForFunction(() => __voice.listening && __voice.listening.active && document.querySelector('#vr-status').classList.contains('listen'), null, { timeout: 1500 });
+  assert(Date.now() - t4 < 1200 && /잘못 알아들었으면/.test(await page.textContent('#vr-say')), `틀리자마자 '맞았어'를 들음 (${Date.now() - t4}ms)`);
+  assert(!(await V(page)).said.some((s) => /^정답은/.test(s.text)), '정답 읽기는 그 뒤로 미룸 (읽는 동안엔 마이크가 꺼져 있으니)');
   await shot(page, 'v5-bad.png');
-  await page.waitForFunction(() => __voice.said.some((s) => /^정답은 /.test(s.text)));
-  await say(page, ['맞았어']);
+  await say(page, ['마자써']);
   await page.waitForSelector('#vr-card.ok');
   c = await cardOf(page, f);
-  assert(c.reps === 1 && c.lapses === 0, "'맞았어'라고 하면 맞은 걸로 (보통)");
+  assert(c.reps === 1 && c.lapses === 0, "소리 나는 대로 적힌 '마자써'도 맞은 걸로 (보통)");
+  assert(!(await V(page)).said.some((s) => /^정답은/.test(s.text)), '고쳤으면 정답은 읽지 않음');
 
   /* ===== 5) 틀림 그대로 → 몇 장 뒤 다시 ===== */
   await page.waitForFunction((f) => document.querySelector('#vr-front').textContent !== f, f);
   f = await front(page);
   await say(page, ['분리']);
   await page.waitForSelector('#vr-card.bad');
+  await page.waitForFunction(() => __voice.said.some((s) => /^정답은 /.test(s.text)), null, { timeout: 8000 });
+  assert(/정답은/.test(await page.textContent('#vr-say')) && /다음 카드에서/.test(await page.textContent('#vr-cmds')), "아무 말 없으면 정답을 읽고, 다음 카드에서 '맞았어'라고 해도 된다고 알려 줌");
   await page.waitForFunction((f) => document.querySelector('#vr-front').textContent !== f, f, { timeout: 9000 });
   c = await cardOf(page, f);
   assert(c.lapses === 1 && c.reps === 0, '틀린 채로 두면 다시로 채점');
@@ -273,6 +279,84 @@ function fakeSpeech(opts) {
   await statusIs(page, 'err', 12000);
   assert(/음성 인식이 자꾸 멈춰요/.test(await page.textContent('#vr-say')) && await page.isVisible('[data-vr="listen"]'), '인식기가 켜지지 않으면 알려 주고 듣기만을 권함');
   await page.evaluate(() => { __voice.stall = false; });
+  await page.tap('#vr-back');
+  await page.waitForFunction(() => document.querySelector('#voice-study').hidden || !document.querySelector('#vr-done').hidden);
+  if (await page.isVisible('#vr-done')) await page.tap('[data-vr="back"]');
+
+  /* ===== 10-3) 다음 카드에서 '맞았어' → 앞 카드 고치기 ===== */
+  const resetEn = () => page.evaluate(() => App.store.update((st) => { const t = App.now(); st.cards.forEach((c) => { if (c.deckId === 'en') Object.assign(c, { due: t - 1000, reps: 0, interval: 0, lapses: 0, ease: 2.5 }); delete c.voiceOk; }); }));
+  await resetEn();
+  await page.evaluate(() => App.openDeck('en'));
+  await page.tap('#deck-voice');
+  await page.waitForSelector('.ui-back.in .ui-voice');
+  await page.tap('[data-vs-start]');
+  f = await front(page);
+  await say(page, ['사과']);
+  await page.waitForSelector('#vr-card.bad');
+  await page.waitForFunction((f) => document.querySelector('#vr-front').textContent !== f, f, { timeout: 9000 });
+  c = await cardOf(page, f);
+  assert(c.lapses === 1, '틀린 채로 넘어감');
+  await listening(page);
+  assert(/맞았어 \(앞 카드\)/.test(await page.textContent('#vr-cmds')), "다음 카드에서 '맞았어 (앞 카드)'를 알려 줌");
+  const f2 = await front(page);
+  const reads2 = (await V(page)).said.filter((s) => s.text === f2).length;
+  await say(page, ['맞았어']);
+  await statusIs(page, 'ok');
+  assert(/앞 카드를 맞은 걸로 바꿨어요/.test(await page.textContent('#vr-say')), '앞 카드를 맞은 걸로 바꿨다고 알려 줌');
+  await shot(page, 'v12-late-fix.png');
+  c = await cardOf(page, f);
+  assert(c.lapses === 0 && c.reps === 1 && c.interval === 1, '앞 카드: 다시 → 보통으로 고침');
+  log = await page.evaluate((id) => App.store.get().reviewLog.filter((e) => e.cardId === id), c.id);
+  assert(log.length >= 1 && log[log.length - 1].grade === 'good' && !log.slice(-1).some((e) => e.grade === 'again'), '기록도 보통으로 바꿈');
+  st = await page.evaluate(() => Voice.state);
+  assert(!st.queue.includes(c.id) && st.stats.wrong === 0, '다시 나오지 않고, 틀린 횟수에서도 뺌');
+  await listening(page);
+  assert(await front(page) === f2 && (await V(page)).said.filter((s) => s.text === f2).length === reads2 + 1, '지금 카드는 다시 읽고 들음');
+
+  /* ===== 10-4) 카드 글과 다른 말 → AI에게 같은 뜻인지 묻기 ===== */
+  await page.evaluate(() => { window.__ai = []; window.VoiceAIMock = async (b) => { window.__ai.push(b); await new Promise((r) => setTimeout(r, 900)); return b.said[0] === '같은 뜻 말'; }; __voice.speakMs = 700; }); // 맞음 화면이 금방 지나가지 않게 읽기를 느리게
+  const f3 = await front(page);
+  await say(page, ['같은 뜻 말']);
+  await statusIs(page, 'think');
+  assert(/같은 뜻인지 확인하는 중/.test(await page.textContent('#vr-say')), 'AI에게 묻는 동안 알려 줌');
+  await shot(page, 'v13-ai-think.png');
+  await page.waitForSelector('#vr-card.ok');
+  assert(/같은 뜻이라 맞았어요/.test(await page.textContent('#vr-status')), '같은 뜻이면 맞음');
+  await shot(page, 'v14-ai-ok.png');
+  let ai = await page.evaluate(() => window.__ai);
+  assert(ai.length === 1 && ai[0].q === f3 && ai[0].said[0] === '같은 뜻 말' && ai[0].a.length > 1, 'AI에게 문제 낱말·카드 뜻·말한 글을 보냄');
+  c = await cardOf(page, f3);
+  assert(JSON.stringify(c.voiceOk) === '["같은 뜻 말"]' && c.reps === 1, '같은 뜻이라고 한 말을 카드에 남김 (다음엔 묻지 않고 바로 맞음)');
+  await page.waitForFunction((f) => document.querySelector('#vr-front').textContent !== f, f3);
+  await say(page, ['다른 뜻 말']);
+  await page.waitForSelector('#vr-card.bad');
+  ai = await page.evaluate(() => window.__ai);
+  assert(ai.length === 2 && ai[1].said[0] === '다른 뜻 말', 'AI가 다른 뜻이라고 하면 틀림');
+  await page.tap('[data-vr="skip"]');
+  await listening(page);
+  await say(page, ['음 그러니까']);
+  await listening(page);
+  assert((await page.evaluate(() => window.__ai)).length === 2 && !(await page.$('#vr-card.bad')), "'음 그러니까'만 말하면 답으로 치지 않고 다시 들음 (AI에게도 안 물음)");
+  await page.evaluate(() => { __voice.speakMs = 30; });
+  await page.tap('#vr-back');
+  await page.waitForSelector('#vr-done:not([hidden])');
+  await page.tap('[data-vr="back"]');
+  // 시작 창에서 끄면 묻지 않는다 (남겨 둔 같은 뜻 말도 지우고)
+  await resetEn();
+  await page.tap('#deck-voice');
+  await page.waitForSelector('.ui-back.in .ui-voice');
+  assert(await page.isVisible('#vs-ai') && await page.isChecked('#vs-ai'), "시작 창 '비슷한 뜻도 맞게 보기' (켜짐)");
+  await page.tap('[data-vs-mode="word"]');
+  assert(await page.isHidden('.vs-ai-row'), '단어 말하기에서는 숨김 (그 단어를 말해야 하니까)');
+  await page.tap('[data-vs-mode="meaning"]');
+  await page.tap('.vs-ai-row');
+  assert(!(await page.isChecked('#vs-ai')), '끄기');
+  await page.tap('[data-vs-start]');
+  await say(page, ['같은 뜻 말']);
+  await page.waitForSelector('#vr-card.bad');
+  assert((await page.evaluate(() => window.__ai)).length === 2, '끄면 AI에게 묻지 않음');
+  assert(await page.evaluate(() => App.store.get().decks.find((d) => d.id === 'en').voice.ai === false), '덱에 끈 채로 남음');
+  await page.evaluate(() => { delete window.VoiceAIMock; });
   await page.tap('#vr-back');
   await page.waitForFunction(() => document.querySelector('#voice-study').hidden || !document.querySelector('#vr-done').hidden);
   if (await page.isVisible('#vr-done')) await page.tap('[data-vr="back"]');

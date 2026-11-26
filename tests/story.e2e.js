@@ -64,7 +64,7 @@ const SHOTS = process.env.SHOTS;
     await page.waitForTimeout(2000);
     assert(!(await page.$('.story')), '새로 설치 뒤 다시 열어도 안 뜸');
     // 업데이트 소식 4.5 칸의 단추로는 볼 수 있다
-    await page.evaluate(() => App.go('about'));
+    await page.evaluate(() => { App.go('about'); const t = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (t) t.click(); }); // 이야기 단추는 4.5 칸에 (4.5.1부터는 눌러서 연다)
     await page.waitForSelector('[data-ver="4.5"] .ver-story:not([hidden]) [data-story="shower-1"]');
     assert(true, '업데이트 소식 4.5 칸에 업데이트 이야기 보기 단추');
     await page.evaluate(() => document.querySelector('#news-panel').scrollIntoView({ block: 'start' }));
@@ -110,6 +110,7 @@ const SHOTS = process.env.SHOTS;
   {
     const { ctx, page } = await open({ hash: '#about' });
     await page.evaluate(() => {
+      const tab = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (tab) tab.click(); // 이야기 단추는 4.5 칸에
       const t = Date.now();
       App.store.update((st) => {
         st.decks = [{ id: 'few', name: '스페인어 3과', createdAt: t }, { id: 'many', name: '영어 시험 단어', createdAt: t }];
@@ -128,7 +129,7 @@ const SHOTS = process.env.SHOTS;
     await page.keyboard.press('Escape');
     await page.waitForTimeout(400);
     // 뒤로 가기로 닫힘 (앱은 그대로)
-    await page.evaluate(() => App.go('about'));
+    await page.evaluate(() => { App.go('about'); const t = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (t) t.click(); }); // 이야기 단추는 4.5 칸에 (4.5.1부터는 눌러서 연다)
     await page.click('[data-story="shower-1"]');
     await frameOf(page);
     await page.goBack();
@@ -143,7 +144,7 @@ const SHOTS = process.env.SHOTS;
     assert(true, 'Esc로 닫힘');
     // 말로 복습을 끈 사람: 끝 화면에 '말로 복습 해 보기' 없음
     await page.evaluate(() => Features.set('voice', false));
-    await page.evaluate(() => App.go('about'));
+    await page.evaluate(() => { App.go('about'); const t = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (t) t.click(); }); // 이야기 단추는 4.5 칸에 (4.5.1부터는 눌러서 연다)
     await page.click('[data-story="shower-1"]');
     f = await frameOf(page);
     assert(/try=0/.test(f.url()), '말로 복습을 끄면 try=0');
@@ -160,7 +161,7 @@ const SHOTS = process.env.SHOTS;
     await ctx.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => window.App && window.Story);
-    await page.evaluate(() => App.go('about'));
+    await page.evaluate(() => { App.go('about'); const t = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (t) t.click(); }); // 이야기 단추는 4.5 칸에 (4.5.1부터는 눌러서 연다)
     await page.click('[data-story="shower-1"]');
     f = await frameOf(page);
     const stats = await f.evaluate(() => window.Cutscene.renderAt(10).stats);

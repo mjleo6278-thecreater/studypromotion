@@ -1169,7 +1169,7 @@
     if (!front || !back) return toast('앞면과 뒷면을 모두 적어 주세요');
     const id = f.dataset.cardEdit;
     editingCardId = null;
-    store.update((st) => { const c = st.cards.find((x) => x.id === id); if (c) { c.front = front; c.back = back; } });
+    store.update((st) => { const c = st.cards.find((x) => x.id === id); if (c) { if (c.front !== front || c.back !== back) delete c.voiceOk; c.front = front; c.back = back; } }); // 글을 고치면 말로 복습에서 AI가 인정한 말(voiceOk)도 지운다
     toast('카드를 고쳤어요');
   });
   $('#card-list').addEventListener('keydown', (e) => {
@@ -1722,8 +1722,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '4.5';
-  const APP_DATE = '2026년 11월 24일';
+  const APP_VERSION = '4.5.1';
+  const APP_DATE = '2026년 11월 26일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */

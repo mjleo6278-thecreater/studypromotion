@@ -5,6 +5,8 @@
  * 덱마다 고른 설정은 덱의 voice 칸에 남는다 (계정 동기화). 녹음은 어디에도 남기지 않는다.
  * 쓰는 브라우저 기능: SpeechRecognition(webkit 접두어), speechSynthesis, Wake Lock, Web Audio.
  * 시험(tests/voice.e2e.js)은 SpeechRecognition·speechSynthesis를 가짜로 바꿔 끼우고 끝까지 눌러 본다.
+ * (4.5.1) 틀렸다고 나오자마자 '맞았어'를 듣고(정답 읽기는 그 뒤), 다음 카드에서 '맞았어'라고 해도 앞 카드를 고친다.
+ * 카드 글과 다른 말이면 로그인한 사람은 서버 AI(/judge)에게 같은 뜻인지 묻고, 같은 뜻이면 그 말을 카드(voiceOk)에 남겨 다음엔 바로 맞힌다.
  */
 (function (root) {
   const V = root.VoiceCore, A = root.App;
@@ -19,6 +21,10 @@
   const WAITS = [6, 10, 15];
   const MODES = { meaning: '뜻 말하기', word: '단어 말하기', listen: '듣기만' };
   const FATAL = ['not-allowed', 'service-not-allowed', 'audio-capture', 'network', 'language-not-supported', 'bad-grammar'];
+  // 같은 뜻인지 묻는 서버 (세컨드와 같은 서버, js/ai.js AI_ENDPOINT). 이 주소의 앱에서만 부른다
+  const JUDGE_URL = 'https://studypromotion-ai.mj-leo6278.workers.dev/judge';
+  const JUDGE_HOME = 'https://mjleo6278-thecreater.github.io';
+  const KEEP_OK = 8; // 카드마다 남겨 두는 '같은 뜻' 말 수
   const CHECK = '<svg class="ui-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
   /* ---------- 덱 설정 ---------- */
@@ -27,17 +33,18 @@
   const dueOf = (id) => { const t = A.now(); return cardsOf(id).filter((c) => SRS.isDue(c, t)); };
   function cfgOf(deck) {
     const g = V.guessPair(cardsOf(deck.id), deck.name);
-    const v = Object.assign({ mode: 'meaning', read: true, wait: 10 }, deck.voice || {});
+    const v = Object.assign({ mode: 'meaning', read: true, wait: 10, ai: true }, deck.voice || {});
     if (!MODES[v.mode]) v.mode = 'meaning';
     if (!V.LANGS.some((l) => l.id === v.front)) v.front = g.front;
     if (!V.LANGS.some((l) => l.id === v.back)) v.back = g.back;
     if (!WAITS.includes(v.wait)) v.wait = 10;
     v.read = v.read !== false;
+    v.ai = v.ai !== false;
     if (!canHear() && v.mode !== 'listen') v.mode = 'listen';
     return v;
   }
   function saveCfg(deckId, cfg) {
-    const keep = { mode: cfg.mode, front: cfg.front, back: cfg.back, read: cfg.read, wait: cfg.wait };
+    const keep = { mode: cfg.mode, front: cfg.front, back: cfg.back, read: cfg.read, wait: cfg.wait, ai: cfg.ai };
     store.update((st) => { const d = st.decks.find((x) => x.id === deckId); if (d) d.voice = keep; });
   }
 
@@ -61,6 +68,7 @@
       `<label>앞면<select id="vs-front" aria-label="앞면 언어">${langOpts(cfg.front)}</select></label>` +
       `<label>뒷면<select id="vs-back" aria-label="뒷면 언어">${langOpts(cfg.back)}</select></label></div>` +
       `<label class="check-field vs-row"><span>문제를 소리 내어 읽어 주기<small>끄면 화면만 보고 말해요</small></span><input type="checkbox" id="vs-read"${cfg.read ? ' checked' : ''}${canSpeak() ? '' : ' disabled'}></label>` +
+      `<label class="check-field vs-row vs-ai-row"><span>비슷한 뜻도 맞게 보기<small>${aiLogin() ? '카드 글과 다르게 말하면 AI에게 같은 뜻인지 물어봐요' : '로그인하면 카드 글과 다르게 말해도 AI가 같은 뜻인지 봐 줘요'}</small></span><input type="checkbox" id="vs-ai"${cfg.ai ? ' checked' : ''}></label>` +
       '<p class="ui-group vs-wait-head">답을 기다리는 시간</p><div class="vs-chips">' +
       WAITS.map((w) => `<button type="button" class="chip" data-vs-wait="${w}">${w}초</button>`).join('') + '</div>' +
       `<p class="vs-note">${canHear() ? '처음 한 번만 마이크를 허락해 주세요. 말소리는 폰의 음성 인식(안드로이드는 구글)이 글자로 바꿔 주고, 앱은 녹음을 남기지 않아요. 인터넷이 있어야 해요.' : '소리를 켜 두세요. 화면은 꺼지지 않아요.'}</p>` +
@@ -71,6 +79,7 @@
       box.querySelectorAll('[data-vs-mode]').forEach((b) => { const on = b.dataset.vsMode === cfg.mode; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
       box.querySelectorAll('[data-vs-wait]').forEach((b) => b.classList.toggle('active', +b.dataset.vsWait === cfg.wait));
       const listen = cfg.mode === 'listen';
+      box.querySelector('.vs-ai-row').hidden = cfg.mode !== 'meaning';
       box.querySelector('.vs-wait-head').textContent = listen ? '뜻을 읽기 전에 생각할 시간' : '답을 기다리는 시간';
       const n = listen ? (nDue || nAll) : nDue;
       const go = box.querySelector('[data-vs-start]');
@@ -89,6 +98,7 @@
           cfg.front = box.querySelector('#vs-front').value;
           cfg.back = box.querySelector('#vs-back').value;
           cfg.read = box.querySelector('#vs-read').checked;
+          cfg.ai = box.querySelector('#vs-ai').checked;
           saveCfg(deckId, cfg);
           close('start');
           start(deckId, cfg); // 누른 그 순간에 시작해야 소리·마이크가 열린다
@@ -128,7 +138,7 @@
     if (listen && !list.length) list = cardsOf(deckId);
     const queue = list.map((c) => c.id);
     for (let i = queue.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [queue[i], queue[j]] = [queue[j], queue[i]]; }
-    S = { deckId, cfg, queue, run: 0, paused: false, stats: { ok1: 0, ok2: 0, wrong: 0, heard: 0 }, missed: new Set(), startedAt: Date.now(), total: queue.length, poke: null, hush: null, ctx: null, wake: null };
+    S = { deckId, cfg, queue, run: 0, paused: false, stats: { ok1: 0, ok2: 0, wrong: 0, heard: 0 }, missed: new Set(), startedAt: Date.now(), total: queue.length, poke: null, hush: null, ctx: null, wake: null, undo: null, aiSeen: new Map(), aiOff: false };
     A.review.pane('voice');
     $('#vr-done').hidden = true;
     $('#vr-card').hidden = false;
@@ -200,14 +210,14 @@
   // 말하기: 읽기 → 듣기 → 채점
   async function askCard(c, run) {
     let silent = 0, read = S.cfg.read;
-    let repeated = false;
+    let repeated = false, echoed = false;
     for (;;) {
       if (read) {
         status('speak', '읽어 주는 중', '다 읽으면 바로 들어요');
         actions([['pause', '잠깐 멈춤'], ['reveal', '정답 보기']]);
         await say(V.speakText(c[qSide()]), langOf('q'));
         if (!alive(run)) return;
-        await wait(150, run); // 읽은 소리 끝자락을 듣지 않게 조금 쉬고 듣는다
+        await wait(250, run); // 읽은 소리 끝자락을 듣지 않게 조금 쉬고 듣는다
         if (!alive(run)) return;
       }
       read = S.cfg.read;
@@ -224,28 +234,102 @@
         repeated = true;
         continue;
       }
-      const j = V.judge(h.alts, c[aSide()], langOf('a'));
+      const j = V.judge(h.alts, c[aSide()], langOf('a'), c.voiceOk);
       if (j.ok) return right(c, j, repeated, run);
       const cmd = V.command(h.alts, langOf('a'));
-      // 물소리 같은 잡음이 한 글자로 잡힌 것은 답으로 치지 않고 다시 듣는다 (되풀이되면 조용할 때처럼 멈춤)
-      if (!cmd && h.alts.every((a) => V.norm(a, langOf('a')).replace(/ /g, '').length <= 1)) {
+      // 물소리 같은 한 글자 잡음, '음…' 같은 군말만 잡힌 것은 답으로 치지 않고 다시 듣는다 (되풀이되면 조용할 때처럼 멈춤)
+      if (!cmd && V.noAnswer(h.alts, langOf('a'))) {
         if (++silent >= 2) return 'pause';
         read = false;
         continue;
       }
+      // 읽어 준 문제(다른 언어)의 소리가 마이크로 들어온 것: 한 번은 답으로 치지 않고 다시 듣는다
+      if (!cmd && !echoed && langOf('q') !== langOf('a') && V.judge(h.alts, c[qSide()], langOf('q')).ok) { echoed = true; read = false; continue; }
       silent = 0;
       if (cmd === 'repeat') { repeated = true; read = true; continue; }
       if (cmd === 'stop') return 'stop';
       if (cmd === 'pause') return 'pause';
+      // 앞 카드가 틀렸다고 나온 뒤에 '맞았어'라고 하면 앞 카드를 맞은 걸로 고친다
+      if (cmd === 'right' && S.undo && Date.now() - S.undo.at < UNDO_MS) {
+        const same = fixLast();
+        sound(true);
+        status('ok', '앞 카드를 맞은 걸로 바꿨어요', same ? '다음 카드로 넘어가요' : '이 카드를 다시 읽어 줘요');
+        actions([['pause', '잠깐 멈춤']]);
+        cmds('');
+        await wait(900, run);
+        if (!alive(run)) return;
+        if (same) return 'next';
+        paintCard(c);
+        read = S.cfg.read;
+        continue;
+      }
       if (cmd === 'right' || cmd === 'resume') { read = false; continue; }
-      return wrong(c, cmd === 'pass' ? null : j.heard, run);
+      if (cmd === 'pass') return wrong(c, null, run);
+      // 카드 글과 다르게 말함: 같은 뜻인지 AI에게 묻는다 (로그인했고 뜻 말하기일 때만)
+      if (canAsk()) {
+        status('think', '같은 뜻인지 확인하는 중', '카드 글과 달라서 AI에게 물어봐요');
+        actions([['pause', '잠깐 멈춤']]);
+        cmds('');
+        heardLive(h.alts[0]);
+        const yes = await askSame(c, h.alts);
+        if (!alive(run)) return;
+        if (yes) {
+          keepOk(c, h.alts[0]);
+          return right(c, { heard: h.alts[0], alt: '' }, repeated, run, '카드 글과 달라도 같은 뜻이라 맞았어요');
+        }
+      }
+      return wrong(c, j.heard, run);
     }
   }
 
-  async function right(c, j, repeated, run) {
+  /* ---------- 같은 뜻인지 AI에게 묻기 (4.5.1) ---------- */
+  const aiLogin = () => !!(root.VoiceAIMock || (root.location.origin === JUDGE_HOME && root.Cloud && root.Cloud.user));
+  const canAsk = () => !!S && !S.aiOff && S.cfg.ai !== false && S.cfg.mode === 'meaning' && aiLogin() && root.navigator.onLine !== false;
+  // true: 같은 뜻, false: 다른 뜻, null: 못 물어봄 (틀린 것으로 둔다). 같은 카드에 같은 말은 한 번만 묻는다
+  async function askSame(c, alts) {
+    const said = alts.slice(0, 3).map((a) => String(a).slice(0, 120));
+    const key = c.id + '|' + said.join('|');
+    if (S.aiSeen.has(key)) return S.aiSeen.get(key);
+    let yes = null;
+    try {
+      if (root.VoiceAIMock) yes = await root.VoiceAIMock({ q: c[qSide()], a: c[aSide()], said });
+      else {
+        const tok = await root.Cloud.user.getIdToken();
+        const ctl = root.AbortController ? new AbortController() : null;
+        const timer = setTimeout(() => { if (ctl) ctl.abort(); }, 6000);
+        try {
+          const res = await fetch(JUDGE_URL, {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ q: c[qSide()].slice(0, 200), a: c[aSide()].slice(0, 400), said }),
+            signal: ctl ? ctl.signal : undefined,
+          });
+          const out = await res.json().catch(() => null);
+          if (res.ok && out && typeof out.ok === 'boolean') yes = out.ok;
+          else if (out && out.error === 'limit') S.aiOff = true; // 오늘 횟수를 다 씀: 이번 복습에서는 더 묻지 않는다
+        } finally { clearTimeout(timer); }
+      }
+    } catch (e) { yes = null; }
+    if (typeof yes === 'boolean') S.aiSeen.set(key, yes);
+    return yes === true;
+  }
+  // AI가 같은 뜻이라고 한 말을 카드에 남긴다 (다음부터는 묻지 않고 바로 맞음)
+  function keepOk(c, said) {
+    const w = V.dropFillers(said, langOf('a')) || V.norm(said, langOf('a'));
+    if (!w) return;
+    store.update((st) => {
+      const x = st.cards.find((y) => y.id === c.id);
+      if (!x) return;
+      const list = (x.voiceOk || []).filter((v) => v !== w);
+      list.push(w);
+      x.voiceOk = list.slice(-KEEP_OK);
+    });
+  }
+
+  async function right(c, j, repeated, run, note) {
     sound(true);
     paintResult(c, true, j.heard, j.alt);
-    status('ok', '띵! 다음 카드로 넘어가요', S.cfg.read ? (S.cfg.mode === 'word' ? `${V.langName(langOf('a'))} 목소리로 한 번 읽어 줘요` : '뜻 전체를 한 번 읽어 줘요') : '');
+    status('ok', '띵! 다음 카드로 넘어가요', note || (S.cfg.read ? (S.cfg.mode === 'word' ? `${V.langName(langOf('a'))} 목소리로 한 번 읽어 줘요` : '뜻 전체를 한 번 읽어 줘요') : ''));
     actions([['pause', '잠깐 멈춤']]);
     cmds('');
     apply(c, V.gradeOf({ ok: true, repeated }));
@@ -257,27 +341,32 @@
   async function wrong(c, heard, run) {
     sound(false);
     paintResult(c, false, heard, '');
-    const ans = V.speakText(c[aSide()]);
-    status('bad', `“정답은 ${ans}”`, '이 카드는 몇 장 뒤에 다시 나와요');
+    const ans = V.speakText(c[aSide()]), a = langOf('a');
     actions([['right', '맞은 걸로'], ['skip', '다음']]);
-    cmds(heard ? 'fix' : '');
-    if (S.cfg.read) {
-      if (/^ko/i.test(langOf('a'))) await say('정답은 ' + ans, langOf('a'));
-      else { await say('정답은', 'ko-KR'); if (alive(run)) await say(ans, langOf('a')); }
-    }
-    if (!alive(run)) return;
-    // 잘못 알아들었으면 '맞았어' (몰라·정답 보기로 넘긴 카드는 묻지 않음)
     let fix = null;
+    // 잘못 알아들었으면 '맞았어': 뚱 하자마자 마이크를 켠다 (정답을 읽는 동안엔 못 들으니 정답은 그다음에 읽는다).
+    // 몰라·정답 보기로 넘긴 카드는 묻지 않음
     if (heard) {
-      status('listen', '잘못 알아들었으면 ‘' + V.commandWords(langOf('a')).right + '’', '조금 뒤 다음 카드로 넘어가요');
-      const h = await hear(3500, langOf('a'), run, false);
+      status('listen', `잘못 알아들었으면 ‘${V.commandWords(a).right}’`, '지금 바로 말하면 돼요');
+      cmds('fix');
+      await wait(200, run); // 뚱 소리가 마이크에 들어가지 않을 만큼만
       if (!alive(run)) return;
-      fix = h.cmd || (h.alts.length ? V.command(h.alts, langOf('a')) : null);
-    } else {
-      // 버튼으로 고칠 시간 (말로 묻지는 않음)
-      const h = await idle(S.cfg.read ? 800 : 1800, run);
+      const h = await hear(4000, a, run, true);
       if (!alive(run)) return;
-      fix = h && h.cmd;
+      fix = h.cmd || (h.alts.length ? (V.saysRight(h.alts, a) ? 'right' : V.command(h.alts, a)) : null);
+    }
+    if (!['right', 'skip', 'stop', 'pause'].includes(fix)) {
+      status('bad', `“정답은 ${ans}”`, '이 카드는 몇 장 뒤에 다시 나와요');
+      cmds(heard ? 'late' : '');
+      if (S.cfg.read) {
+        if (/^ko/i.test(a)) await say('정답은 ' + ans, a);
+        else { await say('정답은', 'ko-KR'); if (alive(run)) await say(ans, a); }
+      }
+      if (!alive(run)) return;
+      // 단추로 고칠 시간
+      const h = await idle(S.cfg.read ? 600 : 1800, run);
+      if (!alive(run)) return;
+      if (h && h.cmd) fix = h.cmd;
     }
     if (fix === 'right') {
       paintResult(c, true, heard, '');
@@ -287,7 +376,7 @@
       await wait(700, run);
       return 'next';
     }
-    apply(c, 'again');
+    apply(c, 'again', false, !!heard); // 말한 답이 틀린 것은 다음 카드에서 '맞았어'로 고칠 수 있게
     if (fix === 'stop') return 'stop';
     if (fix === 'pause') return 'pause';
     return 'next';
@@ -318,9 +407,12 @@
   }
 
   // 채점 결과를 간격 반복에 넣는다 (손으로 하는 복습 grade()와 같은 규칙)
-  function apply(c, grade, fixed) {
+  // undoable: 말한 답이 틀렸다고 본 것. 다음 카드에서 '맞았어'라고 하면 fixLast()로 되돌린다
+  const UNDO_MS = 45000;
+  function apply(c, grade, fixed, undoable) {
     const t = A.now();
     const cur = store.get().cards.find((x) => x.id === c.id);
+    S.undo = cur && undoable && grade === 'again' ? { id: c.id, before: JSON.parse(JSON.stringify(cur)), at: Date.now(), missed: S.missed.has(c.id) } : null;
     if (cur) {
       const nextCard = SRS.review(cur, grade, t);
       store.update((st) => {
@@ -335,6 +427,29 @@
     S.queue.shift();
     if (grade === 'again') S.queue.splice(Math.min(S.queue.length, 3), 0, c.id); // 몇 장 뒤에 다시
     meta();
+  }
+  // 바로 앞에 틀렸다고 본 카드를 맞은 걸로 고친다 (기록도 '다시' → '보통'). 고친 카드가 지금 카드면 true
+  function fixLast() {
+    const u = S.undo;
+    S.undo = null;
+    if (!u) return false;
+    const t = A.now();
+    store.update((st) => {
+      const i = st.cards.findIndex((x) => x.id === u.id);
+      if (i >= 0) st.cards[i] = SRS.review(u.before, 'good', t);
+      for (let k = st.reviewLog.length - 1; k >= 0; k--) {
+        const e = st.reviewLog[k];
+        if (e.cardId === u.id && e.grade === 'again' && e.via === 'voice') { st.reviewLog[k] = { cardId: u.id, grade: 'good', at: t, via: 'voice' }; break; }
+      }
+    });
+    S.stats.wrong = Math.max(0, S.stats.wrong - 1);
+    S.stats.ok1++;
+    if (!u.missed) S.missed.delete(u.id);
+    const same = S.queue[0] === u.id;
+    const at = S.queue.indexOf(u.id, same ? 0 : 1); // 몇 장 뒤에 다시 넣어 둔 것을 뺀다
+    if (at >= 0) S.queue.splice(at, 1);
+    meta();
+    return same;
   }
 
   /* ---------- 멈춤 · 끝 ---------- */
@@ -674,8 +789,9 @@
     const ko = /^ko/i.test(langOf('a'));
     const chip = (word, mean) => `<b>${esc(word)}${!ko && mean ? `<small>${esc(mean)}</small>` : ''}</b>`;
     el.hidden = false;
-    if (kind === 'ask') el.innerHTML = '말로 할 수 있어요 ' + chip(w.pass, '몰라') + chip(w.repeat, '다시') + chip(w.stop, '그만');
+    if (kind === 'ask') el.innerHTML = '말로 할 수 있어요 ' + chip(w.pass, '몰라') + chip(w.repeat, '다시') + chip(w.stop, '그만') + (S.undo ? chip(w.right + ' (앞 카드)', '맞았어') : '');
     else if (kind === 'fix') el.innerHTML = '잘못 알아들었으면 ' + chip(w.right, '맞았어') + ' 라고 말해요';
+    else if (kind === 'late') el.innerHTML = '놓쳤으면 다음 카드에서 ' + chip(w.right, '맞았어') + ' 라고 해도 고쳐져요';
     else if (kind === 'pause') el.innerHTML = '말로 할 수 있어요 ' + chip(w.resume, '계속') + chip(w.stop, '그만');
   }
 

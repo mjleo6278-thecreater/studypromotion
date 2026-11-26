@@ -34,9 +34,16 @@
  *   본문은 16KB까지. 사진·단어장을 붙인 say만 1.6MB까지 받는다
  *   사람은 Firebase 사용자 번호를 SHA-256으로 바꾼 값('group:' + 번호, 벽 튕기기와 다른 값)으로만 가리킨다. 이메일·이름은 받지 않는다
  *
+ * 말로 복습: 같은 뜻인지 묻기 (v4.5.1, 앱 쪽은 js/voice.js). 카드 뜻과 글자가 달라 앱이 틀렸다고 볼 때만 묻는다
+ *   POST /judge  Authorization: Bearer <확인표>   { q: 문제 낱말, a: 카드의 뜻, said: [음성 인식이 적은 글 1~3개] }
+ *   답:          { ok: true|false, left: 299 } 또는 { ok, unlimited: true }. 세컨드 하루 횟수와 따로 센다(JUDGE_LIMIT)
+ *   못 할 때:    { error: "login" | "closed" | "bad" | "limit" | "server", scope?: "all" }
+ *   말한 글은 모델에 넘기기만 하고 어디에도 저장하지 않는다
+ *
  * 설정 (wrangler.toml의 [vars]. OWNER_EMAILS만 Cloudflare 화면에서 비밀 값으로)
  *   FIREBASE_PROJECT_ID  로그인 확인에 쓰는 Firebase 프로젝트
  *   DAILY_LIMIT          한 사람이 하루에 쓸 수 있는 횟수. 0시 UTC(한국 오전 9시)에 다시 채운다
+ *   JUDGE_LIMIT          말로 복습 '같은 뜻인지 묻기'의 한 사람 하루 횟수 (없으면 300)
  *   MODEL, MAX_TOKENS    Workers AI 모델 이름, 답의 최대 길이
  *   THINKING             "on"이면 모델이 답하기 전에 속으로 생각하게 둔다. 기본은 끔: 켜 두면 보이지 않는 생각에
  *                        답 길이(MAX_TOKENS)를 다 써서 한참 기다린 뒤 답이 잘리거나 빈 채로 온다
@@ -346,6 +353,88 @@ async function group(request, env, deps, now, json) {
   return new Response(res.body, { status: 200, headers: out.headers });
 }
 
+/* ---------- 말로 복습: 같은 뜻인지 묻기 (/judge) ---------- */
+export const JUDGE_MAX = { q: 200, a: 400, said: 120, n: 3 };
+// 받은 것이 맞는 모양이면 { q, a, said: [..] }, 아니면 null
+export function cleanJudge(b) {
+  const str = (v, max) => (typeof v === 'string' && v.trim() && v.length <= max ? v.replace(/\s+/g, ' ').trim() : null);
+  if (!b || typeof b !== 'object') return null;
+  const q = str(b.q, JUDGE_MAX.q), a = str(b.a, JUDGE_MAX.a);
+  if (!Array.isArray(b.said) || !b.said.length || b.said.length > JUDGE_MAX.n) return null;
+  const said = b.said.map((s) => str(s, JUDGE_MAX.said));
+  if (!q || !a || said.some((s) => !s)) return null;
+  return { q, a, said };
+}
+// 모델에게 줄 말. 같은 뜻(비슷한 말·풀어 말하기·끝말 다름·음성 인식의 작은 실수)은 YES, 다른 뜻·반대말·너무 넓은 말은 NO
+export function judgeMessages(j) {
+  const sys = 'You grade a spoken vocabulary quiz. The student saw a word and said its meaning out loud; speech recognition turned the speech into text and may have small errors. ' +
+    'Decide whether what the student said means the same as the card answer. Any one of the listed meanings is enough. ' +
+    'Answer YES for: a synonym, a paraphrase with the same meaning, a different ending, tense, part of speech or politeness level of the same meaning, ' +
+    'or text that is clearly the right answer misheard by speech recognition. ' +
+    'Answer NO for: a different meaning, the opposite meaning, a much broader or vaguer word, something only related to the meaning, or just repeating the quiz word. ' +
+    'Reply with exactly one word: YES or NO.';
+  const said = j.said.length > 1 ? j.said.map((s) => '"' + s + '"').join(' or ') + ' (speech recognition guesses)' : '"' + j.said[0] + '"';
+  return [
+    { role: 'system', content: sys },
+    { role: 'user', content: 'Quiz word: ' + j.q + '\nCard answer: ' + j.a + '\nStudent said: ' + said + '\nSame meaning?' },
+  ];
+}
+// 모델의 답에서 YES/NO만 읽는다. 못 읽으면 null
+export function readVerdict(answer) {
+  let t = '';
+  if (answer && typeof answer.response === 'string') t = answer.response;
+  else if (answer && answer.choices && answer.choices[0]) t = (answer.choices[0].message && answer.choices[0].message.content) || answer.choices[0].text || '';
+  else if (typeof answer === 'string') t = answer;
+  const m = /\b(yes|no)\b|(예|네|아니)/i.exec(String(t || ''));
+  if (!m) return null;
+  return m[1] ? m[1].toLowerCase() === 'yes' : m[2] !== '아니';
+}
+async function judge(request, env, deps, now, json) {
+  const everyone = String(env.OPEN_TO || '').trim().toLowerCase() === 'all';
+  const bearer = /^Bearer\s+(\S+)$/i.exec(request.headers.get('Authorization') || '');
+  let user = null;
+  try { user = bearer ? await verifyToken(bearer[1], env.FIREBASE_PROJECT_ID, { now, fetch: deps.fetch }) : null; }
+  catch (e) { return json({ error: 'server' }, 503); }
+  if (!user) return json({ error: 'login' }, 401);
+  const owner = isOwner(user, env);
+  if (!owner && !everyone) return json({ error: 'closed' }, 403);
+  let body = null;
+  try { body = await request.json(); } catch (e) { /* 아래에서 거절 */ }
+  const j = cleanJudge(body);
+  if (!j) return json({ error: 'bad' }, 400);
+  // 하루 횟수: 세컨드와 다른 저장소('judge:' + 사용자 번호)에서 센다. 주인 계정은 세지 않는다
+  const parsed = parseInt(env.JUDGE_LIMIT, 10);
+  const limit = Number.isFinite(parsed) && parsed >= 0 ? parsed : 300;
+  const day = new Date(now).toISOString().slice(0, 10);
+  const counter = owner ? null : env.COUNTER.get(env.COUNTER.idFromName('judge:' + user.sub));
+  const count = async (op) => (await counter.fetch('https://counter/', { method: 'POST', body: JSON.stringify({ op, day, limit }) })).json();
+  let left = null;
+  if (counter) {
+    const r = await count('take');
+    if (!r.ok) return json({ error: 'limit' }, 429);
+    left = r.left;
+  }
+  const refund = async () => { if (counter) { try { left = (await count('refund')).left; } catch (e) { /* 그대로 */ } } };
+  // 생각하기를 끄고 한 낱말만 받는다. 설정을 받지 않는 모델이면 덜어 내고 다시
+  const model = env.MODEL || DEFAULT_MODEL;
+  const base = { messages: judgeMessages(j), max_tokens: 6, temperature: 0 };
+  let verdict = null, fail = null;
+  for (const input of [Object.assign({}, base, { chat_template_kwargs: { enable_thinking: false } }), base]) {
+    try { verdict = readVerdict(await env.AI.run(model, input)); fail = null; break; }
+    catch (e) {
+      fail = e;
+      console.error(JSON.stringify({ at: 'judge', error: String((e && e.message) || e).slice(0, 300) })); // 말한 글은 적지 않는다
+      if (usedUp(e)) break;
+    }
+  }
+  if (fail || verdict === null) {
+    await refund();
+    if (fail && usedUp(fail)) return json({ error: 'limit', scope: 'all' }, 429);
+    return json({ error: 'server' }, 503);
+  }
+  return json(owner ? { ok: verdict, unlimited: true } : { ok: verdict, left });
+}
+
 /* ---------- 요청 처리 ---------- */
 // deps: 테스트에서 시계(now)와 열쇠 받아 오기(fetch)를 바꿔 끼운다
 export async function handle(request, env, deps, ctx) {
@@ -373,6 +462,10 @@ export async function handle(request, env, deps, ctx) {
   if (url.pathname === '/group' && (request.method === 'GET' || request.method === 'POST')) {
     if (origin && allowed.length && !allowed.includes(origin)) return json({ error: 'origin' }, 403);
     return group(request, env, deps, now, json);
+  }
+  if (url.pathname === '/judge' && request.method === 'POST') {
+    if (origin && allowed.length && !allowed.includes(origin)) return json({ error: 'origin' }, 403);
+    return judge(request, env, deps, now, json);
   }
   const isMe = request.method === 'GET' && url.pathname === '/me';
   if (!isMe && (request.method !== 'POST' || url.pathname !== '/chat')) return json({ error: 'not_found' }, 404);
