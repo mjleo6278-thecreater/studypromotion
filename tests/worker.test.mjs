@@ -3,7 +3,7 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { handle, verifyToken, isOwner, cleanMessages, textOf, hasImage, pieceOf, Counter, forgetKeys, cleanName, cleanScore, maxScore, BOARD_TOP, BOARD_KEEP, BOARD_STORE } from '../worker/src/index.js';
+import { handle, verifyToken, isOwner, cleanMessages, textOf, hasImage, pieceOf, Counter, forgetKeys, cleanName, cleanScore, maxScore, BOARD_TOP, BOARD_KEEP, BOARD_STORE, cleanJudge, judgeMessages, readVerdict } from '../worker/src/index.js';
 
 const PROJECT = 'demo-project';
 const ORIGIN = 'https://app.example';
@@ -715,4 +715,85 @@ test('사진: 모델이 사진을 받지 못하면 횟수를 돌려주고, 주�
   assert.equal(me.json.left, 20);
   const owner = await w.ask(await token({ sub: 'owner-1', email: OWNER }), { messages: withPhoto('해석해 줘'), v: 2 });
   assert.match(owner.json.detail, /could not be decoded/);
+});
+
+/* ---------- 말로 복습: 같은 뜻인지 묻기 (/judge, v4.5.1) ---------- */
+const judgeBody = (o) => JSON.stringify(Object.assign({ q: 'distress', a: 'n. 고통, 괴로움', said: ['아픔'] }, o));
+
+test('같은 뜻 묻기: 받은 것 검사', () => {
+  assert.deepEqual(cleanJudge({ q: ' distress ', a: 'n. 고통,  괴로움', said: ['아픔', '아 픔'] }), { q: 'distress', a: 'n. 고통, 괴로움', said: ['아픔', '아 픔'] });
+  assert.equal(cleanJudge({ q: 'x', a: 'y', said: [] }), null);
+  assert.equal(cleanJudge({ q: 'x', a: 'y', said: ['a', 'b', 'c', 'd'] }), null, '후보는 셋까지');
+  assert.equal(cleanJudge({ q: 'x', a: 'y', said: ['가'.repeat(121)] }), null, '말한 글은 120자까지');
+  assert.equal(cleanJudge({ q: 'x', a: 'y'.repeat(401), said: ['a'] }), null);
+  assert.equal(cleanJudge({ q: '', a: 'y', said: ['a'] }), null);
+  assert.equal(cleanJudge({ q: 'x', a: 'y', said: [3] }), null);
+  assert.equal(cleanJudge(null), null);
+});
+
+test('같은 뜻 묻기: 지시문에 낱말·뜻·말한 글이 들어가고, YES/NO만 읽는다', () => {
+  const m = judgeMessages({ q: 'distress', a: 'n. 고통, 괴로움', said: ['아픔', '아품'] });
+  assert.equal(m[0].role, 'system');
+  assert.match(m[0].content, /YES or NO/);
+  assert.match(m[1].content, /Quiz word: distress\nCard answer: n\. 고통, 괴로움\nStudent said: "아픔" or "아품"/);
+  assert.equal(readVerdict({ response: 'YES' }), true);
+  assert.equal(readVerdict({ response: ' no.' }), false);
+  assert.equal(readVerdict({ choices: [{ message: { content: 'Yes' } }] }), true);
+  assert.equal(readVerdict({ response: '네' }), true);
+  assert.equal(readVerdict({ response: '아니요' }), false);
+  assert.equal(readVerdict({ response: '' }), null);
+  assert.equal(readVerdict(null), null);
+});
+
+test('같은 뜻 묻기: 로그인 필요, 생각하기 끄고 짧게 묻고, 세컨드와 따로 센다', async () => {
+  const w = world({ answer: () => ({ response: 'YES' }), env: { JUDGE_LIMIT: '2' } });
+  assert.equal((await w.ask(null, { path: '/judge', raw: judgeBody() })).status, 401);
+  assert.equal((await w.ask(await token(), { path: '/judge', raw: judgeBody(), origin: 'https://evil.example' })).status, 403);
+  const bad = await w.ask(await token(), { path: '/judge', raw: judgeBody({ said: 'x' }) });
+  assert.equal(bad.status, 400);
+  assert.equal(w.runs.length, 0);
+  const r = await w.ask(await token(), { path: '/judge', raw: judgeBody() });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json, { ok: true, left: 1 });
+  assert.equal(w.runs[0].input.max_tokens, 6);
+  assert.equal(w.runs[0].input.chat_template_kwargs.enable_thinking, false);
+  assert.match(w.runs[0].input.messages[1].content, /Student said: "아픔"/);
+  w.answer = () => ({ response: 'NO' });
+  assert.deepEqual((await w.ask(await token(), { path: '/judge', raw: judgeBody({ said: ['분리'] }) })).json, { ok: false, left: 0 });
+  assert.equal((await w.ask(await token(), { path: '/judge', raw: judgeBody() })).status, 429, '하루 횟수를 다 씀');
+  // 세컨드 하루 횟수는 그대로
+  const me = await w.ask(await token(), { method: 'GET', path: '/me' });
+  assert.equal(me.json.left, 20);
+  // 주인 계정은 세지 않는다
+  const own = await w.ask(await token({ sub: 'owner-1', email: OWNER }), { path: '/judge', raw: judgeBody() });
+  assert.deepEqual(own.json, { ok: false, unlimited: true });
+  // 말한 글은 어디에도 남기지 않는다
+  for (const m of w.stores.values()) for (const v of m.values()) assert.ok(!JSON.stringify(v).includes('아픔'));
+});
+
+test('같은 뜻 묻기: 모델이 설정을 받지 않으면 덜어 내고 다시, 못 읽으면 횟수를 돌려준다', async () => {
+  const w = world();
+  let n = 0;
+  w.answer = (input) => { n++; if (input.chat_template_kwargs) throw new Error('unknown field'); return { response: 'YES' }; };
+  const r = await w.ask(await token(), { path: '/judge', raw: judgeBody() });
+  assert.equal(r.json.ok, true);
+  assert.equal(n, 2);
+  w.answer = () => ({ response: '음…' });
+  const r2 = await w.ask(await token(), { path: '/judge', raw: judgeBody() });
+  assert.equal(r2.status, 503);
+  const r3 = await w.ask(await token(), { path: '/judge', raw: judgeBody() });
+  w.answer = () => ({ response: 'YES' });
+  const r4 = await w.ask(await token(), { path: '/judge', raw: judgeBody() });
+  assert.equal(r4.json.left, 298, '실패한 두 번은 돌려받음 (300 - 2)');
+  w.answer = () => { throw new Error('4006: you have used up your daily free allocation of 10,000 neurons'); };
+  const r5 = await w.ask(await token(), { path: '/judge', raw: judgeBody() });
+  assert.equal(r5.status, 429);
+  assert.deepEqual(r5.json, { error: 'limit', scope: 'all' });
+  assert.equal(r3.status, 503);
+});
+
+test('같은 뜻 묻기: OPEN_TO가 all이 아니면 주인 계정만', async () => {
+  const w = world({ answer: () => ({ response: 'YES' }), env: { OPEN_TO: 'owner' } });
+  assert.equal((await w.ask(await token(), { path: '/judge', raw: judgeBody() })).status, 403);
+  assert.equal((await w.ask(await token({ sub: 'owner-1', email: OWNER }), { path: '/judge', raw: judgeBody() })).json.ok, true);
 });
