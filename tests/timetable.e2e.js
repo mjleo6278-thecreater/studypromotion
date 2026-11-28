@@ -309,7 +309,7 @@ const SW = 'studypromotion.stopwatch';
   assert(/버전 4\.6/.test(await page.textContent('#app-version')) && /최신/.test(await page.textContent('#ver-tabs [data-ver-tab] >> nth=0')), '앱 소개의 버전과 같고 ‘최신’ 표시');
   const shown = () => page.$$eval('#about-news .ver', (els) => els.filter((e) => !e.hidden && e.offsetParent !== null).map((e) => ({ v: e.dataset.ver, when: e.querySelector('.ver-when').textContent, n: e.querySelectorAll('.news li').length })));
   let sh = await shown();
-  assert(sh.length === 1 && sh[0].v === '4.6' && /버전 4\.6 · 2026년 11월 26일 업데이트/.test(sh[0].when) && /함수 넓이 공식/.test(await page.textContent('#about-news .ver:not([hidden])')) && /한눈에 보기/.test(await page.textContent('#about-news .ver:not([hidden])')), '4.6 소식: 공식 카드 ' + sh[0].when);
+  assert(sh.length === 1 && sh[0].v === '4.6' && /버전 4\.6 · 2026년 11월 28일 업데이트/.test(sh[0].when) && /함수 넓이 공식/.test(await page.textContent('#about-news .ver:not([hidden])')) && /한눈에 보기/.test(await page.textContent('#about-news .ver:not([hidden])')), '4.6 소식: 공식 카드 ' + sh[0].when);
   await page.tap('#ver-tabs [data-ver-tab="4.4.1"]');
   sh = await shown();
   assert(sh.length === 1 && sh[0].v === '4.4.1' && /버전 4\.4\.1 · 2026년 11월 22일 업데이트/.test(sh[0].when) && /같은 할 일이 두 줄로 겹치던 문제/.test(await page.textContent('#about-news .ver:not([hidden])')), '4.4.1 소식: 같은 할 일 겹침 ' + sh[0].when);
