@@ -62,12 +62,18 @@
     return out;
   }
 
-  function createStore(storage) {
+  // opts.fix(state): 기록을 읽거나 바꿀 때마다 저장하기 전에 바로잡는다 (하루 24시간이 넘는 공부 기록 등). 고쳤으면 true
+  function createStore(storage, opts) {
+    const fix = opts && typeof opts.fix === 'function' ? opts.fix : null;
     let state;
     const listeners = [];
     const replaceHooks = []; // 기록을 통째로 바꾸기 직전에 지금 기록을 넘겨받는다 (자동 백업)
     const errorHooks = []; // 저장에 실패하면 알림
     let loadIssue = null; // 저장된 기록을 읽지 못했을 때 { raw, at }
+    function fixUp() {
+      if (!fix) return false;
+      try { return !!fix(state); } catch (e) { return false; }
+    }
 
     function load() {
       let raw = null;
@@ -83,6 +89,7 @@
         try { if (storage && !storage.getItem(BROKEN_KEY)) storage.setItem(BROKEN_KEY, raw); } catch (err) { /* 공간 부족: 자동 백업이 대신 보관 */ }
         state = defaults();
       }
+      if (fixUp() && !loadIssue) write();
       return state;
     }
 
@@ -122,6 +129,7 @@
         if (undoStack.length > UNDO_LIMIT) undoStack.shift();
       }
       fn(state);
+      fixUp();
       if (opts.silent) write();
       else save();
     }
@@ -131,6 +139,7 @@
       const keepView = state.boardView;
       state = normalize(Object.assign({}, state, JSON.parse(undoStack.pop())));
       state.boardView = keepView;
+      fixUp();
       save();
       return true;
     }
@@ -148,6 +157,7 @@
       beforeReplace(reason || 'import');
       state = normalize(parsed);
       undoStack.length = 0;
+      fixUp();
       save();
     }
 
@@ -167,6 +177,7 @@
       next.boardView = state.boardView; // 보드 보는 위치는 탭마다 따로
       state = next;
       undoStack.length = 0; // 다른 탭의 변경까지 되돌리지 않게
+      if (fixUp()) write();
       listeners.forEach((fn) => fn(state, { external: true }));
       return true;
     }

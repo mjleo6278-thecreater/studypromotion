@@ -167,7 +167,7 @@
       : `<button type="button" class="pl-goal${note.goal ? '' : ' empty'}" data-pl-goal aria-label="${goalLabel} ${note.goal ? '고치기: ' + esc(note.goal) : '적기'}"><span>${goalLabel}</span><b>${esc(note.goal || '한 줄로 적어 두면 여기에 늘 보여요')}</b>${ic('edit')}</button>`;
     let prog;
     if (key <= tk) {
-      const studied = P.studyMinutes(st.sessions, key) + (key === tk ? liveTodayMin() : 0);
+      const studied = Math.min(Stats.DAY_MAX, P.studyMinutes(st.sessions, key) + (key === tk ? liveTodayMin() : 0));
       const pct = sum.total ? Math.round((sum.done / sum.total) * 100) : 0;
       prog = `<div class="pl-prog"><div class="pl-prog-top"><b>할 일 ${sum.done} / ${sum.total}${sum.part ? `<em class="pl-part-n" title="덜 끝낸 일">△ ${sum.part}</em>` : ''}</b><span>${sum.planMin ? `계획 ${fm(sum.planMin)} · ` : ''}공부 <b class="pl-studied">${fm(studied)}</b></span></div>` +
         `<div class="bar" role="progressbar" aria-label="할 일 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="bar-fill" style="width:${pct}%"></div></div></div>`;
@@ -320,7 +320,7 @@
       el.lastChild.textContent = liveText(Math.max(0, Math.floor((now() - lv.from) / 60000)));
     });
     const sd = $('#pl-sum .pl-studied');
-    if (sd && App.view === 'plan' && mode === 'day' && viewKey() === today()) sd.textContent = fm(P.studyMinutes(store.get().sessions, today()) + liveTodayMin());
+    if (sd && App.view === 'plan' && mode === 'day' && viewKey() === today()) sd.textContent = fm(Math.min(Stats.DAY_MAX, P.studyMinutes(store.get().sessions, today()) + liveTodayMin()));
   }, 30000);
 
   /* ---------- 달력 창 ---------- */

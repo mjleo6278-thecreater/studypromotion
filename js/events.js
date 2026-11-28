@@ -272,6 +272,8 @@
     const occ = occOf(id, date);
     if (!occ || occ.ev.kind !== 'study') return;
     if (occ.to > now()) { toast('일정이 끝난 뒤에 기록할 수 있어요'); return; }
+    const full = App.spanFull ? App.spanFull(occ.from, occ.to) : '';
+    if (full) { toast(full); return; } // 하루 24시간까지
     const hits = App.logOverlaps ? App.logOverlaps(occ.from, occ.to) : [];
     if (hits.length) {
       const min = hits.reduce((a, h) => a + h.min, 0);

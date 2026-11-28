@@ -39,6 +39,55 @@
     return minutesByDay(sessions)[dayKey(ts)] || 0;
   }
 
+  /* ---------- 하루 공부 기록은 24시간까지 (v4.6.3) ----------
+   *  직접 기록을 여러 번 넣어 하루 24시간이 넘는 기록이 생기던 것을 막는다.
+   *  - 기록을 넣는 곳(직접 기록·세컨드·끝낸 할 일·일정)은 dayRoom으로 그날 남은 시간을 보고, 넘으면 넣지 않는다.
+   *  - 그 밖의 길(타이머와 직접 기록이 겹침, 가져오기·계정 동기화, 예전에 쌓인 기록)은 저장소가 fitDays로 24시간에 맞춘다.
+   */
+  const DAY_MAX = 24 * 60;
+  // 그 공부 날짜(key)에 더 기록할 수 있는 분 (0 ~ 1440)
+  function dayRoom(sessions, key) {
+    let used = 0;
+    for (const s of sessions || []) if (s && s.endedAt && s.minutes > 0 && dayKey(s.endedAt) === key) used += +s.minutes;
+    return Math.max(0, DAY_MAX - Math.round(used));
+  }
+  // 하루 24시간이 넘는 날을 24시간에 맞춘다. state.sessions를 고친다.
+  //  줄이는 순서: 손으로 적은 기록(직접 기록·끝낸 할 일·세컨드로 넣은 기록)을 나중에 넣은 것부터 줄이고, 0분이 되면 지운다.
+  //  타이머·스톱워치·잠금으로 잰 기록은 손으로 적은 기록을 다 줄여도 넘을 때만 (나중 것부터) 줄인다.
+  //  날짜는 그 기록의 하루 시작 시각 설정으로 나눈다 (저장소가 처음 읽을 때는 아직 전역 설정이 없어서)
+  //  반환 { cut: 뺀 분, days: 맞춘 날짜들 }
+  function fitDays(state) {
+    const list = state && Array.isArray(state.sessions) ? state.sessions : null;
+    if (!list || !list.length) return { cut: 0, days: [] };
+    const set = state.settings && state.settings.dayStartHour;
+    const off = set == null ? dayOffset() : Math.max(0, Math.min(12, Math.floor(+set || 0))) * HOUR;
+    const key = (t) => dateKey(t - off);
+    const counted = (s) => s && typeof s === 'object' && s.endedAt && +s.minutes > 0;
+    const used = {};
+    for (const s of list) if (counted(s)) { const k = key(s.endedAt); used[k] = (used[k] || 0) + +s.minutes; }
+    const days = Object.keys(used).filter((k) => Math.round(used[k]) > DAY_MAX).sort();
+    if (!days.length) return { cut: 0, days: [] };
+    const gone = new Set();
+    let cut = 0;
+    for (const k of days) {
+      let extra = Math.round(used[k]) - DAY_MAX;
+      for (const hand of [true, false]) {
+        for (let i = list.length - 1; i >= 0 && extra > 0; i--) {
+          const s = list[i];
+          if (!counted(s) || gone.has(s) || !!s.manual !== hand || key(s.endedAt) !== k) continue;
+          const take = Math.min(+s.minutes, extra);
+          s.minutes = Math.round(+s.minutes - take);
+          if (s.sec > 0) s.sec = Math.min(s.sec, s.minutes * 60);
+          if (!(s.minutes > 0)) gone.add(s);
+          extra -= take;
+          cut += take;
+        }
+      }
+    }
+    if (gone.size) state.sessions = list.filter((s) => !gone.has(s));
+    return { cut: Math.round(cut), days };
+  }
+
   // 최근 n일 [{key, label, minutes}] (오래된 날 → 오늘)
   function lastNDays(sessions, now, n) {
     const map = minutesByDay(sessions);
@@ -262,7 +311,9 @@
   }
   function pushDone(state, o, now, id) {
     if (!(o.minutes >= 1) || doneCounted(state.sessions, o)) return null;
-    const s = { id, kind: 'done', manual: true, doneOf: o.key, subjectId: o.subjectId, minutes: o.minutes, endedAt: now, label: o.label };
+    const minutes = Math.min(o.minutes, dayRoom(state.sessions, dayKey(now))); // 하루 24시간까지
+    if (minutes < 1) return null;
+    const s = { id, kind: 'done', manual: true, doneOf: o.key, subjectId: o.subjectId, minutes, endedAt: now, label: o.label };
     if (o.taskId) s.taskId = o.taskId;
     if (o.topicId) s.topicId = o.topicId;
     state.sessions.push(s);
@@ -273,9 +324,11 @@
     return t && t.done ? pushDone(state, taskDoneInfo(state, t), now, id) : null;
   }
   // 끝내면 몇 분이 들어갈지 (미리 보기용, 0이면 안 들어감)
-  function taskCreditMinutes(state, t) {
+  function taskCreditMinutes(state, t, now) {
     const o = taskDoneInfo(state, t);
-    return o.minutes >= 1 && !doneCounted(state.sessions, o) ? o.minutes : 0;
+    if (!(o.minutes >= 1) || doneCounted(state.sessions, o)) return 0;
+    const m = Math.min(o.minutes, dayRoom(state.sessions, dayKey(now || Date.now())));
+    return m >= 1 ? m : 0;
   }
   // 범위 잎 항목 하나 (하위 항목이 있는 항목·메모는 넣지 않는다)
   function creditTopic(state, n, now, id) {
@@ -313,6 +366,7 @@
   }
 
   const api = { monthGoal, monthKey, lastNMonths, monthCalendar, dayTimeline, sessionSpan, dayKey, dateKey, dayOffset, setDayStart, addDays, minutesByDay, minutesOn, lastNDays, streak, minutesBySubject, formatMinutes, josa,
+    DAY_MAX, dayRoom, fitDays,
     creditTask, taskCreditMinutes, creditTopic, uncreditDone, doneTopicIds, syncTopicCredits };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Stats = api;

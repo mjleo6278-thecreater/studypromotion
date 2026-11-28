@@ -414,7 +414,7 @@
 
   // 오늘 공부한 시간(분): 홈 '오늘 공부'와 같은 값 (기록 + 지금 재는 스톱워치). '오늘 한 양'은 이 시간까지만 센다
   function studiedToday() {
-    return Stats.minutesOn(st().sessions, Date.now()) + (window.Stopwatch ? window.Stopwatch.todayMinutes() : 0);
+    return Math.min(Stats.DAY_MAX, Stats.minutesOn(st().sessions, Date.now()) + (window.Stopwatch ? window.Stopwatch.todayMinutes() : 0));
   }
 
   // 시험 시간 페이스 띠

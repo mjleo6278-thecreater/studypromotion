@@ -224,6 +224,24 @@ test('공부 기록: 앞날이나 아직 오지 않은 시각은 받지 않는�
   assert.strictEqual(res.ops.length, 0);
   assert.match(res.rejected[1], /아직 오지 않은 시각/);
 });
+test('공부 기록: 하루 24시간이 넘게 되면 받지 않고 그날 남은 시간을 알려 준다 (v4.6.3)', () => {
+  Stats.setDayStart(0);
+  const st = sample();
+  // 11/13에 이미 23시간 (60분 + 직접 기록 1320분)
+  st.sessions.push({ id: 'big', subjectId: null, minutes: 1320, endedAt: new Date(2026, 10, 13, 21, 0).getTime(), label: '직접 기록', manual: true });
+  const { ctx, res } = check([
+    { type: 'add_session', date: '2026-11-13', minutes: 90 },
+    { type: 'add_session', date: '2026-11-13', start: '6:00', end: '8:00' },
+    { type: 'add_session', date: '2026-11-13', minutes: 60 },
+  ], st);
+  assert.strictEqual(res.ops.length, 1); // 딱 1시간은 된다
+  assert.strictEqual(res.ops[0].data.minutes, 60);
+  assert.strictEqual(res.rejected.length, 2);
+  assert.match(res.rejected[0], /하루는 24시간까지만 기록할 수 있어요\. 어제 11\/13\(금\)에는 1시간까지 더 기록할 수 있어요/);
+  st.sessions.push({ id: 'full', subjectId: null, minutes: 60, endedAt: new Date(2026, 10, 13, 21, 0).getTime(), manual: true });
+  const r2 = AI.validate([{ type: 'add_session', date: '2026-11-13', minutes: 10 }], st, ctx, NOW);
+  assert.match(r2.rejected[0], /이미 24시간이 기록돼 있어서 더 기록할 수 없어요/);
+});
 test('공부 기록: 자정을 넘긴 공부는 다음 날로 이어진다', () => {
   const { st, res } = check([{ type: 'add_session', subject: '영어', date: '2026-11-12', start: '23:00', end: '1:00' }]);
   assert.strictEqual(res.ops[0].sub, '11/12(목) 23:00~다음 날 1:00 · 2시간');
