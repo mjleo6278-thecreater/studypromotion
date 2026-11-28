@@ -111,7 +111,7 @@ const server = http.createServer((req, res) => {
     assert(askFit && await lp.isVisible('#ask-ok'), `가로 ${w}x${h}에서 과목이 많아도 확인 창이 화면 안 (창 안에서 스크롤)`);
     await lp.tap('#ask-ok');
     await lp.evaluate(() => {
-      document.querySelector('#lock-msg').textContent = '돌아왔네요. 나가 있던 시간은 공부 시간에서 빠져요.';
+      document.querySelector('#lock-msg').textContent = '돌아왔네요. 화면을 꺼 둔 시간도 공부 시간으로 세요.';
       document.querySelector('#lock-leaves').textContent = '화면을 끄거나 나간 횟수 1번 · 2분';
     });
     assert(/^스톱워치 1:05:\d\d · 계속 재는 중$/.test(await lp.textContent('#lock-sw')), `가로 ${w}x${h}: 잠금 화면에 스톱워치 줄`);
@@ -122,6 +122,62 @@ const server = http.createServer((req, res) => {
     const quitH = await lp.evaluate(() => document.querySelector('#lock-quit').getBoundingClientRect().height);
     assert(fit.every((x) => x.ok) && quitH >= 34, `가로 ${w}x${h}에서 잠금 화면이 모두 보임 (잘린 칸: ${fit.filter((x) => !x.ok).map((x) => x.s).join(' ') || '없음'}, 포기 단추 높이 ${Math.round(quitH)})`);
     await lctx.close();
+  }
+
+  // 화면을 끈 채 공부 (4.6.1, 안준형 님 신고 '타이머로 공부해도 기록이 안 남음'):
+  // 실제 폰처럼 화면이 꺼져 있는 동안은 앱이 멈춰 있다가(시계만 흐름) 켜면 다시 돈다.
+  // 전에는 끈 시간이 모두 '나간 시간'으로 빠져 0분이 되고 기록이 없었으며 알림은 '0분 공부를 기록했어요'였다
+  {
+    const cctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const cp = await cctx.newPage(); cp.on('pageerror', (e) => errors.push(e.message));
+    await cp.clock.install({ time: new Date('2026-11-28T19:00:00+09:00') });
+    const screen = (on) => cp.evaluate((v) => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => (v ? 'visible' : 'hidden') });
+      Object.defineProperty(document, 'hidden', { configurable: true, get: () => !v });
+      document.dispatchEvent(new Event('visibilitychange'));
+    }, on);
+    const offFor = async (min) => { await screen(false); await cp.clock.setSystemTime(await cp.evaluate((m) => Date.now() + m * 60000, min)); await screen(true); await cp.clock.runFor(1500); };
+    const lockOf = (st) => st.sessions.filter((x) => x.lock).map((x) => x.minutes);
+    await cp.goto(base + '#timer');
+    await cp.waitForFunction(() => window.App && window.Lock);
+    const eng = await cp.evaluate(() => App.store.get().subjects.find((x) => x.name === '영어').id);
+    await cp.tap('[data-lock="30"]'); await cp.tap('#lock-start');
+    assert(/화면을 꺼 둔 시간도 공부 시간으로 세요/.test(await cp.textContent('#lock-ask-note')), '확인 창에 ‘화면을 꺼 둔 시간도 공부 시간으로 세요’');
+    await cp.tap(`#ask-extra [data-lsub="${eng}"]`);
+    await cp.tap('#ask-ok');
+    await cp.clock.runFor(2000);
+    await offFor(31); // 잠그고 바로 화면을 끄고 30분 뒤에 켬
+    let st = await cp.evaluate(() => App.store.get());
+    assert(await cp.isHidden('#lock-screen') && lockOf(st).join() === '30' && st.sessions.find((x) => x.lock).subjectId === eng, '화면을 끈 채 30분 잠금 → 영어 30분 기록 (' + lockOf(st).join() + ')');
+    assert(/잠금 완료! 30분 공부를 기록했어요/.test(await cp.textContent('#toast')), '알림: ' + await cp.textContent('#toast'));
+    // 1시간 잠금: 10분은 화면을 켜 두고, 다른 앱처럼 잠깐 나갔다 오고, 45분은 끔 → 1시간 다
+    await cp.tap('[data-lock="60"]'); await cp.tap('#lock-start'); await cp.tap('#ask-ok');
+    await cp.clock.runFor(2000);
+    await cp.clock.fastForward('10:00');
+    await offFor(2);
+    assert(/화면을 꺼 둔 시간도 공부 시간으로 세요/.test(await cp.textContent('#lock-msg')) && /화면을 끄거나 나간 횟수 1번 · 2분/.test(await cp.textContent('#lock-leaves')), '돌아오면 화면 끈 시간도 센다고 알려 주고, 나간 횟수·시간은 보여 줌');
+    await offFor(49);
+    st = await cp.evaluate(() => App.store.get());
+    assert(lockOf(st).join() === '30,60' && st.sessions.find((x) => x.lock && x.minutes === 60).leaves === 2, '1시간 잠금 중 화면을 여러 번 꺼도 60분 기록 (' + lockOf(st).join() + ')');
+    // 화면을 끈 채 앱이 닫혔다가 끝난 뒤 다시 열어도 다 센다
+    await cp.tap('[data-lock="30"]'); await cp.tap('#lock-start'); await cp.tap('#ask-ok');
+    await cp.clock.runFor(2000);
+    await screen(false);
+    await cp.clock.setSystemTime(await cp.evaluate(() => Date.now() + 40 * 60000));
+    await cp.reload();
+    await cp.clock.runFor(2000);
+    st = await cp.evaluate(() => App.store.get());
+    assert(await cp.isHidden('#lock-screen') && lockOf(st).join() === '30,60,30', '화면을 끈 채 닫혔다가 다시 열어도 30분 기록 (' + lockOf(st).join() + ')');
+    // 1분도 안 돼서 그만두면 기록하지 않고, '0분 공부를 기록했어요'라고 하지 않는다
+    await cp.tap('[data-lock="30"]'); await cp.tap('#lock-start'); await cp.tap('#ask-ok');
+    await cp.clock.runFor(2000);
+    await cp.evaluate(() => { const q = document.querySelector('#lock-quit'); q.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); });
+    await cp.clock.runFor(3200);
+    await cp.tap('#ask-ok');
+    await cp.clock.runFor(500);
+    st = await cp.evaluate(() => App.store.get());
+    assert(lockOf(st).join() === '30,60,30' && /1분이 안 돼서 기록하지 않았어요/.test(await cp.textContent('#toast')) && !/0분/.test(await cp.textContent('#toast')), '1분 안에 그만두면 기록 없이 그렇다고 알림: ' + await cp.textContent('#toast'));
+    await cctx.close();
   }
 
   assert(errors.length === 0, '페이지 오류 없음 ' + errors.join(' | '));
