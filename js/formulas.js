@@ -16,7 +16,7 @@
   // 뒷면 수식 (한 줄 또는 여러 줄) + 외우는 요령
   const mathHTML = (m) => { const ms = [].concat(m); return ms.map((x) => `<div class="mf-math${ms.length > 1 ? ' long' : ''}">${x}</div>`).join(''); };
   // 좁은 폰에서 '2γ − α −' / 'β'처럼 식 가운데가 끊기지 않게 − + × ÷ 양쪽은 줄바꿈 없는 띄어쓰기로 (= 에서는 끊겨도 된다)
-  const nb = (x) => esc(x).replace(/ ([−+×÷]) /g, '\u00a0$1\u00a0');
+  const nb = (x) => esc(x).replace(/ ([−+×÷]) /g, '\u00a0$1\u00a0').replace(/([|)])\(/g, '$1\u2060(');
   const tipHTML = (t) => (t && t.length ? `<div class="mf-tip"><b>외우는 요령</b><ul>${t.map((x) => `<li>${nb(x)}</li>`).join('')}</ul></div>` : '');
 
   /* ---------- 그림 ----------
