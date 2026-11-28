@@ -53,6 +53,11 @@ const SHOTS = process.env.SHOTS;
     return f;
   };
   const hit = (f, id) => f.click(`.hit[data-id="${id}"]`);
+  // 업데이트 소식의 ‘업데이트 이야기 보기’: 4.5.1이 나온 뒤로는 4.5 탭을 골라야 보인다
+  const tapStory = async (page) => {
+    if (!(await page.isVisible('[data-story="shower-1"]'))) await page.click('#ver-tabs [data-ver-tab="4.5"]');
+    await page.click('[data-story="shower-1"]');
+  };
 
   // 1) 새로 설치한 사람: 저절로 안 뜸
   {
@@ -64,7 +69,8 @@ const SHOTS = process.env.SHOTS;
     await page.waitForTimeout(2000);
     assert(!(await page.$('.story')), '새로 설치 뒤 다시 열어도 안 뜸');
     // 업데이트 소식 4.5 칸의 단추로는 볼 수 있다
-    await page.evaluate(() => { App.go('about'); const t = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (t) t.click(); }); // 이야기 단추는 4.5 칸에 (4.5.1부터는 눌러서 연다)
+    await page.evaluate(() => App.go('about'));
+    await page.click('#ver-tabs [data-ver-tab="4.5"]'); // 4.5.1이 나온 뒤로는 4.5 탭을 골라야 보인다
     await page.waitForSelector('[data-ver="4.5"] .ver-story:not([hidden]) [data-story="shower-1"]');
     assert(true, '업데이트 소식 4.5 칸에 업데이트 이야기 보기 단추');
     await page.evaluate(() => document.querySelector('#news-panel').scrollIntoView({ block: 'start' }));
@@ -110,7 +116,6 @@ const SHOTS = process.env.SHOTS;
   {
     const { ctx, page } = await open({ hash: '#about' });
     await page.evaluate(() => {
-      const tab = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (tab) tab.click(); // 이야기 단추는 4.5 칸에
       const t = Date.now();
       App.store.update((st) => {
         st.decks = [{ id: 'few', name: '스페인어 3과', createdAt: t }, { id: 'many', name: '영어 시험 단어', createdAt: t }];
@@ -118,7 +123,7 @@ const SHOTS = process.env.SHOTS;
           .concat([['distress', '고통'], ['secure', '확보하다'], ['referent', '지시 대상']].map(([f, b], i) => SRS.newCard({ id: 'e' + i, deckId: 'many', front: f, back: b, createdAt: t }, t)));
       });
     });
-    await page.click('[data-story="shower-1"]');
+    await tapStory(page);
     let f = await frameOf(page);
     await f.evaluate(() => window.Cutscene.renderAt(31));
     await hit(f, 'try');
@@ -129,14 +134,14 @@ const SHOTS = process.env.SHOTS;
     await page.keyboard.press('Escape');
     await page.waitForTimeout(400);
     // 뒤로 가기로 닫힘 (앱은 그대로)
-    await page.evaluate(() => { App.go('about'); const t = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (t) t.click(); }); // 이야기 단추는 4.5 칸에 (4.5.1부터는 눌러서 연다)
-    await page.click('[data-story="shower-1"]');
+    await page.evaluate(() => App.go('about'));
+    await tapStory(page);
     await frameOf(page);
     await page.goBack();
     await page.waitForFunction(() => !document.querySelector('.story'), null, { timeout: 3000 });
     assert(await page.evaluate(() => App.view === 'about'), '폰의 뒤로 가기: 이야기만 닫히고 앱은 그 화면 그대로');
     // Esc로 닫힘 (iframe 안에 초점이 있어도)
-    await page.click('[data-story="shower-1"]');
+    await tapStory(page);
     f = await frameOf(page);
     await f.focus('#start');
     await page.keyboard.press('Escape');
@@ -144,8 +149,8 @@ const SHOTS = process.env.SHOTS;
     assert(true, 'Esc로 닫힘');
     // 말로 복습을 끈 사람: 끝 화면에 '말로 복습 해 보기' 없음
     await page.evaluate(() => Features.set('voice', false));
-    await page.evaluate(() => { App.go('about'); const t = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (t) t.click(); }); // 이야기 단추는 4.5 칸에 (4.5.1부터는 눌러서 연다)
-    await page.click('[data-story="shower-1"]');
+    await page.evaluate(() => App.go('about'));
+    await tapStory(page);
     f = await frameOf(page);
     assert(/try=0/.test(f.url()), '말로 복습을 끄면 try=0');
     const b = (await f.evaluate(() => window.Cutscene.renderAt(31))).buttons;
@@ -161,8 +166,8 @@ const SHOTS = process.env.SHOTS;
     await ctx.setOffline(true);
     await page.reload();
     await page.waitForFunction(() => window.App && window.Story);
-    await page.evaluate(() => { App.go('about'); const t = document.querySelector('#ver-tabs [data-ver-tab="4.5"]'); if (t) t.click(); }); // 이야기 단추는 4.5 칸에 (4.5.1부터는 눌러서 연다)
-    await page.click('[data-story="shower-1"]');
+    await page.evaluate(() => App.go('about'));
+    await tapStory(page);
     f = await frameOf(page);
     const stats = await f.evaluate(() => window.Cutscene.renderAt(10).stats);
     assert(stats && stats.calls > 20 && stats.tris > 1000, '오프라인에서도 이야기가 그려짐 (그리기 ' + JSON.stringify(stats) + ')');

@@ -59,12 +59,16 @@
   // opts.danger: 지우는 일처럼 되돌리기 어려운 동작 → 빨간 버튼, 처음 초점은 '취소'에 (Enter로 실수하지 않게)
   // opts.alt: 세 번째 선택지. 누르면 'alt'를 돌려준다
   // opts.mustChoose: Esc·뒤로 가기로 닫히지 않고 버튼을 골라야 한다
+  // opts.extra: 글과 단추 사이에 넣을 요소 (잠금 확인 창의 과목 고르기처럼 창 안에서 고르는 칸). 창이 닫히면 빼낸다
   function ask(message, opts) {
     opts = opts || {};
     return new Promise((resolve) => {
       const dlg = $('#ask');
-      const ok = $('#ask-ok'), cancel = $('#ask-cancel'), alt = $('#ask-alt');
+      const ok = $('#ask-ok'), cancel = $('#ask-cancel'), alt = $('#ask-alt'), extra = $('#ask-extra');
       $('#ask-msg').textContent = message;
+      extra.replaceChildren();
+      if (opts.extra) extra.append(opts.extra);
+      extra.hidden = !opts.extra;
       ok.textContent = opts.ok || '확인';
       ok.classList.toggle('danger-fill', !!opts.danger);
       ok.classList.toggle('primary', !opts.danger);
@@ -75,7 +79,7 @@
       dlg.dataset.mustChoose = opts.mustChoose ? '1' : '';
       dlg.hidden = false;
       (opts.danger ? cancel : ok).focus();
-      const done = (v) => { dlg.hidden = true; ok.onclick = cancel.onclick = alt.onclick = dlg.onkeydown = null; resolve(v); };
+      const done = (v) => { dlg.hidden = true; ok.onclick = cancel.onclick = alt.onclick = dlg.onkeydown = null; extra.replaceChildren(); extra.hidden = true; resolve(v); };
       ok.onclick = () => done(true);
       cancel.onclick = () => done(false);
       alt.onclick = () => done('alt');
@@ -1722,8 +1726,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '4.5.1';
-  const APP_DATE = '2026년 11월 26일';
+  const APP_VERSION = '4.5.2';
+  const APP_DATE = '2026년 11월 28일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
