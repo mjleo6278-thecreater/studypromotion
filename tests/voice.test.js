@@ -45,10 +45,10 @@ test('음성 인식이 한 글자쯤 다르게 적어도 맞음, 띄어쓰기는
   assert.ok(ok('감수', 'n. 감수성'), '앞부분만 (자모 60% 넘음)');
 });
 
-test('다른 말은 틀림 (두 글자 낱말은 한 자모 차이도 다른 말)', () => {
+test('다른 말은 틀림 (두 글자 낱말은 소리가 다른 한 자모 차이도 다른 말)', () => {
   assert.ok(!ok('분리', 'n. (감정적) 거리 두기, 무심함'));
   assert.ok(!ok('확보하다', 'a. 탄탄한, 확고한'));
-  assert.ok(!ok('상태', 'n. 상대, 짝'));
+  assert.ok(!ok('확고', 'v. 확보하다'), '소리가 다른 받침은 다른 말');
   assert.ok(!ok('지어내다', 'v. (결과를) 내다, 낳다'), '두 글자 답이 다른 낱말 속에 있으면 아님');
   assert.ok(ok('이겨 내다', 'v. 내다, 낳다'), '따로 떨어진 낱말이면 그 답을 말한 것');
   assert.ok(!ok('distress', 'n. 고통, 괴로움'), '앞면을 따라 읽은 것');
@@ -132,4 +132,53 @@ test('채점 → 간격 반복 평가: 맞음 보통, 다시 듣고 맞음 어�
 test('맞힌 답 표시 자리', () => {
   assert.deepStrictEqual(V.highlight('n. 고통, 괴로움', '괴로움'), ['n. 고통, ', '괴로움', '']);
   assert.strictEqual(V.highlight('n. 고통', '없음'), null);
+});
+
+/* ---------- 4.5.1: 소리 나는 대로 · 군말 · 너그러운 '맞았어' · 덧붙인 답 ---------- */
+test('소리가 같으면 맞음: 받침이 넘어가는 소리, 된소리·거센소리, ㅐ/ㅔ', () => {
+  assert.strictEqual(V.phon('맞았어'), V.phon('마자써'));
+  assert.ok(ok('고똥', 'n. 고통, 괴로움'));
+  assert.ok(ok('상태', 'n. 상대, 짝'), '음성 인식이 상대를 상태로 적는 일이 잦아서 같은 소리로 봄');
+  assert.ok(ok('괴로운', 'n. 고통, 괴로움'));
+  assert.ok(ok('지시대쌍', 'n. 지시 대상'));
+  assert.ok(ok('무심헴', 'n. 거리 두기, 무심함'));
+  assert.ok(!ok('확고', 'v. 확보하다'));
+  assert.ok(!ok('고독', 'n. 고통, 괴로움'));
+});
+
+test('군말: 앞뒤 음·어·그러니까는 빼고, 그것만 말했으면 답이 아님', () => {
+  assert.strictEqual(V.dropFillers('음 그러니까 고통이요', 'ko-KR'), '고통이요');
+  assert.strictEqual(V.dropFillers('um distress', 'en-US'), 'distress');
+  assert.ok(ok('어 뭐더라 거리 두기', 'n. (감정적) 거리 두기, 무심함'));
+  assert.ok(V.noAnswer(['음'], 'ko-KR'));
+  assert.ok(V.noAnswer(['그러니까 음', '어'], 'ko-KR'));
+  assert.ok(V.noAnswer(['아'], 'ko-KR'), '한 글자 잡음');
+  assert.ok(!V.noAnswer(['음 고통'], 'ko-KR'));
+  assert.ok(!V.noAnswer([], 'ko-KR'), '아무것도 못 들은 것은 조용한 것 (따로)');
+});
+
+test("'맞았어' 명령: 소리로도 알아듣고, 틀린 바로 뒤에는 더 너그럽게", () => {
+  assert.strictEqual(V.command(['마자써'], 'ko-KR'), 'right');
+  assert.strictEqual(V.command(['맞아요'], 'ko-KR'), 'right');
+  assert.strictEqual(V.command(['정답'], 'ko-KR'), 'right');
+  assert.strictEqual(V.command(['아니 맞았는데'], 'ko-KR'), null, '명령은 그 말만 했을 때만');
+  assert.ok(V.saysRight(['아니 맞았는데'], 'ko-KR'));
+  assert.ok(V.saysRight(['마자 마자'], 'ko-KR'));
+  assert.ok(V.saysRight(['정답이라고'], 'ko-KR'));
+  assert.ok(V.saysRight(['맞게 말했잖아'], 'ko-KR'));
+  assert.ok(!V.saysRight(['안 맞아'], 'ko-KR'));
+  assert.ok(!V.saysRight(['맞지 않아'], 'ko-KR'));
+  assert.ok(!V.saysRight(['마지막'], 'ko-KR'));
+  assert.ok(!V.saysRight(['고통'], 'ko-KR'));
+  assert.ok(V.saysRight(['yes that was right'], 'en-US'));
+  assert.ok(!V.saysRight(['no it was wrong'], 'en-US'));
+  assert.ok(V.saysRight(['sí'], 'es-ES'));
+});
+
+test('덧붙인 답(AI가 같은 뜻이라고 한 말)도 맞음', () => {
+  assert.ok(!ok('아픔', 'n. 고통, 괴로움'));
+  const r = V.judge(['아픔이요'], 'n. 고통, 괴로움', 'ko-KR', ['아픔']);
+  assert.ok(r.ok);
+  assert.strictEqual(r.alt, '아픔');
+  assert.strictEqual(V.highlight('n. 고통, 괴로움', r.alt), null, '카드 글에 없으면 표시하지 않음');
 });
