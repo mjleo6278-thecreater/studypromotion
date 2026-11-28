@@ -3338,6 +3338,20 @@ body.gc-showing .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)
   #vr-done { grid-column: 1 / -1; grid-row: 2; }
 }
 
+/* 폰 잠금 확인 창: 과목 고르기 (v4.5.1) */
+#ask .ask-box { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+#ask-msg:has(+ #ask-extra:not([hidden])) { margin-bottom: 12px; font-weight: 600; }
+.lock-ask-label { margin: 0 0 6px !important; font-size: 13px; color: var(--muted); }
+.lock-subj { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.lock-subj-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 6px 12px; font-size: 14px; color: var(--text); -webkit-tap-highlight-color: transparent; }
+.lock-subj-chip .sel-dot { width: 10px; height: 10px; }
+.lock-subj-chip.active .sel-dot.none { box-shadow: inset 0 0 0 1.5px currentColor; }
+.lock-subj-chip.active .sel-dot:not(.none) { box-shadow: 0 0 0 1.5px var(--ink-text); }
+.lock-ask-note { white-space: pre-line; color: var(--muted); font-size: 13.5px; line-height: 1.55; word-break: keep-all; }
+/* 잠금 화면: 같이 재는 스톱워치 */
+.lock-sw { padding: 4px 12px; border-radius: 999px; background: rgba(255, 255, 255, .1); color: #ddd; font-size: 14px; font-variant-numeric: tabular-nums; }
+.lock-sw[hidden] { display: none; }
+
 /* 공식 카드 (v4.6, js/formulas.js): 그림이 있는 플래시카드 · 한눈에 보기 인포그래픽 · 만들어 둔 공식 덱
  * 그림(SVG)의 색은 여기서만 정한다: 함수 = 글자색, 직선 = 진한 포인트색, 넓이 = 포인트색 26%. 다크 모드·테마 색이 그대로 따라온다. */
 .mf-fig { display: block; width: 100%; height: auto; overflow: visible; }

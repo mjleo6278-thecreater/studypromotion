@@ -43,12 +43,16 @@ const server = http.createServer((req, res) => {
   await page.goto(base + '#home');
   assert(/월 목표 페이스/.test(await page.textContent('#h-month-pace')), '홈에 오늘 페이스 표시');
 
-  // 잠금 시작
+  // 잠금 시작: 확인 창에서 과목을 고른다 (v4.5.1, 전에는 위 ‘과목’ 칸을 미리 바꿔야 했다)
   await page.goto(base + '#timer');
+  const kor = await page.evaluate(() => App.store.get().subjects.find((x) => x.name === '국어').id);
   await page.click('[data-lock="30"]');
   await page.click('#lock-start');
+  assert((await page.getAttribute('#ask-extra [data-lsub=""]', 'aria-checked')) === 'true' && !(await page.textContent('#lock-ask-note')).includes('스톱워치'), '확인 창에 과목 칩, 위 칸과 같은 ‘과목 없음’이 골라져 있음');
+  await page.click(`#ask-extra [data-lsub="${kor}"]`);
   await page.click('#ask-ok');
   assert(await page.isVisible('#lock-screen'), '잠금 화면 보임');
+  assert(/^국어 · 30분 잠금$/.test(await page.textContent('#lock-sub')) && (await page.inputValue('#timer-subject')) === kor && await page.isHidden('#lock-sw'), '고른 국어로 잠금, 위 과목 칸도 국어 (스톱워치 줄은 없음)');
   assert(/^(29:5\d|30:00)$/.test(await page.textContent('#lock-time')), '남은 시간 30분');
 
   // 뒤로 가기 막힘
@@ -78,7 +82,7 @@ const server = http.createServer((req, res) => {
   await page.reload();
   assert(await page.isHidden('#lock-screen'), '시간이 끝나면 잠금 풀림');
   const s = await page.evaluate(() => App.store.get().sessions.find((x) => x.lock));
-  assert(s && s.minutes === 29 && s.leaves >= 2, '잠금 공부 시간 기록 (' + (s && s.minutes) + '분)');
+  assert(s && s.minutes === 29 && s.leaves >= 2 && s.subjectId === kor, '잠금 공부 시간을 국어로 기록 (' + (s && s.minutes) + '분)');
 
   // 길게 눌러 포기
   await page.click('#lock-start'); await page.click('#ask-ok');
@@ -93,12 +97,25 @@ const server = http.createServer((req, res) => {
     const lctx = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true });
     const lp = await lctx.newPage(); lp.on('pageerror', (e) => errors.push(e.message));
     await lp.goto(base + '#timer');
-    await lp.click('[data-lock="60"]'); await lp.click('#lock-start'); await lp.click('#ask-ok');
+    // 과목을 많이 만들고 스톱워치를 켜 둔 채 잠근다: 확인 창이 낮은 화면을 넘으면 창 안에서 스크롤되고, 잠금 화면에 스톱워치 줄이 더 생긴다
+    await lp.evaluate(() => {
+      App.store.update((st) => { for (let i = 1; i <= 8; i++) st.subjects.push({ id: 'x' + i, name: '과목' + i, color: '#45a865' }); });
+      localStorage.setItem('studypromotion.stopwatch', JSON.stringify({ running: true, startAt: Date.now() - 65 * 60000, subjectId: 'x1', last: 'x1' }));
+    });
+    await lp.reload();
+    await lp.tap('[data-ttab="focus"]');
+    await lp.locator('[data-lock="60"]').scrollIntoViewIfNeeded();
+    await lp.tap('[data-lock="60"]'); await lp.tap('#lock-start');
+    const askFit = await lp.evaluate(() => { const b = document.querySelector('#ask .ask-box').getBoundingClientRect(); return b.top >= 0 && b.bottom <= innerHeight; });
+    await lp.locator('#ask-ok').scrollIntoViewIfNeeded();
+    assert(askFit && await lp.isVisible('#ask-ok'), `가로 ${w}x${h}에서 과목이 많아도 확인 창이 화면 안 (창 안에서 스크롤)`);
+    await lp.tap('#ask-ok');
     await lp.evaluate(() => {
       document.querySelector('#lock-msg').textContent = '돌아왔네요. 나가 있던 시간은 공부 시간에서 빠져요.';
-      document.querySelector('#lock-leaves').textContent = '다른 앱으로 나간 횟수 1번 · 2분';
+      document.querySelector('#lock-leaves').textContent = '화면을 끄거나 나간 횟수 1번 · 2분';
     });
-    const fit = await lp.evaluate(() => ['.lock-icon', '#lock-time', '#lock-sub', '#lock-msg', '#lock-leaves', '#lock-quit'].map((s) => {
+    assert(/^스톱워치 1:05:\d\d · 계속 재는 중$/.test(await lp.textContent('#lock-sw')), `가로 ${w}x${h}: 잠금 화면에 스톱워치 줄`);
+    const fit = await lp.evaluate(() => ['.lock-icon', '#lock-time', '#lock-sub', '#lock-sw', '#lock-msg', '#lock-leaves', '#lock-quit'].map((s) => {
       const el = document.querySelector(s); const b = el.getBoundingClientRect();
       return { s, ok: b.top >= 0 && b.bottom <= innerHeight && b.height > 0 && (s !== '#lock-quit' || el.scrollHeight <= el.clientHeight + 1) };
     }));
