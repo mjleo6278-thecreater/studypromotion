@@ -4,7 +4,15 @@
 
   let storage = null;
   try { storage = window.localStorage; storage.getItem('x'); } catch (e) { storage = null; }
-  const store = StoreLib.createStore(storage);
+  // 하루 공부 기록은 24시간까지 (v4.6.3): 넘친 날은 저장하기 전에 손으로 적은 기록부터 줄이고(stats.js fitDays), 뺀 시간을 한 번 알린다
+  let dayCut = 0;
+  function noteDayCut(min) {
+    dayCut += min;
+    clearTimeout(noteDayCut._t);
+    // 시작 화면과 방금 띄운 '기록했어요' 알림이 지나간 뒤에
+    noteDayCut._t = setTimeout(() => { const m = dayCut; dayCut = 0; if (m > 0) toast(`하루 공부 기록은 24시간까지예요. 넘은 ${Stats.formatMinutes(m)}을 뺐어요`); }, 2600);
+  }
+  const store = StoreLib.createStore(storage, { fix: (st) => { const r = Stats.fitDays(st); if (r.cut > 0) noteDayCut(r.cut); return r.cut > 0; } });
   // 하루 시작 시각(설정)을 날짜 계산에 알려 준다. 기록이 바뀔 때마다(가져오기·계정 동기화 포함) 다른 화면이 그려지기 전에 맞춘다
   const applyDayStart = () => Stats.setDayStart(store.get().settings.dayStartHour);
   applyDayStart();
@@ -340,7 +348,7 @@
   //  pace.studied/checked: 마지막으로 그릴 때 쓴 공부 시간과 가장 많이 체크한 양 (공부 시간이 바뀌면 다시 그릴지 정한다)
   const pace = { studied: null, checked: 0 };
   function todayStudyMin() {
-    return Stats.minutesOn(store.get().sessions, now()) + (window.Stopwatch ? window.Stopwatch.todayMinutes() : 0);
+    return Math.min(Stats.DAY_MAX, Stats.minutesOn(store.get().sessions, now()) + (window.Stopwatch ? window.Stopwatch.todayMinutes() : 0));
   }
   function homePlan(p, ex, t) {
     pace.studied = todayStudyMin();
@@ -388,7 +396,7 @@
   function renderHomeToday() {
     const st = store.get();
     const live = window.Stopwatch ? window.Stopwatch.todayMinutes() : 0;
-    const mins = Stats.minutesOn(st.sessions, now()) + live;
+    const mins = Math.min(Stats.DAY_MAX, Stats.minutesOn(st.sessions, now()) + live);
     const goal = st.settings.dailyGoalMin;
     const pct = goal ? Math.min(100, Math.round((mins / goal) * 100)) : 0;
     $('#h-today').textContent = Stats.formatMinutes(mins);
@@ -947,7 +955,7 @@
     const todays = st.sessions.filter((s) => Stats.dayKey(s.endedAt) === todayKey());
     // 직접 기록·스톱워치로 잰 시간은 공부 시간에는 넣고, 집중 횟수에는 넣지 않는다. 스톱워치가 재는 중인 시간도 홈과 같게 더한다
     const live = window.Stopwatch ? window.Stopwatch.todayMinutes() : 0;
-    $('#timer-today').textContent = `오늘 공부 ${Stats.formatMinutes(todays.reduce((a, s) => a + s.minutes, 0) + live)} · 집중 ${todays.filter((s) => !s.manual && s.kind !== 'stopwatch').length}회`;
+    $('#timer-today').textContent = `오늘 공부 ${Stats.formatMinutes(Math.min(Stats.DAY_MAX, todays.reduce((a, s) => a + s.minutes, 0) + live))} · 집중 ${todays.filter((s) => !s.manual && s.kind !== 'stopwatch').length}회`;
     renderTimerFace();
   }
 
@@ -1685,6 +1693,27 @@
     if (lv) { const o = Math.min(lv.to, to) - Math.max(lv.from, from); if (o >= 60000) hits.push({ subjectId: lv.subjectId, from: lv.from, to: null, min: Math.round(o / 60000) }); }
     return hits.sort((a, b) => a.from - b.from);
   }
+  // 하루 24시간이 넘게 되는지 (adds: { 'YYYY-MM-DD': 더할 분 }). 넘으면 알릴 글, 괜찮으면 ''
+  function dayFull(adds) {
+    const tk = todayKey(), sessions = store.get().sessions;
+    for (const k of Object.keys(adds).sort()) {
+      const room = Stats.dayRoom(sessions, k);
+      if (adds[k] <= room) continue;
+      const name = k === tk ? '오늘' : `${+k.slice(5, 7)}/${+k.slice(8)}`;
+      return room < 1 ? `${name}은 이미 24시간을 기록해서 더 적을 수 없어요` : `하루 24시간까지예요. ${name}은 ${Stats.formatMinutes(room)} 남았어요`;
+    }
+    return '';
+  }
+  // 시각으로 적은 공부가 날마다 몇 분인지 (recordClock처럼 하루 시작 시각에서 나눈다)
+  function clockDays(from, to) {
+    const out = {};
+    for (let a = from; a < to;) {
+      const k = Stats.dayKey(a), b = Math.min(to, logDayRange(k)[1]);
+      out[k] = (out[k] || 0) + Math.round((b - a) / 60000);
+      a = b;
+    }
+    return out;
+  }
   // 시각으로 적은 공부를 기록한다. 하루 시작 시각에서 나눠 날마다 따로 남긴다
   function recordClock(c, subjectId, memo) {
     const parts = [];
@@ -1746,11 +1775,13 @@
     if (logMode === 'time') return submitClock();
     const h = Math.max(0, parseInt($('#log-h').value, 10) || 0);
     const m = Math.max(0, parseInt($('#log-m').value, 10) || 0);
-    const minutes = Math.min(24 * 60, h * 60 + m);
+    const minutes = h * 60 + m;
     if (minutes < 1) { toast('공부한 시간을 적어 주세요'); $('#log-h').focus(); return; }
     const tk = todayKey();
     const day = /^\d{4}-\d{2}-\d{2}$/.test($('#log-date').value) ? $('#log-date').value : tk;
     if (day > tk) { toast('오늘 이후 날짜는 기록할 수 없어요'); $('#log-date').focus(); return; }
+    const full = dayFull({ [day]: minutes });
+    if (full) { toast(full); $('#log-h').focus(); return; }
     // 오늘이면 지금 시각, 지난 날이면 그날 저녁에 끝난 것으로 (날짜별 통계에 맞게 들어가도록)
     const endedAt = day === tk ? now() : new Date(day + 'T21:00').getTime();
     const memo = $('#log-label').value.trim();
@@ -1768,6 +1799,8 @@
     const c = readClock();
     if (c.err) { toast(c.err); $(c.focus).focus(); return; }
     if (c.to > now()) { toast('아직 오지 않은 시각이에요. 지금까지 공부한 시간만 적을 수 있어요'); $('#log-eh').focus(); return; }
+    const full = dayFull(clockDays(c.from, c.to));
+    if (full) { toast(full); $('#log-sh').focus(); return; }
     const subjectId = $('#log-subject').value || null;
     const memo = $('#log-label').value.trim();
     const hits = logOverlaps(c.from, c.to);
@@ -1799,8 +1832,8 @@
   }
 
   /* ---------- 앱 소개 ---------- */
-  const APP_VERSION = '4.6.2';
-  const APP_DATE = '2026년 11월 28일';
+  const APP_VERSION = '4.6.3';
+  const APP_DATE = '2026년 11월 29일';
   let aboutTimer = null;
   function stopAboutTrack() { clearInterval(aboutTimer); aboutTimer = null; }
   /* 업데이트 소식: 버전별 탭. index.html의 <section class="ver">마다 탭이 하나씩 생기고, 맨 위(최신)가 먼저 보인다 */
@@ -2115,7 +2148,7 @@
     timerLive: () => (timer.mode === 'focus' && timer.running ? { from: now() - (timer.total - Math.max(0, (timer.endAt - now()) / 1000)) * 1000, to: now(), end: timer.endAt, subjectId: timer.subjectId || null, label: timer.label || null, taskId: timer.taskId || null } : null),
     // 복습 화면 (말로 복습 js/voice.js가 쓴다)
     review: { deckId: () => openDeckId, pane: showReviewPane, detail: renderDeckDetail, cards: deckCards },
-    openLog, dropCredit, setTaskDone, setTaskMark, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
+    openLog, dropCredit, setTaskDone, setTaskMark, subjectOptions, logOverlaps, recordSpan: (from, to, subjectId, memo) => recordClock({ from, to }, subjectId, memo), spanFull: (from, to) => dayFull(clockDays(from, to)), timerBusy, startFocus, syncTimerLen, stopTimer: stopTimerForStopwatch, timerRunning: () => timer.running, timerDot, renderHomeToday, version: APP_VERSION, get view() { return currentView; } };
 
   if (!restoreTimer()) setMode('focus');
   const fromCardLink = takeCardLink(); // 방문 기록을 깔기 전에 긴 카드 주소를 #review로 바꿔 둔다 (뒤로 가기로 다시 뜨지 않게)

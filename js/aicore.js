@@ -471,6 +471,13 @@
     if (found.missing) return `'${found.missing}' 과목이 없어서 과목 없이 넣어요`;
     return '';
   }
+  // 하루 공부 기록은 24시간까지 (stats.js dayRoom). 넘으면 알릴 글, 괜찮으면 ''
+  function dayFullNote(state, key, min, ctx) {
+    const room = Stats.dayRoom(state.sessions, key);
+    if (min <= room) return '';
+    const day = dateLabel(key, ctx.today);
+    return room < 1 ? `${day}에는 이미 24시간이 기록돼 있어서 더 기록할 수 없어요 (하루 최대 24시간)` : `하루는 24시간까지만 기록할 수 있어요. ${day}에는 ${fm(room)}까지 더 기록할 수 있어요`;
+  }
   function overlapMin(state, from, to) {
     let hit = 0;
     for (const x of state.sessions) {
@@ -509,11 +516,11 @@
       if (due === t.due) return { skip: true };
       return { kind: 'change', line: `날짜 옮기기: ${t.title}`, sub: `${t.due ? dateLabel(t.due, ctx.today) : '날짜 없음'} → ${dateLabel(due, ctx.today)}`, data: { id: t.id, due, prev: t.due || null } };
     },
-    complete_task(a, state, ctx) {
+    complete_task(a, state, ctx, now) {
       const t = state.tasks.find((x) => x.id === refId(ctx, 'tasks', 't', a.task));
       if (!t) return '완료할 할 일을 찾지 못했어요';
       if (t.done) return { skip: true };
-      const plus = Stats.taskCreditMinutes(state, Object.assign({}, t, { done: true }));
+      const plus = Stats.taskCreditMinutes(state, Object.assign({}, t, { done: true }), now); // 하루 24시간까지만 들어간다
       return { kind: 'change', line: `완료 표시: ${t.title}`, sub: plus ? `공부 시간 +${fm(plus)}` : '', data: { id: t.id } };
     },
     add_session(a, state, ctx, now) {
@@ -529,6 +536,13 @@
         const min = Math.round((to - from) / 60000);
         if (min < 1 || to === from + DAY || (wrapped && min > 720)) return '공부한 시각을 읽지 못했어요';
         if (to > now) return '아직 오지 않은 시각은 기록할 수 없어요';
+        // 하루 24시간까지: 하루 시작 시각에서 나눈 날마다 남은 시간을 본다 (적용할 때와 같게)
+        for (let p = from; p < to;) {
+          const k = Stats.dayKey(p), q = Math.min(to, dayRange(k)[1]);
+          const full = dayFullNote(state, k, Math.round((q - p) / 60000), ctx);
+          if (full) return full;
+          p = q;
+        }
         const over = overlapMin(state, from, to);
         return {
           kind: 'change', line: `공부 기록 추가: ${who}`,
@@ -539,6 +553,8 @@
       }
       const min = int(a.minutes);
       if (!(min >= 1 && min <= 1440)) return '공부한 시간을 읽지 못했어요';
+      const full = dayFullNote(state, date, min, ctx);
+      if (full) return full;
       return {
         kind: 'change', line: `공부 기록 추가: ${who}`, sub: `${dateLabel(date, ctx.today)} · ${fm(min)} (시각 없음)`,
         warn: subjectNote(subj), choices: subj.choices, data: { subjectId: subj.id, date, minutes: min, memo },
