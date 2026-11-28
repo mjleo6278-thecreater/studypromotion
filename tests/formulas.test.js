@@ -80,6 +80,13 @@ test('공식: 무작위 함수 200개씩 넓이를 재서 공식과 맞춘다', 
     const s2 = Math.abs(integrate((x) => q(x) - t1(x), al, xm)) + Math.abs(integrate((x) => q(x) - t2(x), xm, be));
     assert.ok(close(s2, Math.abs(a) * h ** 3 / 12));
     assert.ok(close(Math.abs(integrate((x) => q(x) - t1(x), al, be)), Math.abs(a) * h ** 3 / 3));
+    // 삼차함수와 직선이 세 점 α < β < γ에서 만날 때: S₁ = |a|(β−α)³(2γ−α−β)/12, S₂ = |a|(γ−β)³(β+γ−2α)/12
+    let ga = rnd(-3, 3);
+    if (Math.abs(ga - al) < 0.2 || Math.abs(ga - be) < 0.2) ga = be + 0.7;
+    const [x1, x2, x3] = [al, be, ga].sort((u, v) => u - v);
+    const d3 = (x) => a * (x - x1) * (x - x2) * (x - x3);
+    assert.ok(close(Math.abs(integrate(d3, x1, x2)), Math.abs(a) * (x2 - x1) ** 3 * (2 * x3 - x1 - x2) / 12), '세 실근 S₁');
+    assert.ok(close(Math.abs(integrate(d3, x2, x3)), Math.abs(a) * (x3 - x2) ** 3 * (x2 + x3 - 2 * x1) / 12), '세 실근 S₂');
     void L;
   }
 });
@@ -98,7 +105,7 @@ test('공식 덱: 카드 이름이 겹치지 않고, 글자는 앱 입력 칸 �
   const p = F.PACKS.area;
   const keys = p.cards.map((c) => c.key);
   assert.strictEqual(new Set(keys).size, keys.length);
-  assert.strictEqual(p.cards.length, 10);
+  assert.strictEqual(p.cards.length, 11);
   for (const c of p.cards) {
     assert.ok(c.front.length <= 300 && c.back.length <= 500, c.key + ' 글자 길이');
     assert.ok(p.groups.some((g) => g.id === c.g), c.key + ' 묶음');
@@ -118,6 +125,7 @@ test('공식 덱: 카드 이름이 겹치지 않고, 글자는 앱 입력 칸 �
   assert.match(back['c-ratio'], /1 : 16$/);
   assert.match(back['f-dtan'], /\(β − α\)⁵ \/ 30$/);
   assert.match(back['f-tri'], /\(β − α\)⁵ \/ 20$/);
+  assert.match(back['c-three'], /^S₁ = \|a\|\(β − α\)³\(2γ − α − β\) \/ 12, S₂ = \|a\|\(γ − β\)³\(β \+ γ − 2α\) \/ 12 \(요령: /);
 });
 
 test('카드 그리기: 그대로면 그림 + 수식, 고친 글자는 그대로 (HTML로 안 읽힘), 그림 이름이 없으면 null', () => {
@@ -132,6 +140,14 @@ test('카드 그리기: 그대로면 그림 + 수식, 고친 글자는 그대로
   assert.match(F.face(edited, 'front'), /<svg/, '고쳐도 그림은 남음');
   assert.ok(/&lt;b&gt;내 답/.test(F.face(edited, 'back')));
   assert.strictEqual(F.face({ front: 'a', back: 'b' }, 'front'), null);
+  const three = F.PACKS.area.cards.find((c) => c.key === 'c-three');
+  const tb = F.face({ fig: 'area/c-three', front: three.front, back: three.back }, 'back');
+  assert.strictEqual((tb.match(/class="mf-math long"/g) || []).length, 2, '수식 두 줄');
+  assert.match(tb, /class="mf-tip"><b>외우는 요령<\/b>/);
+  assert.match(tb, /남은 한 점에서 자기 구간 두 끝까지 거리의 합\u00a0÷\u00a012/, '식 가운데는 줄바꿈 없는 띄어쓰기');
+  assert.match(tb, /\(γ\u00a0−\u00a0α\) \+|\(γ\u00a0−\u00a0α\)\u00a0\+/);
+  assert.ok(!/mf-tip/.test(F.face({ fig: 'area/c-three', front: three.front, back: '내가 고친 답' }, 'back')), '고친 뒷면은 글자만');
+  assert.ok(!/mf-tip/.test(back), '다른 카드는 요령 상자 없음');
   assert.match(F.thumb(card), /mf-thumb/);
   assert.strictEqual(F.thumb({ fig: 'area/basis' }), '');
 });
@@ -145,5 +161,11 @@ test('그림: 같은 그림을 여러 번 그려도 잘라 내기 id가 겹치�
   const poster = F.poster('area');
   assert.strictEqual((poster.match(/<svg/g) || []).length, Object.keys(F.FIGS).length);
   assert.match(poster, /원리/);
+  // 삼차함수 칸: 보통 칸 3개(마지막 하나는 가로로) + 세 실근은 한 줄을 다 쓰는 넓은 칸
+  const sec = poster.split('<section').find((x) => x.includes('<span>삼차함수</span>'));
+  assert.strictEqual((sec.match(/class="mf-p-tile"/g) || []).length, 2);
+  assert.strictEqual((sec.match(/class="mf-p-tile row"/g) || []).length, 1);
+  assert.strictEqual((sec.match(/class="mf-p-tile wide"/g) || []).length, 1);
+  assert.match(sec, /mf-p-tile wide[\s\S]*외우는 요령/);
   assert.strictEqual(F.poster('없음'), '');
 });

@@ -12,6 +12,12 @@
   const sup = (n) => `<sup>${n}</sup>`;
   const AB = '(β − α)';
   const S = '<i>S</i> = ';
+  const S1 = '<i>S</i><sub>1</sub> = ', S2 = '<i>S</i><sub>2</sub> = ';
+  // 뒷면 수식 (한 줄 또는 여러 줄) + 외우는 요령
+  const mathHTML = (m) => { const ms = [].concat(m); return ms.map((x) => `<div class="mf-math${ms.length > 1 ? ' long' : ''}">${x}</div>`).join(''); };
+  // 좁은 폰에서 '2γ − α −' / 'β'처럼 식 가운데가 끊기지 않게 − + × ÷ 양쪽은 줄바꿈 없는 띄어쓰기로 (= 에서는 끊겨도 된다)
+  const nb = (x) => esc(x).replace(/ ([−+×÷]) /g, '\u00a0$1\u00a0');
+  const tipHTML = (t) => (t && t.length ? `<div class="mf-tip"><b>외우는 요령</b><ul>${t.map((x) => `<li>${nb(x)}</li>`).join('')}</ul></div>` : '');
 
   /* ---------- 그림 ----------
    * x, y: 보이는 범위 (수학 좌표). curves: 그릴 곡선·직선 { f, k: 'c'(함수)|'l'(직선), from, to }
@@ -85,6 +91,19 @@
       labels: [[-0.8, 1.2, 'S₁'], [0.8, -1.2, 'S₂'], [0.42, 0.5, '변곡점', 'note']],
       check: { a: -Math.SQRT2, b: 0, want: 1, a2: 0, b2: Math.SQRT2, want2: 1 },
     },
+    // 삼차함수 y = x(x + 1.4)(x − 1) + 0.25x + 0.3과 직선 y = 0.25x + 0.3 → x = −1.4, 0, 1에서 만남 (α, β, γ)
+    // S₁ = 1.4³·(2·1 + 1.4 − 0)/12, S₂ = 1³·(0 + 1 + 2.8)/12
+    'c-three': {
+      x: [-1.75, 1.35], y: [-0.75, 1.45],
+      curves: [{ f: (x) => x * (x + 1.4) * (x - 1) + 0.25 * x + 0.3 }, { f: (x) => 0.25 * x + 0.3, k: 'l', from: -1.75, to: 1.35 }],
+      areas: [
+        { top: (x) => x * (x + 1.4) * (x - 1) + 0.25 * x + 0.3, bot: (x) => 0.25 * x + 0.3, a: -1.4, b: 0 },
+        { top: (x) => 0.25 * x + 0.3, bot: (x) => x * (x + 1.4) * (x - 1) + 0.25 * x + 0.3, a: 0, b: 1, k: 's1' },
+      ],
+      dots: [[-1.4, -0.05], [0, 0.3], [1, 0.55]], marks: [[-1.4, -0.05, 'α'], [0, 0.3, 'β'], [1, 0.55, 'γ']],
+      labels: [[-0.72, 0.52, 'S₁'], [0.5, 0.19, 'S₂', 'sm']],
+      check: { a: -1.4, b: 0, want: Math.pow(1.4, 3) * 3.4 / 12, a2: 0, b2: 1, want2: 3.8 / 12 },
+    },
     // 사차함수 y = x⁴ − 2x² + 0.4x와 x = ±1에서 동시에 접하는 직선 y = 0.4x − 1. 넓이 = 2⁵/30
     'f-dtan': {
       x: [-1.75, 1.75], y: [-1.95, 2.7],
@@ -142,8 +161,8 @@
   const AREA = {
     id: 'area',
     name: '함수 넓이 공식',
-    blurb: '이차·삼차·사차함수 넓이 공식 10장',
-    lead: '<b>a</b>는 두 식을 뺀 식(f − g)의 최고차항 계수, α &lt; β',
+    blurb: '이차·삼차·사차함수 넓이 공식 11장',
+    lead: '<b>a</b>는 두 식을 뺀 식(f − g)의 최고차항 계수, α &lt; β &lt; γ',
     groups: [
       { id: 'q', name: '이차함수', pow: `${AB}${sup(3)}` },
       { id: 'c', name: '삼차함수', pow: `${AB}${sup(4)}` },
@@ -179,6 +198,19 @@
         title: '변곡점을 지나는 직선이 만드는 두 넓이', sub: '삼차함수와 세 점에서 만날 때',
         front: '삼차함수와 변곡점을 지나는 직선이 세 점에서 만날 때 두 넓이', back: 'S₁ = S₂',
         math: '<i>S</i><sub>1</sub> = <i>S</i><sub>2</sub>', note: '삼차함수의 그래프는 변곡점에 대해 점대칭이에요.' },
+      // 세 실근: f − g = a(x − α)(x − β)(x − γ). tools/verify_area.py가 무작위 삼차함수로 정확한 분수 검산 (2026-11-26, 1,937개)
+      { key: 'c-three', g: 'c', short: '세 점에서 만나는 직선', wide: true,
+        title: '삼차함수와 직선이 세 점에서 만날 때 두 넓이', sub: 'x = α, β, γ에서 만날 때 (α < β < γ)',
+        front: '삼차함수와 직선이 x = α, β, γ (α < β < γ)에서 만날 때 두 넓이 S₁(α~β), S₂(β~γ)',
+        back: 'S₁ = |a|(β − α)³(2γ − α − β) / 12, S₂ = |a|(γ − β)³(β + γ − 2α) / 12 (요령: 구간 길이³ × 남은 한 점에서 구간 두 끝까지 거리의 합 ÷ 12)',
+        math: [S1 + fr(`|<i>a</i>|${AB}${sup(3)}(2γ − α − β)`, '12'), S2 + fr(`|<i>a</i>|(γ − β)${sup(3)}(β + γ − 2α)`, '12')],
+        note: 'a: 삼차함수의 x³ 계수 (f − g = a(x − α)(x − β)(x − γ))',
+        tip: [
+          '자기 구간 길이의 세제곱 × 남은 한 점에서 자기 구간 두 끝까지 거리의 합 ÷ 12',
+          'S₁은 남은 점이 γ: (γ − α) + (γ − β) = 2γ − α − β',
+          'S₂는 남은 점이 α: (β − α) + (γ − α) = β + γ − 2α',
+          '확인: 간격이 같으면 S₁ = S₂, β가 α에 붙으면 접선 공식 |a|(γ − α)⁴ / 12',
+        ] },
       { key: 'f-dtan', g: 'f', short: '두 점에서 접하는 직선',
         title: '사차함수와 두 점에서 접하는 직선으로 둘러싸인 넓이', sub: 'x = α, β에서 동시에 접할 때',
         front: '사차함수와 두 점에서 접하는 직선으로 둘러싸인 넓이 (x = α, β에서 접할 때)', back: 'S = |a|(β − α)⁵ / 30',
@@ -218,7 +250,7 @@
       return `<div class="mf-chip">${esc(hit.pack.name)} · ${esc(g ? g.name : '')}</div>${fig}${text}`;
     }
     return card.back === d.back
-      ? `<div class="mf-math">${d.math}</div><div class="mf-note">${esc(d.note)}</div>`
+      ? `${mathHTML(d.math)}<div class="mf-note">${nb(d.note)}</div>${tipHTML(d.tip)}`
       : `<div class="mf-math plain">${esc(card.back)}</div>`;
   }
 
@@ -249,9 +281,12 @@
         continue;
       }
       s += `<section class="mf-p-sec"><h3><span>${esc(g.name)}</span><small class="mf-math">${g.pow}</small></h3><div class="mf-p-grid">`;
-      for (const c of cards) {
-        s += `<figure class="mf-p-tile">${figSVG(c.key, { label: c.title })}<figcaption><b>${esc(c.short)}</b><span class="mf-math">${c.math}</span></figcaption></figure>`;
-      }
+      const norm = cards.filter((c) => !c.wide), wide = cards.filter((c) => c.wide);
+      norm.concat(wide).forEach((c) => {
+        const cls = c.wide ? ' wide' : (norm.length % 2 && c === norm[norm.length - 1] ? ' row' : '');
+        const math = [].concat(c.math).map((m) => `<span class="mf-math">${m}</span>`).join('');
+        s += `<figure class="mf-p-tile${cls}">${figSVG(c.key, { label: c.title })}<figcaption><b>${esc(c.short)}</b>${math}${c.wide ? tipHTML(c.tip) : ''}</figcaption></figure>`;
+      });
       s += '</div></section>';
     }
     return s + '</div>';

@@ -53,12 +53,16 @@ function assert(cond, msg) { if (cond) { pass++; console.log('  ✓ ' + msg); } 
   await page.waitForSelector('.mf-poster-sheet .mf-poster');
   const pv = await page.evaluate(() => {
     const sh = document.querySelector('.mf-poster-sheet'), body = sh.querySelector('.ui-sheet-body');
-    return { figs: sh.querySelectorAll('.mf-p-tile svg').length, secs: [...sh.querySelectorAll('.mf-p-sec h3 > span')].map((e) => e.textContent).join(','), side: body.scrollWidth <= body.clientWidth + 1, foot: !!sh.querySelector('.mf-p-foot [data-pack-add]'), fr: sh.querySelectorAll('.mf-frac').length, tall: body.scrollHeight > body.clientHeight };
+    return { wide: (() => { const w = sh.querySelector('.mf-p-tile.wide'); const g = w && w.parentElement.getBoundingClientRect(); const r = w && w.getBoundingClientRect(); return !!w && Math.abs(r.width - g.width) < 2 && !!w.querySelector('.mf-tip') && w.querySelectorAll('.mf-math').length === 2; })(), figs: sh.querySelectorAll('.mf-p-tile svg').length, secs: [...sh.querySelectorAll('.mf-p-sec h3 > span')].map((e) => e.textContent).join(','), side: body.scrollWidth <= body.clientWidth + 1, foot: !!sh.querySelector('.mf-p-foot [data-pack-add]'), fr: sh.querySelectorAll('.mf-frac').length, tall: body.scrollHeight > body.clientHeight };
   });
-  assert(pv.figs === 9 && pv.secs === '이차함수,삼차함수,사차함수,원리', '그래프 9개 · 이차·삼차·사차·원리 묶음 (' + pv.secs + ')');
+  assert(pv.figs === 10 && pv.secs === '이차함수,삼차함수,사차함수,원리', '그래프 10개 · 이차·삼차·사차·원리 묶음 (' + pv.secs + ')');
   assert(pv.fr >= 11 && pv.side && pv.tall, '공식은 분수로 쌓아 보이고, 시트 안에서 위아래로만 넘김');
-  assert(pv.foot, '아래에 ‘카드 10장 덱으로 받기’ 단추');
+  assert(pv.foot, '아래에 ‘카드 11장 덱으로 받기’ 단추');
+  assert(pv.wide, '세 실근 칸은 한 줄을 다 쓰고, 공식 두 줄 + 외우는 요령');
   await shot(page, 'f2-poster');
+  await page.evaluate(() => { const w = document.querySelector('.mf-p-tile.wide'); w.scrollIntoView({ block: 'center' }); });
+  await page.waitForTimeout(200);
+  await shot(page, 'f2c-poster-three');
   // 원리 칸까지 넘겨 봄
   await page.evaluate(() => { const b = document.querySelector('.mf-poster-sheet .ui-sheet-body'); b.scrollTop = b.scrollHeight; });
   await page.waitForTimeout(200);
@@ -69,10 +73,10 @@ function assert(cond, msg) { if (cond) { pass++; console.log('  ✓ ' + msg); } 
   await tap(page, '.mf-p-foot [data-pack-add]');
   await page.waitForSelector('#deck-detail:not([hidden])');
   let st = await state(page);
-  assert(st.deck && st.deck.name === '함수 넓이 공식' && st.cards.length === 10 && st.cards.every((c) => /^area\//.test(c.fig) && c.front && c.back && c.due != null), '덱(pack: area)과 그림 카드 10장 (카드에는 글자와 그림 이름만)');
-  assert(/‘함수 넓이 공식’ 카드 10장을 받았어요/.test(await page.textContent('#toast')), '받았다는 알림');
+  assert(st.deck && st.deck.name === '함수 넓이 공식' && st.cards.length === 11 && st.cards.every((c) => /^area\//.test(c.fig) && c.front && c.back && c.due != null), '덱(pack: area)과 그림 카드 11장 (카드에는 글자와 그림 이름만)');
+  assert(/‘함수 넓이 공식’ 카드 11장을 받았어요/.test(await page.textContent('#toast')), '받았다는 알림');
   assert(await page.isVisible('#deck-poster') && !(await page.isVisible('#deck-voice')), '덱 화면: 한눈에 보기 단추 있음, 말로 복습 단추는 숨김(그림 카드만 있는 덱)');
-  assert(await page.$$eval('#card-list .card-row.has-fig .mf-thumb', (e) => e.length) === 9, '카드 목록에 작은 그래프 9개 (원리 카드는 그림 없음)');
+  assert(await page.$$eval('#card-list .card-row.has-fig .mf-thumb', (e) => e.length) === 10, '카드 목록에 작은 그래프 10개 (원리 카드는 그림 없음)');
   assert(await noSideScroll(page), '덱 화면 옆으로 밀리지 않음');
   await shot(page, 'f3-deck');
   await tap(page, '#deck-poster');
@@ -99,7 +103,7 @@ function assert(cond, msg) { if (cond) { pass++; console.log('  ✓ ' + msg); } 
   await tap(page, '[data-grade="good"]');
   st = await state(page);
   assert(st.logs === 1 && st.cards.filter((c) => c.reps > 0 || (c.due && c.due > Date.now() + 3600e3)).length === 1, '채점하면 복습 기록 1개, 그 카드는 다음 복습일로');
-  assert(/남은 카드 9장/.test(await page.textContent('#study-meta')) && await page.evaluate(() => !!document.querySelector('#flash-front svg.mf-fig') || !!document.querySelector('#flash-front .mf-qmath')), '다음 그림 카드');
+  assert(/남은 카드 10장/.test(await page.textContent('#study-meta')) && await page.evaluate(() => !!document.querySelector('#flash-front svg.mf-fig') || !!document.querySelector('#flash-front .mf-qmath')), '다음 그림 카드');
 
   console.log('5) 글자를 고친 카드 · 글자 카드와 섞인 덱');
   await tap(page, '#study-back');
@@ -118,17 +122,46 @@ function assert(cond, msg) { if (cond) { pass++; console.log('  ✓ ' + msg); } 
   await shot(page, 'f6-missing');
   await tap(page, '#pack-list [data-pack-add]');
   st = await state(page);
-  assert(st.cards.filter((c) => c.fig).length === 10 && st.cards.length === 11 && (await page.evaluate(() => App.store.get().decks.filter((d) => d.pack === 'area').length)) === 1, '지운 2장만 다시 들어옴 (덱은 하나, 더한 글자 카드도 그대로)');
+  assert(st.cards.filter((c) => c.fig).length === 11 && st.cards.length === 12 && (await page.evaluate(() => App.store.get().decks.filter((d) => d.pack === 'area').length)) === 1, '지운 2장만 다시 들어옴 (덱은 하나, 더한 글자 카드도 그대로)');
   await tap(page, '#deck-back');
   assert(!(await page.$('#pack-list [data-pack-add]')) && await page.isVisible('#pack-list [data-pack-open]'), '다 있으면 받기 단추 없음');
   await tap(page, '#pack-list [data-pack-open]');
   assert(await page.isVisible('#deck-detail') && /함수 넓이 공식/.test(await page.textContent('#deck-title')), '덱 열기');
 
+  console.log('6-2) 예전(4.6) 덱 10장인 사람: 세 실근 카드 1장만 더 받기');
+  await page.evaluate(() => { App.store.update((s) => { s.cards = s.cards.filter((c) => c.fig !== 'area/c-three'); }); });
+  await tap(page, '#deck-back');
+  assert(/빠진 1장 받기/.test(await page.textContent('#pack-list [data-pack-add]')), '덱 목록: 빠진 1장 받기');
+  await tap(page, '#pack-list [data-pack-poster]');
+  assert(/빠진 카드 1장 받기/.test(await page.textContent('.mf-p-foot [data-pack-add]')), '한눈에 보기 아래: 빠진 카드 1장 받기');
+  await tap(page, '.mf-p-foot [data-pack-add]');
+  st = await state(page);
+  assert(/카드 1장을 받았어요/.test(await page.textContent('#toast')) && st.cards.filter((c) => c.fig === 'area/c-three').length === 1 && st.cards.filter((c) => c.fig).length === 11, '세 실근 카드 1장만 들어옴');
+
+  console.log('6-3) 세 실근 카드 복습: 앞면 그래프(α·β·γ, S₁·S₂) → 뒷면 공식 두 줄 + 외우는 요령');
+  await page.evaluate(() => { App.store.update((s) => { s.cards.forEach((c) => { c.due = c.fig === 'area/c-three' ? 0 : Date.now() + 864e6; }); }); });
+  await tap(page, '#deck-study');
+  const tf = await page.evaluate(() => ({ q: (document.querySelector('#flash-front .mf-q') || {}).textContent, mk: [...document.querySelectorAll('#flash-front .mf-mk')].map((e) => e.textContent).join(''), lb: [...document.querySelectorAll('#flash-front .mf-lb')].map((e) => e.textContent).join(','), areas: document.querySelectorAll('#flash-front .mf-area').length }));
+  assert(tf.q === '삼차함수와 직선이 세 점에서 만날 때 두 넓이' && tf.mk === 'αβγ' && tf.lb === 'S₁,S₂' && tf.areas === 2, '앞면: 세 점 α·β·γ, 두 넓이 S₁·S₂ (' + tf.q + ' / ' + tf.mk + ' / ' + tf.lb + ')');
+  await shot(page, 'f9-three-front');
+  await tap(page, '#flash');
+  await page.waitForTimeout(500);
+  const tb = await page.evaluate(() => {
+    const b = document.querySelector('#flash-back'), card = document.querySelector('#flash').getBoundingClientRect();
+    const ms = [...b.querySelectorAll('.mf-math.long')];
+    return { n: ms.length, fit: ms.every((m) => { const r = m.getBoundingClientRect(); return r.left >= card.left - 1 && r.right <= card.right + 1; }), tip: ((b.querySelector('.mf-tip') || {}).textContent || '').replace(/\u00a0/g, ' '), side: document.documentElement.scrollWidth <= innerWidth + 1 };
+  });
+  assert(tb.n === 2 && tb.fit && tb.side, '뒷면: 공식 두 줄이 카드 안에 들어감 (390px)');
+  assert(/외우는 요령/.test(tb.tip) && /남은 한 점/.test(tb.tip) && /2γ − α − β/.test(tb.tip) && /β \+ γ − 2α/.test(tb.tip), '외우는 요령: 남은 한 점까지 두 거리의 합, S₁·S₂ 풀어 쓰기');
+  await shot(page, 'f9-three-back', true);
+  await tap(page, '[data-grade="good"]');
+  await tap(page, '#study-finish');
+
   console.log('7) 다시 열어도 그대로 (저장)');
   await page.reload();
   await page.waitForFunction(() => window.App && window.Formulas);
   st = await state(page);
-  assert(st.deck && st.cards.filter((c) => c.fig).length === 10, '다시 열어도 덱 · 그림 이름이 남음');
+  assert(st.deck && st.cards.filter((c) => c.fig).length === 11, '다시 열어도 덱 · 그림 이름이 남음');
 
   console.log('8) 기능 끄기');
   await page.evaluate(() => App.store.update((s) => { s.settings.layout = { off: ['packs'] }; }));
@@ -165,6 +198,15 @@ function assert(cond, msg) { if (cond) { pass++; console.log('  ✓ ' + msg); } 
     const figW = await page.$eval('#flash-front .mf-card-fig, #flash-front .mf-q', (e) => e.getBoundingClientRect().width);
     await shot(page, `f8-card-${w}`);
     assert(ok1 && ok2 && sw.side && sw.w <= 601 && figW > 100, `${w}×${h}: 옆으로 밀리지 않고, 한눈에 보기 폭 ${Math.round(sw.w)}px, 카드 그림 ${Math.round(figW)}px`);
+    // 세 실근 카드 뒷면 (가장 긴 공식)
+    await tap(page, '#study-back');
+    await page.evaluate(() => { App.store.update((s) => { s.cards.forEach((c) => { c.due = c.fig === 'area/c-three' ? 0 : Date.now() + 864e6; }); }); });
+    await tap(page, '#deck-study');
+    await tap(page, '#flash');
+    await page.waitForTimeout(400);
+    const fit = await page.evaluate(() => { const card = document.querySelector('#flash').getBoundingClientRect(); const ms = [...document.querySelectorAll('#flash-back .mf-math.long')]; return ms.length === 2 && ms.every((m) => { const r = m.getBoundingClientRect(); return r.left >= card.left - 1 && r.right <= card.right + 1; }) && document.documentElement.scrollWidth <= innerWidth + 1; });
+    await shot(page, `f8-three-${w}`, true);
+    assert(fit, `${w}×${h}: 세 실근 공식 두 줄이 카드 안에 들어감`);
     await page.context().close();
   }
 

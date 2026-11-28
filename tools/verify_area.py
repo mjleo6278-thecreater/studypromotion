@@ -1,4 +1,4 @@
-# 사용: python3 tools/verify_area.py  (js/formulas.js 함수 넓이 공식 덱의 공식 9가지와 원리를 무작위 함수 300개씩 정확한 분수 적분으로 확인, 40초쯤)
+# 사용: python3 tools/verify_area.py  (js/formulas.js 함수 넓이 공식 덱의 공식 10가지와 원리를 무작위 함수 300개씩 정확한 분수 적분으로 확인, 40초쯤)
 # 함수 넓이 공식 검증: 분수(정확한 유리수)로 다항식을 직접 적분해 공식과 비교하고,
 # 실수 계산(심프슨 적분)으로 |f-g| 넓이도 따로 재서 한 번 더 맞춰 본다.
 from fractions import Fraction as Fr
@@ -123,6 +123,19 @@ for _ in range(N):
     ok('Q7 세 교점 p-k, p, p+k', pev(D3, p - k) == 0 and pev(D3, p) == 0 and pev(D3, p + k) == 0)
     s1 = abs(pint(D3, p - k, p)); s2 = abs(pint(D3, p, p + k))
     ok('Q7 두 넓이 같음 S1 = S2', s1 == s2 and s1 > 0)
+
+    # 7-2. 삼차함수와 직선이 서로 다른 세 점 α < β < γ에서 만날 때 (f - L = a(x-α)(x-β)(x-γ))
+    xs = sorted({al, be, rnd()})
+    if len(xs) == 3:
+        x1, x2, x3 = xs
+        L = lin(rnd(), rnd())
+        f3 = padd(L, pscale(pmul(pmul(lin(1, -x1), lin(1, -x2)), lin(1, -x3)), a3))
+        D4 = psub(f3, L)
+        s1 = abs(pint(D4, x1, x2)); s2 = abs(pint(D4, x2, x3))
+        ok('Q7-2 세 실근 S1 = |a|(β-α)^3(2γ-α-β)/12', s1 == abs(a3) * (x2 - x1) ** 3 * (2 * x3 - x1 - x2) / 12)
+        ok('Q7-2 세 실근 S2 = |a|(γ-β)^3(β+γ-2α)/12', s2 == abs(a3) * (x3 - x2) ** 3 * (x2 + x3 - 2 * x1) / 12)
+        ok('Q7-2 요령: 2γ-α-β = (γ-α)+(γ-β), β+γ-2α = (β-α)+(γ-α)', 2 * x3 - x1 - x2 == (x3 - x1) + (x3 - x2) and x2 + x3 - 2 * x1 == (x2 - x1) + (x3 - x1))
+        ok('Q7-2 실수 검산', abs(simpson_abs(lambda x: float(pev(D4, Fr(x))), x1, x2) - float(s1)) < 1e-6 * max(1, float(s1)))
 
     # 8. 사차함수와 두 점에서 접하는 직선
     a4 = rnd(); L = lin(rnd(), rnd())
