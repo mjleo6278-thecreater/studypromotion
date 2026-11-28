@@ -281,19 +281,24 @@ void main(){ vec4 c = texture2D(uTex, vUV); gl_FragColor = vec4(c.rgb * uBright,
       gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
       return { buf: b, count: data.length / STRIDE };
     }
-    texture(canvas) {
+    // smooth: 매끈하게 (캔버스 가로세로가 2의 거듭제곱이어야 함, 밉맵으로 멀리서도 글자가 덜 자글거림)
+    texture(canvas, { smooth = false } = {}) {
       const gl = this.gl, t = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, t);
-      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
-      const tx = { t, canvas, update() { gl.bindTexture(gl.TEXTURE_2D, t); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas); } };
+      const minF = smooth ? gl.LINEAR_MIPMAP_LINEAR : gl.NEAREST, magF = smooth ? gl.LINEAR : gl.NEAREST;
+      for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, minF], [gl.TEXTURE_MAG_FILTER, magF], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+      const tx = { t, canvas, update() {
+        gl.bindTexture(gl.TEXTURE_2D, t); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+        if (smooth) gl.generateMipmap(gl.TEXTURE_2D);
+      } };
       tx.update();
       return tx;
     }
-    // 글자 판: 가운데 기준 w×h 사각형
-    quad(w, h) {
+    // 글자 판: 가운데 기준 w×h 사각형. 텍스처의 왼쪽 위 u1×v1 부분만 쓴다
+    quad(w, h, u1 = 1, v1 = 1) {
       const gl = this.gl, b = gl.createBuffer();
       const x = w / 2, y = h / 2;
-      const d = new Float32Array([-x, -y, 0, 0, 1, x, -y, 0, 1, 1, x, y, 0, 1, 0, -x, -y, 0, 0, 1, x, y, 0, 1, 0, -x, y, 0, 0, 0]);
+      const d = new Float32Array([-x, -y, 0, 0, v1, x, -y, 0, u1, v1, x, y, 0, u1, 0, -x, -y, 0, 0, v1, x, y, 0, u1, 0, -x, y, 0, 0, 0]);
       gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
       return { buf: b, count: 6 };
     }
@@ -307,7 +312,7 @@ void main(){ vec4 c = texture2D(uTex, vUV); gl_FragColor = vec4(c.rgb * uBright,
       gl.enableVertexAttribArray(prog.a.aCol); gl.vertexAttribPointer(prog.a.aCol, 3, gl.FLOAT, false, F, 24);
       gl.enableVertexAttribArray(prog.a.aAo); gl.vertexAttribPointer(prog.a.aAo, 1, gl.FLOAT, false, F, 36);
     }
-    // frame = { cam:{eye,target,fov,shiftY}, light:{dir,center,radius}, bg, sky, ground, lightCol, fog, items:[{mesh,m,tint,add,alpha,shadow,emit}], dyn:[floats], glass:[...], planes:[{quad,tex,m,alpha,bright}] }
+    // frame = { cam:{eye,target,fov,shiftY}, light:{dir,center,radius}, bg, sky, ground, lightCol, fog, items:[{mesh,m,tint,add,alpha,shadow,recv,emit}], dyn:[floats], glass:[...], planes:[{quad,tex,m,alpha,bright}] }
     render(frame) {
       const gl = this.gl, cv = this.canvas;
       const W = cv.width, H = cv.height;
@@ -376,6 +381,7 @@ void main(){ vec4 c = texture2D(uTex, vUV); gl_FragColor = vec4(c.rgb * uBright,
         gl.uniform4f(P.u.uTint, t[0], t[1], t[2], it.alpha == null ? 1 : it.alpha);
         gl.uniform3fv(P.u.uAdd, it.add || [0, 0, 0]);
         gl.uniform1f(P.u.uEmit, it.emit || 0);
+        gl.uniform1f(P.u.uShadowOn, shadowOn && it.recv !== false ? 1 : 0); // recv: false = 그림자를 받지 않음 (캐릭터 얼굴)
         gl.drawArrays(gl.TRIANGLES, 0, it.mesh.count);
         this.stats.calls++; this.stats.tris += it.mesh.count / 3;
       };
