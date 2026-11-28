@@ -81,12 +81,12 @@ function assert(cond, msg) { if (cond) { pass++; console.log('  ✓ ' + msg); } 
   await page.waitForTimeout(250);
 
   console.log('4) 그림 카드 복습');
-  // 섞는 순서를 고정해 둔다 (시험이 매번 같은 카드로 시작)
-  await page.evaluate(() => { const r = Math.random; Math.random = () => 0.999999; setTimeout(() => { Math.random = r; }, 0); });
+  await page.evaluate(() => { window.__rnd = Math.random; Math.random = () => 0.999999; }); // 섞지 않음 → 덱 순서대로 (첫 장 = 이차함수와 직선)
   await tap(page, '#deck-study');
+  await page.evaluate(() => { Math.random = window.__rnd; });
   const fr = await page.evaluate(() => ({ mf: document.querySelector('#flash').classList.contains('mf'), svg: !!document.querySelector('#flash-front svg.mf-fig'), q: (document.querySelector('#flash-front .mf-q') || {}).textContent, chip: (document.querySelector('#flash-front .mf-chip') || {}).textContent, back: document.querySelector('#flash-back').hidden }));
-  assert(fr.mf && fr.svg && fr.q && fr.back, '앞면: 그래프 + 문제, 뒷면은 숨김 (' + fr.q + ')');
-  assert(/함수 넓이 공식 · (이차|삼차|사차)함수|원리/.test(fr.chip || '') || fr.chip === undefined, '위에 덱 · 묶음 표시 (' + fr.chip + ')');
+  assert(fr.mf && fr.svg && fr.q === '이차함수와 직선으로 둘러싸인 넓이' && fr.back, '앞면: 그래프 + 문제, 뒷면은 숨김 (' + fr.q + ')');
+  assert(fr.chip === '함수 넓이 공식 · 이차함수', '위에 덱 · 묶음 표시 (' + fr.chip + ')');
   assert(await noSideScroll(page), '복습 화면 옆으로 밀리지 않음');
   await shot(page, 'f4-front');
   await tap(page, '#flash');
@@ -140,8 +140,10 @@ function assert(cond, msg) { if (cond) { pass++; console.log('  ✓ ' + msg); } 
   console.log('9) 다크 모드 · 다른 화면 크기');
   page = await open({ dark: true });
   await tap(page, '#pack-list [data-pack-add]');
-  await page.evaluate(() => { const r = Math.random; Math.random = () => 0; setTimeout(() => { Math.random = r; }, 0); });
+  // 첫 장이 그림 있는 카드가 되게 섞지 않는다 (예전엔 setTimeout으로 바로 되돌려서 섞기가 그대로였고, 그림 없는 원리 카드가 먼저 나오면 실패했다)
+  await page.evaluate(() => { window.__rnd = Math.random; Math.random = () => 0.999999; });
   await tap(page, '#deck-study');
+  await page.evaluate(() => { Math.random = window.__rnd; });
   await tap(page, '#flash');
   const dk = await page.evaluate(() => { const p = document.querySelector('#flash-front .mf-curve'); return p ? getComputedStyle(p).stroke : ''; });
   assert(/rgb\(2[0-9]{2}, 2[0-9]{2}, 2[0-9]{2}\)/.test(dk), '다크 모드: 그래프 선이 밝은색 (' + dk + ')');
