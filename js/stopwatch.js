@@ -199,14 +199,6 @@
     const cur = sw.subjectId && subjectOf(sw.subjectId) ? sw.subjectId : ''; // 지운 과목으로 재는 중이면 ‘과목 없이’와 같다
     return sw.running && cur !== id ? switchTo(id) : Promise.resolve();
   }
-  // 잠금 중 다른 앱에 나가 있던 시간: 잠금 규칙대로 공부 시간에서 뺀다 (시작 시각을 그만큼 늦춘다)
-  function dropAway(ms) {
-    if (!sw.running || !(ms > 0)) return;
-    sw.startAt = Math.min(now(), sw.startAt + ms);
-    save();
-    begin();
-    render();
-  }
 
   /* ---------- 흐르는 시간 ---------- */
   let tick = null, lastShown = -1;
@@ -495,7 +487,7 @@
   // 지금 재고 있는 구간 (타임테이블이 실시간으로 그린다). 재는 중이 아니면 null
   const live = () => (sw.running ? { from: sw.startAt, to: now(), subjectId: sw.subjectId && subjectOf(sw.subjectId) ? sw.subjectId : null, label: sw.label, taskId: sw.taskId || null } : null);
 
-  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: curTab, showTab, render, todayMinutes, live, startFlow, startPlan, switchSubject, dropAway };
+  window.Stopwatch = { running: () => sw.running, stop, start, toggle, tab: curTab, showTab, render, todayMinutes, live, startFlow, startPlan, switchSubject };
   if (sw.running) begin();
   render();
 })();

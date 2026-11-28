@@ -3,7 +3,7 @@
  *  - 전체 화면 + 화면 꺼짐 방지
  *  - 뒤로 가기 막기
  *  - 앱을 닫았다 다시 열어도 끝나는 시각까지 잠금 화면 유지 (localStorage)
- *  - 다른 앱으로 나간 횟수와 시간 기록
+ *  - 화면을 끄거나 다른 앱으로 나간 횟수와 시간 기록 (웹앱은 둘을 구별할 수 없다)
  *  - 포기는 3초 길게 눌러야 가능 */
 (function (root) {
   const KEY = 'studypromotion.lock';
@@ -33,7 +33,7 @@
 
   const MSGS = ['지금은 공부 시간이에요.', '한 칸씩 전진 중이에요.', '폰은 내려놓고, 책을 펴요.', '끝나면 스스로를 칭찬해 줘요.', '집중한 만큼 승급해요.'];
   let lock = null; // { startAt, endAt, minutes, subjectId, leaves, awayMs, hiddenAt, sw }
-  // sw: 스톱워치를 켜 둔 채 잠갔다. 공부 시간은 스톱워치가 재고(잠금은 따로 기록하지 않음), 나가 있던 시간은 스톱워치에서 뺀다
+  // sw: 스톱워치를 켜 둔 채 잠갔다. 공부 시간은 스톱워치가 재고(잠금은 따로 기록하지 않음), 화면을 꺼 둔 시간도 빼지 않는다
   let tick = null;
   let wakeLock = null;
 
@@ -126,7 +126,7 @@
       });
       const lines = [];
       if (swSid != null) {
-        lines.push('재고 있던 스톱워치는 멈추지 않고 이어서 재요. 다른 앱에 나가 있던 시간은 빠져요.');
+        lines.push('재고 있던 스톱워치는 멈추지 않고 이어서 재요. 화면을 꺼 둔 시간도 그대로 세요.');
         if (pick !== swSid) {
           const SW = window.Stopwatch, live = SW && SW.live ? SW.live() : null;
           const m = live ? Math.floor((live.to - live.from) / 60000) : 0;
@@ -214,13 +214,14 @@
     clearInterval(tick);
     tick = setInterval(update, 500);
     update();
+    if (lock.sw && !window.Stopwatch) later(update); // 앱을 다시 열 때는 스톱워치가 이 파일보다 늦게 준비된다: 준비되면 스톱워치 줄도 바로
   }
 
   function update() {
     if (!lock) return;
     const left = Math.max(0, Math.ceil((lock.endAt - Date.now()) / 1000));
     $('#lock-time').textContent = clock(left);
-    $('#lock-leaves').textContent = lock.leaves ? `다른 앱으로 나간 횟수 ${lock.leaves}번 · ${Stats.formatMinutes(Math.round(lock.awayMs / 60000))}` : '';
+    $('#lock-leaves').textContent = lock.leaves ? `화면을 끄거나 나간 횟수 ${lock.leaves}번 · ${Stats.formatMinutes(Math.round(lock.awayMs / 60000))}` : '';
     // 같이 재는 스톱워치: 이번에 잰 시간 (나가 있던 시간을 뺀 만큼)
     const live = lock.sw && window.Stopwatch && window.Stopwatch.live ? window.Stopwatch.live() : null;
     const swEl = $('#lock-sw');
@@ -244,20 +245,19 @@
     write();
     hide();
     const SW = window.Stopwatch;
-    // 다른 앱에 나가 있는 동안 잠금 시간이 끝났으면 그 시간도 나가 있던 시간으로 (스톱워치와 같이 잠갔으면 스톱워치에서도 뺀다)
+    // 화면을 끄거나 다른 앱에 가 있는 동안 잠금 시간이 끝났으면 그 시간도 나가 있던 시간으로
     if (done.hiddenAt) {
-      const ms = Math.max(0, Math.min(at, done.endAt) - done.hiddenAt);
-      done.awayMs = (done.awayMs || 0) + ms;
+      done.awayMs = (done.awayMs || 0) + Math.max(0, Math.min(at, done.endAt) - done.hiddenAt);
       done.hiddenAt = null;
-      if (done.sw && ms > 0 && SW && SW.dropAway) SW.dropAway(ms);
     }
     const swKeeps = !!(done.sw && SW && SW.running());
     let minutes = 0;
     if (!done.sw) minutes = studiedMinutes(done, at);
     else if (!swKeeps) {
       // 스톱워치가 먼저 멈췄으면 스톱워치가 기록한 뒤의 잠금 시간만 (겹치는 시간은 다시 넣지 않는다)
+      // 스톱워치처럼 화면을 꺼 둔 시간은 빼지 않는다
       const from = store.get().sessions.reduce((m, x) => (x.kind === 'stopwatch' && x.endedAt >= done.startAt && x.endedAt <= at ? Math.max(m, x.endedAt) : m), done.startAt);
-      minutes = tailMinutes(done, at, from);
+      minutes = tailMinutes(Object.assign({}, done, { awayMs: 0 }), at, from);
     }
     // 시작 시각으로 정한 id: 탭 두 개에서 같은 잠금이 끝나도 한 번만 기록
     const id = 'lock-' + done.startAt;
@@ -274,14 +274,11 @@
     toast(completed ? `잠금 완료! ${Stats.formatMinutes(minutes)} 공부를 기록했어요` : `잠금을 그만뒀어요. ${Stats.formatMinutes(minutes)}만 기록했어요`);
   }
 
-  // 나가 있던 시간을 잠금에 더한다. 스톱워치와 같이 잠갔으면 스톱워치에서도 뺀다 (스톱워치는 이 파일보다 늦게 읽히므로 준비된 뒤에)
+  // 나가 있던 시간을 잠금에 더한다 (화면 끔과 다른 앱은 구별할 수 없다). 스톱워치와 같이 잠갔으면 스톱워치는 그대로 둔다
   function addAway(ms) {
     lock.awayMs += ms;
     lock.hiddenAt = null;
     write();
-    if (!lock.sw || !(ms > 0)) return;
-    const drop = () => { if (window.Stopwatch && window.Stopwatch.dropAway) window.Stopwatch.dropAway(ms); };
-    if (window.Stopwatch) drop(); else later(drop);
   }
   function later(fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true });
@@ -298,7 +295,7 @@
     } else {
       if (lock.hiddenAt) {
         addAway(Math.max(0, Math.min(Date.now(), lock.endAt) - lock.hiddenAt));
-        $('#lock-msg').textContent = lock.sw ? '돌아왔네요. 나가 있던 시간은 스톱워치에서 빠져요.' : '돌아왔네요. 나가 있던 시간은 공부 시간에서 빠져요.';
+        $('#lock-msg').textContent = lock.sw ? '돌아왔네요. 스톱워치는 계속 재고 있어요.' : '돌아왔네요. 나가 있던 시간은 공부 시간에서 빠져요.';
       }
       keepAwake();
       update();

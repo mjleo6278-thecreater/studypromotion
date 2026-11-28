@@ -112,7 +112,7 @@ const server = http.createServer((req, res) => {
     await lp.tap('#ask-ok');
     await lp.evaluate(() => {
       document.querySelector('#lock-msg').textContent = '돌아왔네요. 나가 있던 시간은 공부 시간에서 빠져요.';
-      document.querySelector('#lock-leaves').textContent = '다른 앱으로 나간 횟수 1번 · 2분';
+      document.querySelector('#lock-leaves').textContent = '화면을 끄거나 나간 횟수 1번 · 2분';
     });
     assert(/^스톱워치 1:05:\d\d · 계속 재는 중$/.test(await lp.textContent('#lock-sw')), `가로 ${w}x${h}: 잠금 화면에 스톱워치 줄`);
     const fit = await lp.evaluate(() => ['.lock-icon', '#lock-time', '#lock-sub', '#lock-sw', '#lock-msg', '#lock-leaves', '#lock-quit'].map((s) => {

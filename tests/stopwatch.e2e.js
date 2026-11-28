@@ -272,7 +272,7 @@ const SW = 'studypromotion.stopwatch';
   const ses0 = (await state()).sessions.length;
   await page.click('[data-lock="30"]');
   await page.click('#lock-start');
-  assert(/^30분 동안 잠글까요\?$/.test(await page.textContent('#ask-msg')) && /멈추지 않고 이어서 재요/.test(await page.textContent('#lock-ask-note')), '잠금 확인 창: 스톱워치는 이어서 잰다고 알림');
+  assert(/^30분 동안 잠글까요\?$/.test(await page.textContent('#ask-msg')) && /멈추지 않고 이어서 재요\. 화면을 꺼 둔 시간도 그대로 세요/.test(await page.textContent('#lock-ask-note')), '잠금 확인 창: 스톱워치는 이어서 잰다고 알림');
   assert((await page.getAttribute(`#ask-extra [data-lsub="${math.id}"]`, 'aria-checked')) === 'true' && (await page.locator('#ask-extra [data-lsub]').count()) === subs.length + 1, '확인 창에서 과목을 고를 수 있고, 재는 스톱워치 과목(수학)이 먼저 골라져 있음');
   await page.click('#ask-ok');
   await page.waitForTimeout(150);
@@ -282,7 +282,7 @@ const SW = 'studypromotion.stopwatch';
   assert(/^스톱워치 05:0\d · 계속 재는 중$/.test(await page.textContent('#lock-sw')), '잠금 화면에 스톱워치 시간이 보임 (' + (await page.textContent('#lock-sw')) + ')');
   await page.evaluate(() => Stopwatch.stop());
   assert((await swState()).running, '잠금 중에는 스톱워치를 멈출 수 없음');
-  // 다른 앱에 2분 나가 있다 오면: 잠금처럼 그 시간은 스톱워치에서도 빠진다
+  // 화면을 끄거나 다른 앱에 2분 가 있다 오면: 웹앱은 둘을 구별할 수 없어서, 스톱워치는 빼지 않고 그대로 센다 (v4.5.1 사용자 요청: 화면 끈 시간도 공부 시간)
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
     document.dispatchEvent(new Event('visibilitychange'));
@@ -291,23 +291,23 @@ const SW = 'studypromotion.stopwatch';
     document.dispatchEvent(new Event('visibilitychange'));
   });
   const swB = await swState();
-  assert(Math.abs(swB.startAt - swA.startAt - 2 * 60000) < 1500 && (await lockState()).awayMs >= 119000, '나가 있던 2분은 스톱워치에서 뺌 (시작 시각을 2분 늦춤)');
-  assert(/스톱워치에서 빠져요/.test(await page.textContent('#lock-msg')) && /^스톱워치 05:0\d/.test(await page.textContent('#lock-sw')), '돌아오면 알려 주고, 스톱워치 시간은 5분 그대로');
-  // 앱을 닫았다가(나간 채로) 다시 열어도 나가 있던 시간을 스톱워치에서 뺀다
+  assert(swB.startAt === swA.startAt && (await lockState()).awayMs >= 119000 && /화면을 끄거나 나간 횟수 1번 · 2분/.test(await page.textContent('#lock-leaves')), '화면을 끈 2분은 스톱워치에서 빼지 않음 (잠금 화면엔 횟수만)');
+  assert(/스톱워치는 계속 재고 있어요/.test(await page.textContent('#lock-msg')) && /^스톱워치 07:0\d/.test(await page.textContent('#lock-sw')), '돌아오면 스톱워치는 계속 잰다고 알려 주고, 2분이 더해진 7분 (' + (await page.textContent('#lock-sw')) + ')');
+  // 앱을 닫았다가 다시 열어도 그동안의 시간을 그대로 센다
   // (새로고침하면 앱이 가려지며 나간 시각이 남고, 시계를 3분 앞으로 돌려 다시 연다)
   await page.evaluate(() => { delete document.visibilityState; localStorage.setItem('__shift', String(window.__shift + 3 * 60000)); });
   await page.reload();
   await page.waitForTimeout(300);
   const swC = await swState();
-  assert(await page.isVisible('#lock-screen') && Math.abs(swC.startAt - swB.startAt - 3 * 60000) < 1500 && swC.running, '다시 열면 닫혀 있던 3분도 스톱워치에서 뺌');
+  assert(await page.isVisible('#lock-screen') && swC.startAt === swB.startAt && swC.running && /^스톱워치 10:0\d/.test(await page.textContent('#lock-sw')), '다시 열어도 닫혀 있던 3분까지 그대로 세서 10분');
   await endLock();
   assert(await page.isHidden('#lock-screen'), '잠금 끝');
   assert((await swState()).running && (await swCount()) === sw0 && !(await state()).sessions.some((x) => x.lock) && /스톱워치는 계속 재고 있어요/.test(await toastText()), '잠금이 끝나도 스톱워치는 계속 재고, 잠금 기록은 따로 없음');
-  assert(await page.isVisible('#timer-pane-sw') && /^00:05:0\d$/.test(await page.textContent('#sw-now-time')), '잠금이 끝나면 타이머 화면에 스톱워치가 보이고, 나가 있던 시간을 뺀 5분 (' + (await page.textContent('#sw-now-time')) + ')');
+  assert(await page.isVisible('#timer-pane-sw') && /^00:10:0\d$/.test(await page.textContent('#sw-now-time')), '잠금이 끝나면 타이머 화면에 스톱워치가 보이고, 화면 끈 시간까지 10분 (' + (await page.textContent('#sw-now-time')) + ')');
   await page.evaluate(() => Stopwatch.stop());
   await page.waitForTimeout(100);
   const mathRec = (await swSessions()).slice(sw0);
-  assert(!(await swState()).running && mathRec.length === 1 && mathRec[0].subjectId === math.id && mathRec[0].minutes === 5, '멈추면 스톱워치 기록 하나만, 나가 있던 5분은 빼고 5분 (' + (mathRec[0] && mathRec[0].minutes) + '분)');
+  assert(!(await swState()).running && mathRec.length === 1 && mathRec[0].subjectId === math.id && mathRec[0].minutes === 10, '멈추면 스톱워치 기록 하나만, 화면 끈 5분까지 10분 (' + (mathRec[0] && mathRec[0].minutes) + '분)');
 
   // 잠그면서 다른 과목을 고르면: 지금까지는 그 과목으로 기록하고, 고른 과목으로 이어서 잰다
   await page.tap('[data-ttab="sw"]');
@@ -325,7 +325,7 @@ const SW = 'studypromotion.stopwatch';
   const rec8 = (await swSessions()).slice(sw0 + 1);
   assert(swD.running && swD.subjectId === eng.id && rec8.length === 1 && rec8[0].subjectId === math.id && rec8[0].minutes === 8, '수학 8분을 기록하고 영어로 이어서 잼');
   assert((await lockState()).subjectId === eng.id && /^영어 · 30분 잠금$/.test(await page.textContent('#lock-sub')) && (await page.inputValue('#timer-subject')) === eng.id, '잠금 과목도 영어, 위 과목 칸도 영어로');
-  // 다른 앱에 나가 있는 동안 잠금이 끝나면: 끝날 때까지 나가 있던 시간도 스톱워치에서 뺀다
+  // 화면을 꺼 둔 동안 잠금이 끝나도: 그 시간을 스톱워치에서 빼지 않는다
   const swE = await swState();
   await page.evaluate(() => {
     Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
@@ -334,11 +334,12 @@ const SW = 'studypromotion.stopwatch';
   });
   await endLock();
   const swF = await swState();
-  assert(await page.isHidden('#lock-screen') && swF.running && Math.abs(swF.startAt - swE.startAt - 4 * 60000) < 2500, '나가 있는 동안 잠금이 끝나도 그 4분은 스톱워치에서 뺌');
+  assert(await page.isHidden('#lock-screen') && swF.running && swF.startAt === swE.startAt, '화면을 꺼 둔 동안 잠금이 끝나도 그 4분은 스톱워치에 그대로');
   await page.evaluate(() => { delete document.visibilityState; document.dispatchEvent(new Event('visibilitychange')); });
   await page.evaluate(() => Stopwatch.stop());
   await page.waitForTimeout(100);
-  assert(!(await state()).sessions.some((x) => x.lock), '스톱워치와 같이 잠근 동안은 잠금 기록이 생기지 않음');
+  const engRec = (await swSessions()).filter((x) => x.subjectId === eng.id).pop();
+  assert(!(await state()).sessions.some((x) => x.lock) && engRec && engRec.minutes === 4, '스톱워치와 같이 잠근 동안은 잠금 기록이 생기지 않고, 영어는 화면 끈 4분까지 기록 (' + (engRec && engRec.minutes) + '분)');
   // 다음 테스트를 위해 과목 칸을 처음처럼
   await page.evaluate(() => { const el = document.querySelector('#timer-subject'); el.value = ''; el.dispatchEvent(new Event('change', { bubbles: true })); });
   await page.tap('[data-ttab="focus"]');
