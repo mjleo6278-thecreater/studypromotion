@@ -4,7 +4,7 @@
  *   앱이 새로고침된다(쓰는 중이면 '새 버전' 안내 띠). 그래서 배포할 때마다 CACHE 버전을 꼭 올린다.
  *   (tools/build.js가 배포본의 CACHE 이름 끝에 파일 내용 해시를 붙여, 깜빡해도 새 파일이 전달되게 한다.)
  */
-const CACHE = 'studypromotion-v79';
+const CACHE = 'studypromotion-v80';
 const ASSETS = [
   './',
   './index.html',
@@ -22,6 +22,7 @@ const ASSETS = [
   './js/share.js',
   './js/ui.js',
   './js/cardlink.js',
+  './js/formulas.js',
   './js/app.js',
   './js/voice.js',
   './js/layout.js',

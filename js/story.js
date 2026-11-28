@@ -120,7 +120,10 @@
   available().then((ok) => { if (ok) document.querySelectorAll('[data-story]').forEach((b) => { const p = b.closest('.ver-story'); (p || b).hidden = false; }); });
 
   /* ---------- 업데이트한 뒤 처음 열 때 한 번 ---------- */
-  const pending = STORIES.find((s) => sameVer(s.ver) && !isSeen(s));
+  // 그 버전이거나(4.5, 4.5.1 …), 그 버전 전에 마지막으로 열고 건너뛰어 올라온 사람(4.4.1 → 4.6)에게
+  const cmpVer = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; };
+  const jumped = (v) => prevVer != null && cmpVer(prevVer, v) < 0 && cmpVer(v, App.version) <= 0;
+  const pending = STORIES.find((s) => (sameVer(s.ver) || jumped(s.ver)) && !isSeen(s));
   // 다른 일을 하는 중이면 띄우지 않는다 (타이머·잠금·확인 창·시트·말로 복습·게임·시작 화면)
   function busy() {
     return document.visibilityState !== 'visible' || !!document.getElementById('splash') ||

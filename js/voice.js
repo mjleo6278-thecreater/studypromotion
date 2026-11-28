@@ -5,7 +5,7 @@
  * 덱마다 고른 설정은 덱의 voice 칸에 남는다 (계정 동기화). 녹음은 어디에도 남기지 않는다.
  * 쓰는 브라우저 기능: SpeechRecognition(webkit 접두어), speechSynthesis, Wake Lock, Web Audio.
  * 시험(tests/voice.e2e.js)은 SpeechRecognition·speechSynthesis를 가짜로 바꿔 끼우고 끝까지 눌러 본다.
- * (4.5.2) 틀렸다고 나오자마자 '맞았어'를 듣고(정답 읽기는 그 뒤), 다음 카드에서 '맞았어'라고 해도 앞 카드를 고친다.
+ * (4.6.1) 틀렸다고 나오자마자 '맞았어'를 듣고(정답 읽기는 그 뒤), 다음 카드에서 '맞았어'라고 해도 앞 카드를 고친다.
  * 카드 글과 다른 말이면 로그인한 사람은 서버 AI(/judge)에게 같은 뜻인지 묻고, 같은 뜻이면 그 말을 카드(voiceOk)에 남겨 다음엔 바로 맞힌다.
  */
 (function (root) {
@@ -29,7 +29,7 @@
 
   /* ---------- 덱 설정 ---------- */
   const deckOf = (id) => store.get().decks.find((d) => d.id === id) || null;
-  const cardsOf = (id) => store.get().cards.filter((c) => c.deckId === id);
+  const cardsOf = (id) => store.get().cards.filter((c) => c.deckId === id && !c.fig); // 그림 카드(공식 덱, js/formulas.js)는 읽어 줄 수 없어 뺀다
   const dueOf = (id) => { const t = A.now(); return cardsOf(id).filter((c) => SRS.isDue(c, t)); };
   function cfgOf(deck) {
     const g = V.guessPair(cardsOf(deck.id), deck.name);
@@ -282,7 +282,7 @@
     }
   }
 
-  /* ---------- 같은 뜻인지 AI에게 묻기 (4.5.2) ---------- */
+  /* ---------- 같은 뜻인지 AI에게 묻기 (4.6.1) ---------- */
   const aiLogin = () => !!(root.VoiceAIMock || (root.location.origin === JUDGE_HOME && root.Cloud && root.Cloud.user));
   const canAsk = () => !!S && !S.aiOff && S.cfg.ai !== false && S.cfg.mode === 'meaning' && aiLogin() && root.navigator.onLine !== false;
   // true: 같은 뜻, false: 다른 뜻, null: 못 물어봄 (틀린 것으로 둔다). 같은 카드에 같은 말은 한 번만 묻는다
