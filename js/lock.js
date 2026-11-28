@@ -3,17 +3,18 @@
  *  - 전체 화면 + 화면 꺼짐 방지
  *  - 뒤로 가기 막기
  *  - 앱을 닫았다 다시 열어도 끝나는 시각까지 잠금 화면 유지 (localStorage)
- *  - 화면을 끄거나 다른 앱으로 나간 횟수와 시간 기록 (웹앱은 둘을 구별할 수 없다)
+ *  - 화면을 끄거나 다른 앱으로 나간 횟수와 시간 기록 (웹앱은 둘을 구별할 수 없다. 보여 주기만 하고 공부 시간에서 빼지 않는다)
  *  - 포기는 3초 길게 눌러야 가능 */
 (function (root) {
   const KEY = 'studypromotion.lock';
 
   // 잠금 기록에서 공부 시간(분) 계산 (순수 함수, 테스트 대상)
-  //  lock: { startAt, endAt, awayMs }  at: 끝낸 시각
+  //  lock: { startAt, endAt }  at: 끝낸 시각
+  //  화면을 꺼 둔 시간도 센다 (4.6.1): 웹앱은 화면을 끈 것과 다른 앱에 간 것을 구별할 수 없어서,
+  //  전에는 화면을 끄고 공부해도 그 시간이 다 빠져 0분이 되고 기록이 남지 않았다. 나간 시간(awayMs)은 잠금 화면에 보여 주기만 한다
   function studiedMinutes(lock, at) {
     const end = Math.min(at, lock.endAt);
-    const ms = Math.max(0, end - lock.startAt - (lock.awayMs || 0));
-    return Math.floor(ms / 60000);
+    return Math.floor(Math.max(0, end - lock.startAt) / 60000);
   }
   // 스톱워치를 켜 둔 채 잠갔는데 잠금이 끝나기 전에 스톱워치가 먼저 멈췄을 때(다른 창 등):
   // 스톱워치가 기록한 끝(from) 뒤부터 잠금이 끝날 때까지만 센다. 나가 있던 시간은 그 구간 길이만큼 나눠서 뺀다
@@ -134,6 +135,7 @@
           lines.push(`지금까지 잰 ${m >= 1 ? Stats.formatMinutes(m) : '시간'}은 ${ro(swSid)} 기록하고, ${ro(pick)} 이어서 재요.`);
         }
       }
+      else lines.push('화면을 꺼 둔 시간도 공부 시간으로 세요.');
       if (tm === 'focus') lines.push('진행 중인 집중 타이머는 멈추고 지금까지를 기록해요.');
       lines.push('중간에 그만두려면 3초 길게 눌러야 해요.');
       note.textContent = lines.join('\n');
@@ -222,7 +224,7 @@
     const left = Math.max(0, Math.ceil((lock.endAt - Date.now()) / 1000));
     $('#lock-time').textContent = clock(left);
     $('#lock-leaves').textContent = lock.leaves ? `화면을 끄거나 나간 횟수 ${lock.leaves}번 · ${Stats.formatMinutes(Math.round(lock.awayMs / 60000))}` : '';
-    // 같이 재는 스톱워치: 이번에 잰 시간 (나가 있던 시간을 뺀 만큼)
+    // 같이 재는 스톱워치: 이번에 잰 시간
     const live = lock.sw && window.Stopwatch && window.Stopwatch.live ? window.Stopwatch.live() : null;
     const swEl = $('#lock-sw');
     swEl.hidden = !live;
@@ -245,7 +247,7 @@
     write();
     hide();
     const SW = window.Stopwatch;
-    // 화면을 끄거나 다른 앱에 가 있는 동안 잠금 시간이 끝났으면 그 시간도 나가 있던 시간으로
+    // 화면을 끄거나 다른 앱에 가 있는 동안 잠금 시간이 끝났으면 그 시간도 나가 있던 시간으로 (보여 주기용, 공부 시간에서는 빼지 않음)
     if (done.hiddenAt) {
       done.awayMs = (done.awayMs || 0) + Math.max(0, Math.min(at, done.endAt) - done.hiddenAt);
       done.hiddenAt = null;
@@ -271,10 +273,12 @@
       toast(completed ? '잠금 완료! 스톱워치는 계속 재고 있어요' : '잠금을 그만뒀어요. 스톱워치는 계속 재고 있어요');
       return;
     }
-    toast(completed ? `잠금 완료! ${Stats.formatMinutes(minutes)} 공부를 기록했어요` : `잠금을 그만뒀어요. ${Stats.formatMinutes(minutes)}만 기록했어요`);
+    // 1분이 안 되면 기록하지 않는다 ('0분 공부를 기록했어요'라고 하면 기록이 있는 줄 안다)
+    if (minutes < 1) toast(completed ? '잠금이 끝났어요. 1분이 안 돼서 기록하지 않았어요' : '잠금을 그만뒀어요. 1분이 안 돼서 기록하지 않았어요');
+    else toast(completed ? `잠금 완료! ${Stats.formatMinutes(minutes)} 공부를 기록했어요` : `잠금을 그만뒀어요. ${Stats.formatMinutes(minutes)}만 기록했어요`);
   }
 
-  // 나가 있던 시간을 잠금에 더한다 (화면 끔과 다른 앱은 구별할 수 없다). 스톱워치와 같이 잠갔으면 스톱워치는 그대로 둔다
+  // 나가 있던 시간을 잠금에 더한다 (화면 끔과 다른 앱은 구별할 수 없다). 잠금 화면에 보여 주기만 하고 공부 시간에서는 빼지 않는다
   function addAway(ms) {
     lock.awayMs += ms;
     lock.hiddenAt = null;
@@ -295,7 +299,7 @@
     } else {
       if (lock.hiddenAt) {
         addAway(Math.max(0, Math.min(Date.now(), lock.endAt) - lock.hiddenAt));
-        $('#lock-msg').textContent = lock.sw ? '돌아왔네요. 스톱워치는 계속 재고 있어요.' : '돌아왔네요. 나가 있던 시간은 공부 시간에서 빠져요.';
+        $('#lock-msg').textContent = lock.sw ? '돌아왔네요. 스톱워치는 계속 재고 있어요.' : '돌아왔네요. 화면을 꺼 둔 시간도 공부 시간으로 세요.';
       }
       keepAwake();
       update();
@@ -332,7 +336,7 @@
   const saved = read();
   if (saved && saved.endAt) {
     lock = saved;
-    if (lock.hiddenAt) addAway(Math.max(0, Math.min(Date.now(), lock.endAt) - lock.hiddenAt)); // 앱이 닫혀 있던 시간도 나가 있던 시간으로 친다
+    if (lock.hiddenAt) addAway(Math.max(0, Math.min(Date.now(), lock.endAt) - lock.hiddenAt)); // 앱이 닫혀 있던 시간도 나가 있던 시간으로 적는다 (공부 시간에서는 빼지 않음)
     if (Date.now() >= lock.endAt) later(() => { if (lock) finish(true); }); // 동기화·스톱워치 등 다른 스크립트가 다 준비된 뒤 기록
     else show(false);
   }
