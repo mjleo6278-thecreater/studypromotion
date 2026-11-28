@@ -18,14 +18,14 @@
   ];
   const CPS = 15; // 자막 글자/초
 
-  // 자리
+  // 자리. 캐릭터가 큰 블록(머리 13.2칸, 돌면 대각선 18.7)이라 벽·선반·통·폰과 겹치지 않게 띄워 둔다
+  //  왼쪽 선반: 바디워시 / 가운데: 샤워기 / 오른쪽 선반: 폰. (겹침 검사는 tests/cutscene.e2e.js)
   const SHOWER = [-0.5, 41.5, -6.5];
   const POS_A = [-0.5, 0, -6.5];
-  const POS_B = [3.5, 0, -8];
-  const POS_C = [7, 0, -6.5];
-  const BOTTLE_AT = [9.5, 9, -13.6];
-  const PHONE_AT = [18.5, 9, -14.4], PHONE_R = [-0.14, -0.2, 0];
-  const DUCK_AT = [-15, 1, 16];
+  const POS_B = [-5, 0, -6.5];
+  const POS_C = [4.7, 0, -5.8];
+  const BOTTLE_AT = [-18, Sets.SHELF_Y, -13.6];
+  const PHONE_AT = [18.5, Sets.SHELF_Y + 0.22, -11.8], PHONE_R = [-0.14, -0.2, 0]; // 선반에 서서 위쪽이 벽에 기댐
 
   const TAPS = [ // 손가락 누르기: 시각, 화면 좌표(u,v), 미끄러짐
     { t: 13.5, u: 0.5, v: 0.8 },
@@ -113,20 +113,21 @@
       p.pos = t < 8.42 ? h1.p : h2.p;
       const land = [8.42, 8.84].map((x) => t - x).find((k) => k > 0 && k < 0.14);
       if (land != null) p.squash = 0.88 + land * 0.85;
-      p.rotY = lerp(0.35, 1.15, inOut(seg(t, 8.0, 9.0)));
+      p.rotY = lerp(0.35, -1.15, inOut(seg(t, 8.0, 9.0))); // 바디워시(왼쪽) 쪽으로
       p.eyes = blink ? 'blink' : 'normal';
       const pumpTop = [BOTTLE_AT[0] + 0.5, BOTTLE_AT[1] + 15, BOTTLE_AT[2] + 0.5];
       if (t >= 9.0 && t < 10.7) {
         const reach = inOut(seg(t, 9.0, 9.4)) * (1 - inOut(seg(t, 10.35, 10.7)));
         const press = pumpPress(t);
         const target = toLocal(p, [pumpTop[0], pumpTop[1] - press, pumpTop[2]]);
-        p.handR = lerp3(REST_R, target, reach);
-        p.head = [0.15 * reach, 0.25 * reach, 0];
+        p.handL = lerp3(REST_L, target, reach);
+        p.handL[1] += Math.sin(reach * Math.PI) * 4.5; // 통 위로 넘어가며 펌프에 손을 얹는다 (통 몸통을 뚫지 않게)
+        p.head = [0.15 * reach, -0.25 * reach, 0];
       }
       if (t >= 10.6) {
         // 손 비비기 (몸 앞에서 동그랗게) → 11.3부터 거품 가득한 손을 들어 보며 당황
         const k = inOut(seg(t, 10.6, 11.0));
-        p.rotY = lerp(1.15, 0.3, k);
+        p.rotY = lerp(-1.15, -0.3, k);
         const a = t * 17, rub = 1 - inOut(seg(t, 11.2, 11.5));
         const show = inOut(seg(t, 11.2, 11.5));
         const rl = [-2.2 + Math.cos(a) * 1.1 * rub, 10 + Math.sin(a) * 1.1 * rub, 7.5], rr = [3.2 - Math.cos(a) * 1.1 * rub, 10 - Math.sin(a) * 1.1 * rub, 7.5];
@@ -139,11 +140,11 @@
       }
     } else if (t < SHOT.D) {
       // C: 폰 앞으로 깡충 → 눌러 보기 (안 눌림)
-      const h = hop(t, 12.6, 0.5, POS_B, POS_C, 3.5);
+      const h = hop(t, 12.6, 0.5, POS_B, POS_C, 4); // 머리가 수도꼭지(27)에 닿지 않을 만큼
       p.pos = h.p;
       if (t - 13.1 > 0 && t - 13.1 < 0.14) p.squash = 0.88 + (t - 13.1) * 0.85;
       // 세 번째 실패(미끄러짐) 뒤 놀라서 보는 사람 쪽으로 돈다
-      p.rotY = lerp(lerp(0.35, 1.35, inOut(seg(t, 12.6, 13.1))), 0.6, inOut(seg(t, 15.7, 16.1)));
+      p.rotY = lerp(lerp(-0.3, 1.35, inOut(seg(t, 12.6, 13.1))), 0.6, inOut(seg(t, 15.7, 16.1)));
       p.eyes = t > 14.6 ? 'worried' : blink ? 'blink' : 'normal';
       p.mouth = t > 14.6 ? 'wavy' : 'closed';
       const FT = Pawn.FINGER + 0.2; // 손 가운데에서 손가락 끝까지
@@ -225,7 +226,7 @@
   }
   // 손의 거품 양 (0~1)
   function foam(t, which) {
-    if (which === 'R') return clamp((t - 10.1) / 0.2) * 0.45 + clamp((t - 10.7) / 0.8) * 0.55;
+    if (which === 'L') return clamp((t - 10.1) / 0.2) * 0.45 + clamp((t - 10.7) / 0.8) * 0.55; // 펌프를 누른 손
     return clamp((t - 10.7) / 0.8);
   }
   // 거품 덩어리 크기 (거품을 보여 줄 때 크게)
@@ -249,7 +250,7 @@
     }
     if (t < SHOT.C) {
       const k = inOut(seg(t, SHOT.B, SHOT.C));
-      return S(lerp3([7, 14, -9], [7, 13, -8.5], k), lerp(14.5, 13.5, k), 15, lerp(0.58, 0.5, k), 0.26);
+      return S(lerp3([-10, 14, -9], [-9.5, 13, -8.5], k), lerp(15.5, 14.5, k), 15, lerp(-0.2, -0.14, k), 0.26);
     }
     if (t < SHOT.D) {
       const k = inOut(seg(t, SHOT.C, SHOT.D));
@@ -257,7 +258,7 @@
       let jx = 0;
       for (const tp of TAPS) { const q = t - tp.t; if (q > 0 && q < 0.25) jx += Math.sin(q * 70) * 0.12 * (1 - q / 0.25); }
       const b = inOut(seg(t, 15.75, 16.35));
-      return S(lerp3([pc[0] + 0.4 + jx, pc[1] - 0.3, pc[2] + 1], [12.5, 14.5, -9.5], b), lerp(lerp(8.5, 7.8, k), 16, b), lerp(lerp(10, 9.4, k), 14, b), lerp(0.24, 0.3, b), lerp(0.14, 0.18, b));
+      return S(lerp3([pc[0] + 0.4 + jx, pc[1] - 0.3, pc[2] + 1], [11.3, 14.5, -9.5], b), lerp(lerp(8.5, 7.8, k), 16, b), lerp(lerp(10, 9.4, k), 14, b), lerp(0.24, 0.3, b), lerp(0.14, 0.18, b));
     }
     if (t < SHOT.E) {
       let j = 0; if (t > 17.35 && t < 18.6) j = Math.sin(t * 50) * 0.08;
@@ -277,11 +278,11 @@
       SAYS.forEach((sy, i) => { const c = CORRECT[i]; push = Math.max(push, inOut(seg(t, sy.t0 - 0.6, sy.t0 - 0.1)) * (1 - inOut(seg(t, c + 0.6, c + 1.0)))); });
       const pc = screenPoint(SHOT.F, 0.5, 0.5, 0);
       // 폰 전체(오른쪽 정답 배지까지)가 늘 화면 안에: 머리 뒤쪽은 잘려도 얼굴·입은 보이게
-      const base = lerp3([12, 15.5, -9.5], [11.5, 15.5, -9.5], k);
+      const base = lerp3([10.8, 15.5, -9.5], [10.3, 15.5, -9.5], k);
       return S(lerp3(base, [pc[0] - 3.5, pc[1] + 0.5, pc[2] + 3], push * 0.6), lerp(lerp(17.5, 17, k), 16, push), 14 * (1 - push * 0.15), lerp(0.32, 0.26, k), 0.2);
     }
     const k = inOut(seg(t, SHOT.END, DUR));
-    return S([10.5, 14, -8.5], lerp(12.5, 13, k), lerp(14, 15, k), lerp(0.26, 0.36, k), 0.24, { shiftY: portrait ? -0.42 : -0.3 });
+    return S([9.3, 14, -8.5], lerp(12.5, 13, k), lerp(14, 15, k), lerp(0.26, 0.36, k), 0.24, { shiftY: portrait ? -0.42 : -0.3 });
   }
 
   // ---------- 입자 ----------
@@ -289,13 +290,16 @@
     const N = 34, L = SHOWER[1] - 0.5, speed = 52;
     const head = Pawn.headTop(pose);
     const under = Math.hypot(pose.pos[0] - SHOWER[0], pose.pos[2] - SHOWER[2]) < 4;
+    // 머리 네모(돌린 상자) 안으로 떨어지는 물줄기는 머리 위에서 끊는다 (옆에 서 있어도 머리를 뚫고 지나가지 않게)
+    const rc = Math.cos(pose.rotY), rs = Math.sin(pose.rotY), HALF = 3 * Pawn.U + 0.3;
+    const overHead = (x, z) => { const dx = x - pose.pos[0], dz = z - pose.pos[2]; return Math.abs(rc * dx - rs * dz) < HALF && Math.abs(rs * dx + rc * dz) < HALF; };
     for (let i = 0; i < N; i++) {
       const u = frac(t * speed / L + rand(i * 3));
       const a = 6.283 * rand(i * 3 + 1), r0 = 2.6 * Math.sqrt(rand(i * 3 + 2));
       const r = r0 * (1 + u * 0.5);
       const x = SHOWER[0] + 0.5 + Math.cos(a) * r, z = SHOWER[2] + 0.5 + Math.sin(a) * r;
       const y = SHOWER[1] - 0.6 - u * L;
-      const onHead = under && Math.hypot(x - head[0], z - head[2]) < 5.2;
+      const onHead = (under && Math.hypot(x - head[0], z - head[2]) < 5.2) || overHead(x, z);
       if (onHead && y < head[1] - 0.5) continue;
       out.push([x - 0.3, y, z - 0.3, x + 0.3, y + 1.3, z + 0.3, i % 3 ? 0x6fc6f2 : 0xa8e0fb]);
     }
@@ -425,16 +429,15 @@
       this.bottle = R.mesh(buildMesh(Sets.bottle()));
       this.pump = R.mesh(buildMesh(Sets.pump()));
       this.head = R.mesh(buildMesh(Sets.showerHead()));
-      this.duck = R.mesh(buildMesh(Sets.duck()));
       const cube = new Vox(); cube.set(0, 0, 0, 0xffffff);
       const blob = new Vox(); blob.disc(0, 7.2, 0x000000);
       this.blob = R.mesh(buildMesh(blob, { noAO: true }));
       this.cube = R.mesh(buildMesh(cube, { noAO: true }));
-      // 폰 화면 텍스처
-      const sc = document.createElement('canvas'); sc.width = 48; sc.height = 88;
-      this.scrPix = new Pix(sc); this.scrPix.w = 48; this.scrPix.h = 88; this.scrPix.ctx.imageSmoothingEnabled = false;
-      this.scrTex = R.texture(sc);
-      this.scrQuad = R.quad(6.4, 12);
+      // 폰 화면 텍스처: 48×88칸을 칸당 10픽셀로 (가까이 찍어도 글자가 선명하게). 밉맵을 쓰려고 512×1024 캔버스의 왼쪽 위만 쓴다
+      const SK = 10, sc = document.createElement('canvas'); sc.width = 512; sc.height = 1024;
+      this.scrPix = new Pix(sc); this.scrPix.fixed(48, 88, SK);
+      this.scrTex = R.texture(sc, { smooth: true });
+      this.scrQuad = R.quad(6.4, 12, (48 * SK - 0.5) / 512, (88 * SK - 0.5) / 1024);
       this.scrKey = '';
     },
     frame(t, st) {
@@ -446,7 +449,6 @@
       items.push({ mesh: this.phone, m: pm });
       items.push({ mesh: this.bottle, m: M4.compose(BOTTLE_AT, [0, -0.3, 0], [1, 1, 1], [0.5, 0, 0.5]) });
       items.push({ mesh: this.pump, m: M4.compose([BOTTLE_AT[0], BOTTLE_AT[1] + 10 - pumpPress(t), BOTTLE_AT[2]], [0, -0.3, 0], [1, 1, 1], [0.5, 0, 0.5]) });
-      items.push({ mesh: this.duck, m: M4.compose(DUCK_AT, [0, -0.6 + Math.sin(t * 1.3) * 0.08, 0], [1, 1, 1], [0.5, 0, 0.5]) });
       items.push(...Pawn.items(this.P, pose));
       // 입자
       const boxes = [];
@@ -822,5 +824,7 @@
   scene.SHOT = SHOT;
   scene.SUBS = SUBS;
   scene.pawnPose = pawnPose;
+  scene.phoneMatrix = phoneMatrix;
+  scene.LAYOUT = { SHOWER, POS_A, POS_B, POS_C, BOTTLE_AT, PHONE_AT, PHONE_R };
   global.ShowerScene = scene;
 })(typeof window !== 'undefined' ? window : globalThis);

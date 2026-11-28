@@ -33,7 +33,7 @@
   const HEAD_H = 5, FACE_Z = 3; // 앞면은 z = 3
 
   // 얼굴: 반 칸(0.5) 격자에 [열, 행, 색]. 열 -6..5, 행은 머리 가운데 기준 (0이 가운데 바로 위)
-  function face(px, depth = 0.12) {
+  function face(px, depth = 0.05) { // 얇게: 옆면이 어두운 테두리로 보이지 않게
     const boxes = [];
     for (const [c, r, col] of px) {
       const x = c * 0.5, y = HEAD_H / 2 + r * 0.5;
@@ -85,7 +85,7 @@
       thumb: R.mesh(handMesh('thumb')),
       sweat: R.mesh(sweatMesh()),
       eyes: {}, mouths: {},
-      blush: R.mesh(face(BLUSH, 0.06)),
+      blush: R.mesh(face(BLUSH, 0.03)),
     };
     for (const k in EYES) P.eyes[k] = R.mesh(face(EYES[k]));
     for (const k in MOUTHS) P.mouths[k] = R.mesh(face(MOUTHS[k]));
@@ -113,17 +113,18 @@
     const bm = M4.mul(root, M4.compose(AXIS, [0, 0, 0], [U, U, U], [0, 0, 0]));
     const hm = M4.mul(root, M4.compose([HEAD_AT[0], HEAD_AT[1] + s.bob, HEAD_AT[2]], s.head, [U, U, U], [0, HEAD_H / 2, 0]));
     const tint = s.tint || undefined;
+    // 머리(얼굴)는 그림자를 받지 않고, 눈·입·볼은 그림자를 만들지 않는다 (2026-11-24 사용자: 얼굴의 그림자가 부자연스러움)
     const out = [
       { mesh: P.body, m: bm, tint },
-      { mesh: P.head, m: hm, tint },
-      { mesh: P.eyes[s.eyes] || P.eyes.normal, m: hm, tint },
-      { mesh: P.mouths[s.mouth] || P.mouths.closed, m: hm, tint },
+      { mesh: P.head, m: hm, tint, recv: false },
+      { mesh: P.eyes[s.eyes] || P.eyes.normal, m: hm, tint, shadow: false, recv: false },
+      { mesh: P.mouths[s.mouth] || P.mouths.closed, m: hm, tint, shadow: false, recv: false },
     ];
-    if (s.blush) out.push({ mesh: P.blush, m: hm, tint });
+    if (s.blush) out.push({ mesh: P.blush, m: hm, tint, shadow: false, recv: false });
     if (s.sweat > 0) {
       const k = s.sweat;
       const sm = M4.mul(hm, M4.compose([3.05, 3.4 - (1 - k) * 0.8, 1.6], [0, 0, 0], [k, k, 1], [0.25, 0.45, 0.2]));
-      out.push({ mesh: P.sweat, m: sm, shadow: false, emit: 0.35 });
+      out.push({ mesh: P.sweat, m: sm, shadow: false, recv: false, emit: 0.35 });
     }
     for (const [hp, hr, pt, th] of [[s.handL, s.handRotL, false, s.thumbL], [s.handR, s.handRotR, s.pointR, false]]) {
       if (!hp) continue;

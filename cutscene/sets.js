@@ -68,7 +68,10 @@
   }
 
   // 욕실: 뒷벽 z = -back-1, 왼벽 x = -left-1, 바닥 y = -1
-  const BATH = { left: 27, right: 66, back: 16, front: 52, height: 58, tile: 4 };
+  // 왼쪽을 넓혀 바디워시 장면 카메라가 방 안에 있게, 바닥은 앞·오른쪽으로 넓혀 가로 화면 끝에 빈 곳(검정)이 보이지 않게. 왼벽은 sideTo까지만
+  const BATH = { left: 40, right: 80, back: 16, front: 100, sideTo: 52, height: 58, tile: 4 };
+  const SHELF_Y = 8; // 선반 윗면 높이 (소품은 여기 올린다)
+  const SHELVES = [[-23, -14], [14, 27]]; // [왼쪽 x, 오른쪽 x] (칸 번호, 둘 다 포함)
   function bathroom() {
     const v = new Vox({ jitter: 0.06 });
     const { left, right, back, front, height, tile } = BATH;
@@ -89,23 +92,25 @@
       v.set(x, y, -back - 1, y === band ? COL.band : g ? COL.grout : alt ? COL.tileAlt : COL.tile);
     }
     // 왼벽
-    for (let z = -back; z <= front; z++) for (let y = 0; y < height; y++) {
+    for (let z = -back; z <= BATH.sideTo; z++) for (let y = 0; y < height; y++) {
       const g = (z + back) % tile === 0 || y % tile === 0;
       const alt = (Math.floor((z + back) / tile) + Math.floor(y / tile)) % 2;
       v.set(-left - 1, y, z, y === band ? COL.band : g ? COL.grout : alt ? COL.tileAlt : COL.tile);
     }
     // 벽 아래 띠 (흰 몰딩)
     for (let x = -left; x <= right; x++) v.set(x, 0, -back, COL.trim);
-    for (let z = -back; z <= front; z++) v.set(-left, 0, z, COL.trim);
-    // 선반 (뒷벽, 바디워시와 폰)
-    v.box(6, 8, -back, 26, 8, -back + 4, COL.shelf);
-    v.box(6, 7, -back, 26, 7, -back + 1, 0xdedad0);
+    for (let z = -back; z <= BATH.sideTo; z++) v.set(-left, 0, z, COL.trim);
+    // 선반 두 개 (뒷벽): 왼쪽은 바디워시, 오른쪽은 폰. 큰 블록 캐릭터의 목도리(높이 8.8)보다 낮게, 캐릭터가 서는 자리와 겹치지 않게
+    for (const [x0, x1] of SHELVES) {
+      v.box(x0, SHELF_Y - 1, -back, x1, SHELF_Y - 1, -back + 4, COL.shelf);
+      v.box(x0, SHELF_Y - 2, -back, x1, SHELF_Y - 2, -back + 1, 0xdedad0);
+    }
     // 샤워기 관: 벽에서 앞으로 나와 아래로
     v.box(-1, 45, -back, -1, 45, -7, COL.chrome);
     v.set(-1, 44, -7, COL.chrome);
-    // 수도꼭지 (벽)
-    v.box(-4, 22, -back, 2, 24, -back, COL.chromeDark);
-    v.box(-2, 23, -back + 1, 0, 23, -back + 2, COL.chrome);
+    // 수도꼭지 (벽): 캐릭터 머리 꼭대기(22)보다 위
+    v.box(-4, 27, -back, 2, 29, -back, COL.chromeDark);
+    v.box(-2, 28, -back + 1, 0, 28, -back + 2, COL.chrome);
     // 수건걸이 + 수건 (왼벽)
     v.box(-left, 34, -6, -left, 34, 12, COL.rail);
     v.box(-left + 1, 20, -4, -left + 1, 34, 9, 0x2fb5c2);
@@ -125,5 +130,5 @@
     return v;
   }
 
-  global.Sets = { COL, chessFloor, phone, PHONE, bottle, pump, duck, bathroom, BATH, showerHead };
+  global.Sets = { COL, chessFloor, phone, PHONE, bottle, pump, duck, bathroom, BATH, SHELF_Y, SHELVES, showerHead };
 })(typeof window !== 'undefined' ? window : globalThis);
