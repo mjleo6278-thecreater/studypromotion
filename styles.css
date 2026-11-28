@@ -3397,10 +3397,17 @@ body.gc-showing .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)
 .flash.mf .mf-math { font-size: clamp(20px, 6.6vw, 26px); }
 .mf-chip { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--bg); border-radius: 999px; padding: 3px 10px; margin-bottom: 2px; }
 .mf-card-fig { width: min(100%, 330px); margin: 2px auto 6px; }
-.mf-q { font-size: 19px; font-weight: 700; line-height: 1.4; word-break: keep-all; }
+.mf-q { font-size: 19px; font-weight: 700; line-height: 1.4; word-break: keep-all; text-wrap: balance; }
 .mf-sub { font-size: 14px; color: var(--muted); font-weight: 500; line-height: 1.45; word-break: keep-all; }
 .mf-qmath { font-size: 22px; margin-top: 8px; }
 .mf-note { font-size: 13.5px; color: var(--muted); font-weight: 500; line-height: 1.5; word-break: keep-all; max-width: 30em; }
+/* 여러 줄 수식(세 실근 카드)은 조금 작게, 외우는 요령 상자 */
+.flash.mf .mf-math.long, .mf-math.long { font-size: clamp(15px, 4.6vw, 21px); }
+.mf-tip { width: 100%; max-width: 30em; margin-top: 4px; padding: 10px 12px; border-radius: 12px; background: var(--accent-soft, rgba(4, 190, 205, .1)); text-align: left; }
+.mf-tip b { display: block; font-size: 13px; font-weight: 800; color: var(--accent-text); margin-bottom: 4px; }
+.mf-tip ul { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 3px; }
+.mf-tip li { font-size: 13px; line-height: 1.5; color: var(--text); font-weight: 500; word-break: keep-all; }
+.mf-tip li:first-child { font-weight: 700; }
 .card-row > .mf-thumb { width: 48px; }
 /* 그림 카드 줄: 그림 | 앞면(두 줄까지) 위 · 뒷면 아래 | 복습일 · 고치기 · 지우기 */
 .card-row.has-fig { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto auto; column-gap: 10px; row-gap: 2px; align-items: center; }
@@ -3433,9 +3440,12 @@ body.gc-showing .toast { bottom: auto; top: calc(66px + env(safe-area-inset-top)
 .mf-p-sec h3 small { font-size: 14px; color: var(--accent-text); font-weight: 650; }
 .mf-p-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 /* 홀수 개면 마지막 칸은 한 줄을 다 쓰고 그림 · 글을 옆으로 */
-.mf-p-grid > .mf-p-tile:last-child:nth-child(odd) { grid-column: 1 / -1; flex-direction: row; align-items: center; }
-.mf-p-grid > .mf-p-tile:last-child:nth-child(odd) .mf-fig { width: calc(50% - 5px); flex: none; }
-.mf-p-grid > .mf-p-tile:last-child:nth-child(odd) figcaption { flex: 1; }
+.mf-p-tile.row { grid-column: 1 / -1; flex-direction: row; align-items: center; }
+.mf-p-tile.row .mf-fig { width: calc(50% - 5px); flex: none; }
+.mf-p-tile.row figcaption { flex: 1; }
+.mf-p-tile.wide { grid-column: 1 / -1; }
+.mf-p-tile.wide .mf-fig { width: min(100%, 300px); align-self: center; }
+.mf-p-tile.wide .mf-math { font-size: clamp(13px, 4.1vw, 16px); }
 .mf-p-tile { margin: 0; border: 1px solid var(--line); border-radius: 12px; padding: 6px 6px 10px; background: var(--surface); display: flex; flex-direction: column; gap: 4px; }
 .mf-p-tile .mf-mk { font-size: 15px; }
 .mf-p-tile .mf-mk.sm { font-size: 12px; }
