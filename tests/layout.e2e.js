@@ -117,7 +117,7 @@ function seed(settings) {
     assert(await page.textContent('#lay-tabs > [data-id="home"] .lay-always') === '항상 켜짐' && !(await page.$('#lay-tabs [data-sw="home"]')), '홈 탭은 끌 수 없음 (항상 켜짐)');
     assert(!(await page.$('#lay-home [data-sw="home-sum"]')), '오늘 요약 칸도 항상 켜짐');
     const subs = await page.$$eval('#lay-subs > *', (els) => els.map((e) => (e.classList.contains('lay-group') ? '#' + e.textContent : [...e.querySelectorAll('.lay-row')].map((r) => r.dataset.id).join(','))).join(' | '));
-    assert(subs === '#타이머 안 | focus,stopwatch,lock | #플래너 안 | plcarry,plslot,plreview | #복습 안 | voice | #그룹 안 | grchat | #어디서나 | ai', '탭 안 기능 묶음: ' + subs);
+    assert(subs === '#타이머 안 | focus,stopwatch,lock | #플래너 안 | plcarry,plslot,plreview | #복습 안 | voice,packs | #그룹 안 | grchat | #어디서나 | ai', '탭 안 기능 묶음: ' + subs);
     assert(await page.$$eval('#view-layout [data-sw]', (els) => els.every((e) => e.checked && !e.disabled)), '처음엔 모두 켜짐');
     assert(await page.isDisabled('#lay-reset'), '처음 배치면 ‘처음 배치로 되돌리기’는 누를 수 없음');
     assert(await layoutOf(page) === null && await barOf(page) === null, '바꾸기 전에는 아무것도 저장하지 않음');
@@ -375,7 +375,7 @@ function seed(settings) {
       const st = App.store.get(), ctx = AICore.buildContext(st, Date.now());
       return { v: AICore.validate([{ type: 'add_card', front: 'hola', back: '안녕' }, { type: 'open_view', view: 'stats' }], st, ctx, Date.now()), text: AICore.contextText(ctx) };
     });
-    assert(res.v.ops.length === 1 && /복습을 꺼 두어서/.test(res.v.rejected[0]) && /꺼 둔 기능: 복습, 말로 복습\./.test(res.text), '세컨드: 꺼 둔 복습 카드는 만들지 않고, AI에게도 꺼 둔 기능을 알림');
+    assert(res.v.ops.length === 1 && /복습을 꺼 두어서/.test(res.v.rejected[0]) && /꺼 둔 기능: 복습, 말로 복습, 만들어 둔 공식 덱\./.test(res.text), '세컨드: 꺼 둔 복습 카드는 만들지 않고, AI에게도 꺼 둔 기능을 알림');
     // 복습을 꺼 둔 채로 카드 링크를 열면 켤지 묻는다 → 안 가져오기
     await page.goto(base + '#cards&deck=링크+단어&c=uno~하나&c=dos~둘');
     await page.waitForSelector('#ask:not([hidden])');

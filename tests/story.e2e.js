@@ -53,7 +53,7 @@ const SHOTS = process.env.SHOTS;
     return f;
   };
   const hit = (f, id) => f.click(`.hit[data-id="${id}"]`);
-  // 업데이트 소식의 ‘업데이트 이야기 보기’: 4.5.1이 나온 뒤로는 4.5 탭을 골라야 보인다
+  // 업데이트 소식의 ‘업데이트 이야기 보기’: 4.5.1·4.6이 나온 뒤로는 4.5 탭을 골라야 보인다
   const tapStory = async (page) => {
     if (!(await page.isVisible('[data-story="shower-1"]'))) await page.click('#ver-tabs [data-ver-tab="4.5"]');
     await page.click('[data-story="shower-1"]');
@@ -70,7 +70,7 @@ const SHOTS = process.env.SHOTS;
     assert(!(await page.$('.story')), '새로 설치 뒤 다시 열어도 안 뜸');
     // 업데이트 소식 4.5 칸의 단추로는 볼 수 있다
     await page.evaluate(() => App.go('about'));
-    await page.click('#ver-tabs [data-ver-tab="4.5"]'); // 4.5.1이 나온 뒤로는 4.5 탭을 골라야 보인다
+    await page.click('#ver-tabs [data-ver-tab="4.5"]'); // 4.5.1·4.6이 나온 뒤로는 4.5 탭을 골라야 보인다
     await page.waitForSelector('[data-ver="4.5"] .ver-story:not([hidden]) [data-story="shower-1"]');
     assert(true, '업데이트 소식 4.5 칸에 업데이트 이야기 보기 단추');
     await page.evaluate(() => document.querySelector('#news-panel').scrollIntoView({ block: 'start' }));
@@ -78,7 +78,7 @@ const SHOTS = process.env.SHOTS;
     await ctx.close();
   }
 
-  // 2) 업데이트한 사람(4.4.1 → 4.5): 처음 열 때 한 번
+  // 2) 업데이트한 사람(4.4.1 → 4.5, 건너뛰고 4.6으로 와도): 처음 열 때 한 번
   {
     const { ctx, page } = await open({ prev: '4.4.1' });
     const f = await frameOf(page);
@@ -109,6 +109,13 @@ const SHOTS = process.env.SHOTS;
     await page.reload();
     await page.waitForTimeout(2500);
     assert(!(await page.$('.story')), '한 번 본 뒤에는 다시 열어도 안 뜸');
+    await ctx.close();
+  }
+  // 2-1) 이미 4.5에서 열어 본 사람이 그 뒤 버전으로 올라오면: 다시 뜨지 않음 (4.5에서 못 봤어도 그 버전 이야기는 그 버전에서만)
+  if (await (async () => { const { ctx, page } = await open(); const v = await page.evaluate(() => App.version); await ctx.close(); return v !== '4.5'; })()) {
+    const { ctx, page } = await open({ prev: '4.5' });
+    await page.waitForTimeout(2500);
+    assert(!(await page.$('.story')), '4.5에서 열어 본 사람은 새 버전에서 다시 뜨지 않음');
     await ctx.close();
   }
 
